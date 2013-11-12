@@ -1,0 +1,37 @@
+##############################################################################
+#
+#    Copyright (c) 2005 - 2013 by Vivante Corp.  All rights reserved.
+#
+#    The material in this file is confidential and contains trade secrets
+#    of Vivante Corporation. This is proprietary information owned by
+#    Vivante Corporation. No part of this work may be disclosed,
+#    reproduced, copied, transmitted, or used in any way for any purpose,
+#    without the express written permission of Vivante Corporation.
+#
+##############################################################################
+
+
+#
+# Common makefile for the node.
+#
+
+################################################################################
+# Specify the targets.
+
+.PHONY: all clean install $(MODULES)
+
+all: $(MAIN_MODULE)
+
+clean:
+	$(MAKE) --makefile=makefile.linux V_TARGET=clean gcdSTATIC_LINK=$(gcdSTATIC_LINK)
+
+install:
+	$(MAKE) --makefile=makefile.linux V_TARGET=install gcdSTATIC_LINK=$(gcdSTATIC_LINK)
+
+ifneq ($(VIVANTE_NO_3D), 1)
+$(MODULES):
+	@test ! -d $@ || $(MAKE) --makefile=makefile.linux --directory=$@ $(V_TARGET) gcdSTATIC_LINK=$(gcdSTATIC_LINK)
+else
+$(MODULES):
+	@test ! -d $@ || $(MAKE) --makefile=makefile.linux --directory=$@ $(V_TARGET) VIVANTE_NO_3D=1 gcdSTATIC_LINK=$(gcdSTATIC_LINK)
+endif

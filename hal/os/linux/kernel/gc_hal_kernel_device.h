@@ -1,0 +1,226 @@
+/****************************************************************************
+*
+*    Copyright (c) 2005 - 2013 by Vivante Corp.  All rights reserved.
+*
+*    The material in this file is confidential and contains trade secrets
+*    of Vivante Corporation. This is proprietary information owned by
+*    Vivante Corporation. No part of this work may be disclosed,
+*    reproduced, copied, transmitted, or used in any way for any purpose,
+*    without the express written permission of Vivante Corporation.
+*
+*****************************************************************************/
+
+
+#ifndef __gc_hal_kernel_device_h_
+#define __gc_hal_kernel_device_h_
+
+/******************************************************************************\
+******************************* gckGALDEVICE Structure *******************************
+\******************************************************************************/
+
+typedef struct _gckGALDEVICE
+{
+    /* Objects. */
+    gckOS               os;
+    gckKERNEL           kernels[gcdMAX_GPU_COUNT];
+
+    /* Attributes. */
+    gctSIZE_T           internalSize;
+    gctPHYS_ADDR        internalPhysical;
+    gctUINT32           internalPhysicalName;
+    gctPOINTER          internalLogical;
+    gckVIDMEM           internalVidMem;
+    gctSIZE_T           externalSize;
+    gctPHYS_ADDR        externalPhysical;
+    gctUINT32           externalPhysicalName;
+    gctPOINTER          externalLogical;
+    gckVIDMEM           externalVidMem;
+    gckVIDMEM           contiguousVidMem;
+    gctPOINTER          contiguousBase;
+    gctPHYS_ADDR        contiguousPhysical;
+    gctUINT32           contiguousPhysicalName;
+    gctSIZE_T           contiguousSize;
+    gctBOOL             contiguousMapped;
+    gctPOINTER          contiguousMappedUser;
+    gctSIZE_T           systemMemorySize;
+    gctUINT32           systemMemoryBaseAddress;
+#if gcdMULTI_GPU
+    gctPOINTER          registerBase3D[gcdMULTI_GPU];
+    gctSIZE_T           registerSize3D[gcdMULTI_GPU];
+#endif
+    gctPOINTER          registerBases[gcdMAX_GPU_COUNT];
+    gctSIZE_T           registerSizes[gcdMAX_GPU_COUNT];
+    gctUINT32           baseAddress;
+#if gcdMULTI_GPU
+    gctUINT32           requestedRegisterMemBase3D[gcdMULTI_GPU];
+    gctSIZE_T           requestedRegisterMemSize3D[gcdMULTI_GPU];
+#endif
+    gctUINT32           requestedRegisterMemBases[gcdMAX_GPU_COUNT];
+    gctSIZE_T           requestedRegisterMemSizes[gcdMAX_GPU_COUNT];
+    gctUINT32           requestedContiguousBase;
+    gctSIZE_T           requestedContiguousSize;
+
+    /* IRQ management. */
+#if gcdMULTI_GPU
+    gctINT              irqLine3D[gcdMULTI_GPU];
+    gctBOOL             isrInitialized3D[gcdMULTI_GPU];
+    gctBOOL             dataReady3D[gcdMULTI_GPU];
+#endif
+    gctINT              irqLines[gcdMAX_GPU_COUNT];
+    gctBOOL             isrInitializeds[gcdMAX_GPU_COUNT];
+    gctBOOL             dataReadys[gcdMAX_GPU_COUNT];
+
+    /* Thread management. */
+#if gcdMULTI_GPU
+    struct task_struct  *threadCtxt3D[gcdMULTI_GPU];
+    wait_queue_head_t   intrWaitQueue3D[gcdMULTI_GPU];
+    gctBOOL             threadInitialized3D[gcdMULTI_GPU];
+#endif
+    struct task_struct  *threadCtxts[gcdMAX_GPU_COUNT];
+    struct semaphore    semas[gcdMAX_GPU_COUNT];
+    gctBOOL             threadInitializeds[gcdMAX_GPU_COUNT];
+    gctBOOL             killThread;
+
+#if MRVL_PROFILE_THREAD
+    /* The profile thread */
+    struct task_struct  *profilethread;
+#endif
+    gctBOOL             powerOffWhenIdle;
+    gctBOOL             needPowerOff;
+    gctUINT32           profileStep;
+    gctUINT32           profileTimeSlice;
+    gctUINT32           profileTailTimeSlice;
+    gctUINT32           idleThreshold;
+
+    /* debug flags. */
+    gctBOOL             powerDebug;
+    gctBOOL             pmrtDebug;
+    gctBOOL             profilerDebug;
+    gctBOOL             printPID;
+
+    /* Signal management. */
+    gctINT              signal;
+
+    /* Core mapping */
+    gceCORE             coreMapping[8];
+
+    /* GC memory profile*/
+    gctSIZE_T           reservedMem;
+    gctINT32            vidMemUsage;
+#if MRVL_VIDEO_MEMORY_USE_PMEM
+    gctSIZE_T           reservedPmemMem;
+    gctINT32            pmemUsage;
+#endif
+    gctINT32            contiguousNonPagedMemUsage;
+    gctINT32            contiguousPagedMemUsage;
+    gctINT32            virtualPagedMemUsage;
+    gctINT32            wastBytes;
+    /* GC video memory usage in detail. */
+    gctINT32            indexVidMemUsage;
+    gctINT32            vertexVidMemUsage;
+    gctINT32            textureVidMemUsage;
+    gctINT32            renderTargetVidMemUsage;
+    gctINT32            depthVidMemUsage;
+    gctINT32            bitmapVidMemUsage;
+    gctINT32            tileStatusVidMemUsage;
+    gctINT32            imageVidMemUsage;
+    gctINT32            maskVidMemUsage;
+    gctINT32            scissorVidMemUsage;
+    gctINT32            hierarchicalDepthVidMemUsage;
+    gctINT32            othersVidMemUsage;
+
+    /* States before suspend. */
+    gceCHIPPOWERSTATE   statesStored[gcdMAX_GPU_COUNT];
+
+    /* Device Debug File System Entry in kernel. */
+    struct _gcsDEBUGFS_Node * dbgNode;
+}
+* gckGALDEVICE;
+
+typedef struct _gcsHAL_PRIVATE_DATA
+{
+    gckGALDEVICE        device;
+    gctPOINTER          mappedMemory;
+    gctPOINTER          contiguousLogical;
+    /* The process opening the device may not be the same as the one that closes it. */
+    gctUINT32           pidOpen;
+}
+gcsHAL_PRIVATE_DATA, * gcsHAL_PRIVATE_DATA_PTR;
+
+gceSTATUS gckGALDEVICE_Setup_ISR(
+    IN gckGALDEVICE Device
+    );
+
+gceSTATUS gckGALDEVICE_Setup_ISR_2D(
+    IN gckGALDEVICE Device
+    );
+
+gceSTATUS gckGALDEVICE_Setup_ISR_VG(
+    IN gckGALDEVICE Device
+    );
+
+gceSTATUS gckGALDEVICE_Release_ISR(
+    IN gckGALDEVICE Device
+    );
+
+gceSTATUS gckGALDEVICE_Release_ISR_2D(
+    IN gckGALDEVICE Device
+    );
+
+gceSTATUS gckGALDEVICE_Release_ISR_VG(
+    IN gckGALDEVICE Device
+    );
+
+gceSTATUS gckGALDEVICE_Start_Threads(
+    IN gckGALDEVICE Device
+    );
+
+gceSTATUS gckGALDEVICE_Stop_Threads(
+    gckGALDEVICE Device
+    );
+
+gceSTATUS gckGALDEVICE_Start(
+    IN gckGALDEVICE Device
+    );
+
+gceSTATUS gckGALDEVICE_Stop(
+    gckGALDEVICE Device
+    );
+
+gceSTATUS gckGALDEVICE_Construct(
+#if gcdMULTI_GPU || gcdMULTI_GPU_AFFINITY
+    IN gctINT IrqLine3D0,
+    IN gctUINT32 RegisterMemBase3D0,
+    IN gctSIZE_T RegisterMemSize3D0,
+    IN gctINT IrqLine3D1,
+    IN gctUINT32 RegisterMemBase3D1,
+    IN gctSIZE_T RegisterMemSize3D1,
+#else
+    IN gctINT IrqLine,
+    IN gctUINT32 RegisterMemBase,
+    IN gctSIZE_T RegisterMemSize,
+#endif
+    IN gctINT IrqLine2D,
+    IN gctUINT32 RegisterMemBase2D,
+    IN gctSIZE_T RegisterMemSize2D,
+    IN gctINT IrqLineVG,
+    IN gctUINT32 RegisterMemBaseVG,
+    IN gctSIZE_T RegisterMemSizeVG,
+    IN gctUINT32 ContiguousBase,
+    IN gctSIZE_T ContiguousSize,
+    IN gctSIZE_T BankSize,
+    IN gctINT FastClear,
+    IN gctINT Compression,
+    IN gctUINT32 PhysBaseAddr,
+    IN gctUINT32 PhysSize,
+    IN gctINT Signal,
+    IN gctUINT LogFileSize,
+    IN gctINT PowerManagement,
+    OUT gckGALDEVICE *Device
+    );
+
+gceSTATUS gckGALDEVICE_Destroy(
+    IN gckGALDEVICE Device
+    );
+
+#endif /* __gc_hal_kernel_device_h_ */

@@ -1,0 +1,46 @@
+##############################################################################
+#
+#    Copyright (c) 2005 - 2013 by Vivante Corp.  All rights reserved.
+#
+#    The material in this file is confidential and contains trade secrets
+#    of Vivante Corporation. This is proprietary information owned by
+#    Vivante Corporation. No part of this work may be disclosed,
+#    reproduced, copied, transmitted, or used in any way for any purpose,
+#    without the express written permission of Vivante Corporation.
+#
+##############################################################################
+
+
+
+#
+# Linux build file for the user level HAL libraries.
+#
+
+################################################################################
+# Define build directories.
+ifeq ($(VIVANTE_ENABLE_VG), 1)
+ifeq ($(USE_ARCH_REG), 1)
+HAL_USER_DRV_ARCH   := $(AQROOT)/hal/user/arch_reg $(AQROOT)/hal/user/archvg_reg
+else
+HAL_USER_DRV_ARCH	:= $(AQROOT)/hal/user/arch $(AQROOT)/hal/user/archvg
+endif
+else
+ifeq ($(USE_ARCH_REG), 1)
+HAL_USER_DRV_ARCH   := $(AQROOT)/hal/user/arch_reg
+else
+HAL_USER_DRV_ARCH	:= $(AQROOT)/hal/user/arch
+endif
+endif
+ifeq ($(QNX), 1)
+HAL_USER_DRV_OS 	:= $(AQROOT)/hal/os/qnx/user
+else
+HAL_USER_DRV_OS 	:= $(AQROOT)/hal/os/linux/user
+endif
+HAL_USER_DRV_MAIN	:= $(AQROOT)/hal/user
+
+$(HAL_USER_DRV_MAIN): $(HAL_USER_DRV_ARCH) $(HAL_USER_DRV_OS)
+
+MODULES 	:= $(HAL_USER_DRV_ARCH) $(HAL_USER_DRV_OS) $(HAL_USER_DRV_MAIN)
+MAIN_MODULE	= $(HAL_USER_DRV_MAIN)
+
+include $(AQROOT)/common.node

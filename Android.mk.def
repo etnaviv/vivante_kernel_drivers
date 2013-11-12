@@ -1,0 +1,167 @@
+##############################################################################
+#
+#    Copyright (c) 2005 - 2013 by Vivante Corp.  All rights reserved.
+#
+#    The material in this file is confidential and contains trade secrets
+#    of Vivante Corporation. This is proprietary information owned by
+#    Vivante Corporation. No part of this work may be disclosed,
+#    reproduced, copied, transmitted, or used in any way for any purpose,
+#    without the express written permission of Vivante Corporation.
+#
+##############################################################################
+
+
+#
+# Common include file for Android build
+#
+
+ifeq ($(VIVANTE_ANDROID_MK_DEF),)
+
+################################################################################
+# Options.
+
+# Select prebuilt binary types.
+FIXED_ARCH_TYPE              ?=
+
+# Set this variable to Kernel directory.
+KERNEL_DIR                   ?= $(ANDROID_BUILD_TOP)/kernel/kernel
+
+# Cross compiler for building kernel module.
+CROSS_COMPILE                ?= arm-marvell-linux-gnueabi-
+
+# <ro.board.platform> property
+# This affects module name of <variant> field
+RO_BOARD_PLATFORM            ?= mrvl
+
+# Enable this to allocate video memory via coherent DMA.
+NO_DMA_COHERENT              ?= 1
+
+# Enable to start GPU clock in drver.
+ENABLE_GPU_CLOCK_BY_DRIVER   ?= 1
+
+# Enable platform driver model, available after linux 2.6.x.
+USE_PLATFORM_DRIVER          ?= 1
+
+# Build as vanilla Linux in Android environment with VDK backend.
+USE_LINUX_MODE_FOR_ANDROID   ?= 0
+
+# Force all video memory cached.
+FORCE_ALL_VIDEO_MEMORY_CACHED ?= 0
+
+# Enable caching for non paged memory.
+NONPAGED_MEMORY_CACHEABLE    ?= 0
+
+# Enable buffering for non paged memory
+NONPAGED_MEMORY_BUFFERABLE   ?= 1
+
+# Enable memory bank alignment
+USE_BANK_ALIGNMENT           ?= 0
+BANK_BIT_START               ?= 0
+BANK_BIT_END                 ?= 0
+BANK_CHANNEL_BIT             ?= 0
+
+# Enable debug.
+DEBUG                        ?= 0
+
+# Build OpenCL
+USE_OPENCL ?= 1
+
+# Build libGLESv3x
+BUILD_HALTI                  ?= 1
+
+# Enable outer cache patch.
+ENABLE_OUTER_CACHE_PATCH     ?= 1
+
+# 2D VG
+VIVANTE_ENABLE_VG := 0
+
+# Use reg or non-reg arch files
+USE_ARCH_REG ?= 1
+
+################################################################################
+# Variables.
+
+GPU_TYPE  := \
+	$(lastword \
+		$(filter XAQ2 GCCORE Unified,\
+			$(notdir $(wildcard $(call my-dir)/arch/*)) \
+		) \
+	)
+
+PROPERTY  := \
+	$(firstword \
+		$(strip $(RO_HARDWARE)) \
+		$(TARGET_BOOTLOADER_BOARD_NAME) \
+		$(RO_BOARD_PLATFORM)\
+		default \
+	)
+
+AQROOT    := $(call my-dir)
+AQARCH    := $(AQROOT)/arch/$(GPU_TYPE)
+
+ARCH_TYPE := $(TARGET_ARCH)
+TAG       := MRVL
+
+export KERNEL_DIR
+export CROSS_COMPILE
+
+
+################################################################################
+# Target CFLAGS.
+
+CFLAGS        := -DLINUX
+
+CFLAGS        += -DEGL_API_ANDROID=1
+
+ifeq ($(VIVANTE_ENABLE_VG),1)
+CFLAGS        += -DgcdENABLE_VG=1
+else
+CFLAGS        += -DgcdENABLE_VG=0
+endif
+
+ifeq ($(USE_LINUX_MODE_FOR_ANDROID),1)
+CFLAGS        += -DUSE_VDK=1 -DEGL_API_FB=1
+else
+CFLAGS        += -DUSE_VDK=0
+endif
+
+PLATFORM_SDK_VERSION ?= 12
+
+ifeq ($(ENABLE_OUTER_CACHE_PATCH),1)
+CFLAGS        += -DgcdENABLE_OUTER_CACHE_PATCH=1
+endif
+
+ifeq ($(USE_BANK_ALIGNMENT), 1)
+    CFLAGS += -DgcdENABLE_BANK_ALIGNMENT=1
+    ifneq ($(BANK_BIT_START), 0)
+	        ifneq ($(BANK_BIT_END), 0)
+	            CFLAGS += -DgcdBANK_BIT_START=$(BANK_BIT_START)
+	            CFLAGS += -DgcdBANK_BIT_END=$(BANK_BIT_END)
+	        endif
+    endif
+
+    ifneq ($(BANK_CHANNEL_BIT), 0)
+        CFLAGS += -DgcdBANK_CHANNEL_BIT=$(BANK_CHANNEL_BIT)
+    endif
+endif
+
+CFLAGS        += -DANDROID_SDK_VERSION=$(PLATFORM_SDK_VERSION)
+CFLAGS        += -fno-strict-aliasing -fno-short-enums
+CFLAGS        += -Wall -Wno-missing-field-initializers -Wno-unused-parameter
+
+ifeq ($(DEBUG), 1)
+CFLAGS        += -DDBG=1 -DDEBUG -D_DEBUG -O0 -g
+endif
+
+
+ifeq ($(FORCE_ALL_VIDEO_MEMORY_CACHED), 1)
+CFLAGS        += -DgcdPAGED_MEMORY_CACHEABLE=1
+else
+CFLAGS        += -DgcdPAGED_MEMORY_CACHEABLE=0
+endif
+
+
+CFLAGS += -DMRVL_USE_VIV_GRALLOC=1
+VIVANTE_ANDROID_MK_DEF := 1
+endif
+
