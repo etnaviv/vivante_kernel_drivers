@@ -31,11 +31,7 @@ else
 HAL_USER_DRV_ARCH	:= $(AQROOT)/hal/user/arch
 endif
 endif
-ifeq ($(QNX), 1)
-HAL_USER_DRV_OS 	:= $(AQROOT)/hal/os/qnx/user
-else
 HAL_USER_DRV_OS 	:= $(AQROOT)/hal/os/linux/user
-endif
 HAL_USER_DRV_MAIN	:= $(AQROOT)/hal/user
 
 $(HAL_USER_DRV_MAIN): $(HAL_USER_DRV_ARCH) $(HAL_USER_DRV_OS)

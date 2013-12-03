@@ -98,6 +98,8 @@ gckKERNEL_NewDatabase(
         gckOS_ZeroMemory(pointer, gcmSIZEOF(gcsDATABASE));
 
         database = pointer;
+
+        gcmkONERROR(gckOS_CreateMutex(Kernel->os, &database->counterMutex));
     }
 
     /* Insert the database into the hash. */
@@ -154,7 +156,7 @@ OnError:
 **          Pointer to a variable receiving the database structure pointer on
 **          success.
 */
-static gceSTATUS
+gceSTATUS
 gckKERNEL_FindDatabase(
     IN gckKERNEL Kernel,
     IN gctUINT32 ProcessID,
@@ -711,6 +713,13 @@ gckKERNEL_CreateProcessDB(
         database->list[i]              = gcvNULL;
     }
 
+    for (i = 0; i < gcvSURF_NUM_TYPES; i++)
+    {
+        database->vidMemDetail[i].bytes = 0;
+        database->vidMemDetail[i].maxBytes = 0;
+        database->vidMemDetail[i].totalBytes = 0;
+    }
+
     gcmkASSERT(database->handleDatabase == gcvNULL);
     gcmkONERROR(
         gckKERNEL_CreateIntegerDatabase(Kernel, &database->handleDatabase));
@@ -826,6 +835,7 @@ gckKERNEL_AddProcessDB(
     gcsDATABASE_PTR database;
     gcsDATABASE_RECORD_PTR record = gcvNULL;
     gcsDATABASE_COUNTERS * count;
+    gctUINT32 subType;
 
     gcmkHEADER_ARG("Kernel=0x%x ProcessID=%d Type=%d Pointer=0x%x "
                    "Physical=0x%x Size=%lu",
@@ -833,6 +843,10 @@ gckKERNEL_AddProcessDB(
 
     /* Verify the arguments. */
     gcmkVERIFY_OBJECT(Kernel, gcvOBJ_KERNEL);
+
+    subType = (Type & gcdDATABASE_SUBTYPE_MASK) >> gcdDATABASE_SUBTYPE_SHIFT;
+
+    Type &= gcdDATABASE_TYPE_MASK;
 
     /* Special case the idle record. */
     if (Type == gcvDB_IDLE)
@@ -957,6 +971,8 @@ gckKERNEL_AddProcessDB(
         break;
     }
 
+    gcmkVERIFY_OK(gckOS_AcquireMutex(Kernel->os, database->counterMutex, gcvINFINITE));
+
     if (count != gcvNULL)
     {
         /* Adjust counters. */
@@ -968,6 +984,22 @@ gckKERNEL_AddProcessDB(
             count->maxBytes = count->bytes;
         }
     }
+
+    if (Type == gcvDB_VIDEO_MEMORY)
+    {
+        count = &database->vidMemDetail[subType];
+
+        /* Adjust counters. */
+        count->totalBytes += Size;
+        count->bytes      += Size;
+
+        if (count->bytes > count->maxBytes)
+        {
+            count->maxBytes = count->bytes;
+        }
+    }
+
+    gcmkVERIFY_OK(gckOS_ReleaseMutex(Kernel->os, database->counterMutex));
 
     /* Success. */
     gcmkFOOTER_NO();
@@ -1018,6 +1050,7 @@ gckKERNEL_RemoveProcessDB(
     gceSTATUS status;
     gcsDATABASE_PTR database;
     gctSIZE_T bytes = 0;
+    gctUINT32 subType;
 
     gcmkHEADER_ARG("Kernel=0x%x ProcessID=%d Type=%d Pointer=0x%x",
                    Kernel, ProcessID, Type, Pointer);
@@ -1026,6 +1059,10 @@ gckKERNEL_RemoveProcessDB(
     gcmkVERIFY_OBJECT(Kernel, gcvOBJ_KERNEL);
     gcmkVERIFY_ARGUMENT(Pointer != gcvNULL);
 
+    subType = (Type & gcdDATABASE_SUBTYPE_MASK) >> gcdDATABASE_SUBTYPE_SHIFT;
+
+    Type &= gcdDATABASE_TYPE_MASK;
+
     /* Find the database. */
     gcmkONERROR(gckKERNEL_FindDatabase(Kernel, ProcessID, gcvFALSE, &database));
 
@@ -1033,11 +1070,14 @@ gckKERNEL_RemoveProcessDB(
     gcmkONERROR(
         gckKERNEL_DeleteRecord(Kernel, database, Type, Pointer, &bytes));
 
+    gcmkVERIFY_OK(gckOS_AcquireMutex(Kernel->os, database->counterMutex, gcvINFINITE));
+
     /* Update counters. */
     switch (Type)
     {
     case gcvDB_VIDEO_MEMORY:
         database->vidMem.bytes -= bytes;
+        database->vidMemDetail[subType].bytes -= bytes;
         break;
 
     case gcvDB_NON_PAGED:
@@ -1059,6 +1099,8 @@ gckKERNEL_RemoveProcessDB(
     default:
         break;
     }
+
+    gcmkVERIFY_OK(gckOS_ReleaseMutex(Kernel->os, database->counterMutex));
 
     /* Success. */
     gcmkFOOTER_NO();
@@ -1778,7 +1820,6 @@ gckKERNEL_DestroyProcessDB(
                            record->data, record->bytes, status);
             break;
 
-#if gcdVIRTUAL_COMMAND_BUFFER
         case gcvDB_COMMAND_BUFFER:
             /* Free the command buffer. */
             status = gckEVENT_DestroyVirtualCommandBuffer(record->kernel->eventObj,
@@ -1792,7 +1833,6 @@ gckKERNEL_DestroyProcessDB(
                            "DB: COMMAND_BUFFER 0x%x, bytes=%lu (status=%d)",
                            record->data, record->bytes, status);
             break;
-#endif
 
         case gcvDB_CONTIGUOUS:
             physical = gcmNAME_TO_PTR(record->physical);
@@ -2642,3 +2682,76 @@ gckKERNEL_DumpProcessDB(
     gcmkFOOTER_NO();
     return gcvSTATUS_OK;
 }
+
+void
+_DumpCounter(
+    IN gcsDATABASE_COUNTERS * Counter,
+    IN gctCONST_STRING Name
+    )
+{
+    gcmkPRINT("%s:", Name);
+    gcmkPRINT("  Currently allocated : %10lld", Counter->bytes);
+    gcmkPRINT("  Maximum allocated   : %10lld", Counter->maxBytes);
+    gcmkPRINT("  Total allocated     : %10lld", Counter->totalBytes);
+}
+
+gceSTATUS
+gckKERNEL_DumpVidMemUsage(
+    IN gckKERNEL Kernel,
+    IN gctINT32 ProcessID
+    )
+{
+    gctUINT32 i = 0;
+    gceSTATUS status;
+    gcsDATABASE_PTR database;
+    gcsDATABASE_COUNTERS * counter;
+
+    static gctCONST_STRING surfaceTypes[] = {
+        "UNKNOWN",
+        "INDEX",
+        "VERTEX",
+        "TEXTURE",
+        "RENDER_TARGET",
+        "DEPTH",
+        "BITMAP",
+        "TILE_STATUS",
+        "IMAGE",
+        "MASK",
+        "SCISSOR",
+        "HIERARCHICAL_DEPTH",
+    };
+
+    gcmkHEADER_ARG("Kernel=0x%x ProcessID=%d",
+                   Kernel, ProcessID);
+
+    /* Verify the arguments. */
+    gcmkVERIFY_OBJECT(Kernel, gcvOBJ_KERNEL);
+
+    /* Find the database. */
+    gcmkONERROR(
+        gckKERNEL_FindDatabase(Kernel, ProcessID, gcvFALSE, &database));
+
+    gcmkPRINT("VidMem Usage (Process %d):", ProcessID);
+
+    /* Get pointer to counters. */
+    counter = &database->vidMem;
+
+    _DumpCounter(counter, "Total Video Memory");
+
+    for (i = 0; i < gcvSURF_NUM_TYPES; i++)
+    {
+        counter = &database->vidMemDetail[i];
+
+        _DumpCounter(counter, surfaceTypes[i]);
+    }
+
+    /* Success. */
+    gcmkFOOTER_NO();
+    return gcvSTATUS_OK;
+
+OnError:
+    /* Return the status. */
+    gcmkFOOTER();
+    return status;
+}
+

@@ -46,13 +46,7 @@ else
 INCLUDE += -I$(AQROOT)/hal/kernel/archvg
 endif
 endif
-ifeq ($(QNX), 1)
-CFLAGS += -fPIC
-INCLUDE += -I$(AQROOT)/hal/os/qnx/inc
-INCLUDE += -I$(AQROOT)/hal/os/qnx/kernel
-else
 INCLUDE += -I$(AQROOT)/hal/os/linux/kernel
-endif
 
 ifneq ($(ANDROID), 1)
 CFLAGS += $(INCLUDE) -Werror -ansi

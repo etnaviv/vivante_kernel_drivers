@@ -19,22 +19,22 @@ extern "C" {
 #endif
 
 /*
-**  FILE LAYOUT:
+**    FILE LAYOUT:
 **
-**      gcsDUMP_FILE structure
+**        gcsDUMP_FILE structure
 **
-**      gcsDUMP_DATA frame
-**          gcsDUMP_DATA or gcDUMP_DATA_SIZE records rendingring the frame
-**          gctUINT8 data[length]
+**        gcsDUMP_DATA frame
+**            gcsDUMP_DATA or gcDUMP_DATA_SIZE records rendingring the frame
+**            gctUINT8 data[length]
 */
 
-#define gcvDUMP_FILE_SIGNATURE      gcmCC('g','c','D','B')
+#define gcvDUMP_FILE_SIGNATURE        gcmCC('g','c','D','B')
 
 typedef struct _gcsDUMP_FILE
 {
-    gctUINT32           signature;  /* File signature */
-    gctSIZE_T           length;     /* Length of file */
-    gctUINT32           frames;     /* Number of frames in file */
+    gctUINT32           signature;    /* File signature */
+    gctSIZE_T             length;        /* Length of file */
+    gctUINT32             frames;        /* Number of frames in file */
 }
 gcsDUMP_FILE;
 
@@ -56,20 +56,20 @@ gceDUMP_TAG;
 
 typedef struct _gcsDUMP_SURFACE
 {
-    gceDUMP_TAG         type;       /* Type of record. */
-    gctUINT32           address;    /* Address of the surface. */
-    gctINT16            width;      /* Width of surface. */
-    gctINT16            height;     /* Height of surface. */
-    gceSURF_FORMAT      format;     /* Surface pixel format. */
-    gctSIZE_T           length;     /* Number of bytes inside the surface. */
+    gceDUMP_TAG            type;        /* Type of record. */
+    gctUINT32             address;    /* Address of the surface. */
+    gctINT16              width;        /* Width of surface. */
+    gctINT16               height;        /* Height of surface. */
+    gceSURF_FORMAT        format;        /* Surface pixel format. */
+    gctSIZE_T            length;        /* Number of bytes inside the surface. */
 }
 gcsDUMP_SURFACE;
 
 typedef struct _gcsDUMP_DATA
 {
-    gceDUMP_TAG         type;       /* Type of record. */
-    gctSIZE_T           length;     /* Number of bytes of data. */
-    gctUINT32           address;    /* Address for the data. */
+    gceDUMP_TAG             type;        /* Type of record. */
+    gctSIZE_T             length;        /* Number of bytes of data. */
+    gctUINT32             address;    /* Address for the data. */
 }
 gcsDUMP_DATA;
 

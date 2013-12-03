@@ -25,8 +25,8 @@ extern "C" {
 ****************************** Object Declarations *****************************
 \******************************************************************************/
 
-typedef struct _gcoBRUSH *              gcoBRUSH;
-typedef struct _gcoBRUSH_CACHE *        gcoBRUSH_CACHE;
+typedef struct _gcoBRUSH *                gcoBRUSH;
+typedef struct _gcoBRUSH_CACHE *          gcoBRUSH_CACHE;
 
 /******************************************************************************\
 ******************************** gcoBRUSH Object *******************************

@@ -176,6 +176,7 @@ typedef enum _gceOBJECT_TYPE
     gcvOBJ_VG                   = gcmCC('V','G',' ',' '),
     gcvOBJ_BUFOBJ               = gcmCC('B','U','F','O'),
     gcvOBJ_UNIFORM_BLOCK        = gcmCC('U','B','L','K'),
+    gcvOBJ_CL                   = gcmCC('C','L',' ',' '),
 }
 gceOBJECT_TYPE;
 
@@ -209,25 +210,6 @@ typedef enum _gceCORE
 #endif
 }
 gceCORE;
-
-#if gcdMULTI_GPU
-
-typedef enum _gceCORE_3D_MASK
-{
-    gcvCORE_3D_0_MASK   = (1 << 0),
-    gcvCORE_3D_1_MASK   = (1 << 1),
-
-    gcvCORE_3D_ALL_MASK = (0xFFFF)
-}
-gceCORE_3D_MASK;
-
-typedef enum _gceCORE_3D_ID
-{
-    gcvCORE_3D_0_ID     = 0,
-    gcvCORE_3D_1_ID     = 1
-}
-gceCORE_3D_ID;
-#endif
 
 #if gcdMULTI_GPU_AFFINITY
 #define gcdMAX_GPU_COUNT               4
@@ -473,6 +455,22 @@ gckOS_FreeNonPagedMemory(
     IN gctPOINTER Logical
     );
 
+#if MRVL_USE_GPU_RESERVE_MEM
+gceSTATUS
+gckOS_AllocateVidmemFromMemblock(
+    IN gckOS Os,
+    IN gctSIZE_T Bytes,
+    IN gctPHYS_ADDR Base,
+    OUT gctPHYS_ADDR * Physical
+    );
+
+gceSTATUS
+gckOS_FreeVidmemFromMemblock(
+    IN gckOS Os,
+    IN gctPHYS_ADDR Physical
+    );
+#endif
+
 /* Allocate contiguous memory. */
 gceSTATUS
 gckOS_AllocateContiguous(
@@ -579,6 +577,15 @@ gckOS_WriteRegisterEx(
 #if gcdMULTI_GPU
 gceSTATUS
 gckOS_ReadRegisterByCoreId(
+    IN gckOS Os,
+    IN gceCORE Core,
+    IN gctUINT32 CoreId,
+    IN gctUINT32 Address,
+    OUT gctUINT32 * Data
+    );
+
+gceSTATUS
+gckOS_DirectReadRegisterByCoreId(
     IN gckOS Os,
     IN gceCORE Core,
     IN gctUINT32 CoreId,
@@ -1533,10 +1540,63 @@ gckOS_SetGPUPower(
     IN gctBOOL Power
     );
 
+#if MRVL_ENABLE_COMMON_PWRCLK_FRAMEWORK /* == 1*/
+
+gceSTATUS
+gckOS_GetIfaceMapping(
+    IN gckOS Os,
+    IN gceCORE Core,
+    OUT gctPOINTER *Iface
+    );
+
+gceSTATUS
+gckOS_SetGPUPowerOnBeforeInit(
+    IN gceCORE Core,
+    IN gctBOOL EnableClk,
+    IN gctBOOL EnablePwr
+    );
+
+#else /* MRVL_ENABLE_COMMON_PWRCLK_FRAMEWORK == 0 */
+
+gceSTATUS
+gckOS_GpuPowerEnable(
+    IN gckOS Os,
+    IN gceCORE Core,
+    IN gctBOOL enableClk,
+    IN gctBOOL enablePwr,
+    IN gctUINT32 Frequency
+    );
+
+gceSTATUS
+gckOS_GpuPowerDisable(
+    IN gckOS Os,
+    IN gceCORE Core,
+    IN gctBOOL disableClk,
+    IN gctBOOL disablePwr
+    );
+
+#if MRVL_CONFIG_SHADER_CLK_CONTROL
+gceSTATUS
+gckOS_QueryShClkRate(
+    IN gckOS Os,
+    IN gceCORE Core,
+    OUT gctUINT32_PTR Rate
+    );
+
+gceSTATUS
+gckOS_SetShClkRate(
+    IN gckOS Os,
+    IN gceCORE Core,
+    IN gctUINT32 Rate
+    );
+#endif
+
+#endif /* MRVL_ENABLE_COMMON_PWRCLK_FRAMEWORK */
+
 gceSTATUS
 gckOS_SetGPUPowerOnMRVL(
     IN gckOS Os,
-    IN gckHARDWARE Hardware,
+    IN gceCORE Core,
     IN gctBOOL EnableClk,
     IN gctBOOL EnablePwr
     );
@@ -1544,7 +1604,7 @@ gckOS_SetGPUPowerOnMRVL(
 gceSTATUS
 gckOS_SetGPUPowerOffMRVL(
     IN gckOS Os,
-    IN gckHARDWARE Hardware,
+    IN gceCORE Core,
     IN gctBOOL DisableClk,
     IN gctBOOL DisablePwr
     );
@@ -1564,23 +1624,6 @@ gckOS_ResetGPU(
     );
 
 gceSTATUS
-gckOS_GpuPowerEnable(
-    IN gckOS Os,
-    IN gceCORE Core,
-    IN gctBOOL enableClk,
-    IN gctBOOL enablePwr,
-    IN gctUINT32 Frequency
-    );
-
-gceSTATUS
-gckOS_GpuPowerDisable(
-    IN gckOS Os,
-    IN gceCORE Core,
-    IN gctBOOL disableClk,
-    IN gctBOOL disablePwr
-    );
-
-gceSTATUS
 gckOS_QueryIdleProfile(
     IN     gckOS         Os,
     IN     gceCORE       Core,
@@ -1593,22 +1636,6 @@ gckOS_PowerOffWhenIdle(
     IN gckOS Os,
     IN gctBOOL NeedProfile
     );
-
-#if MRVL_CONFIG_SHADER_CLK_CONTROL
-gceSTATUS
-gckOS_QueryShClkRate(
-    IN gckOS Os,
-    IN gceCORE Core,
-    OUT gctUINT32_PTR Rate
-    );
-
-gceSTATUS
-gckOS_SetShClkRate(
-    IN gckOS Os,
-    IN gceCORE Core,
-    IN gctUINT32 Rate
-    );
-#endif
 
 gceSTATUS
 gckOS_QueryRegisterStats(
@@ -2471,6 +2498,12 @@ gckHARDWARE_SetPowerManagement(
     IN gctBOOL PowerManagement
     );
 
+gceSTATUS
+gckHARDWARE_SetGpuProfiler(
+    IN gckHARDWARE Hardware,
+    IN gctBOOL GpuProfiler
+    );
+
 #if gcdENABLE_FSCALE_VAL_ADJUST
 gceSTATUS
 gckHARDWARE_SetFscaleValue(
@@ -2704,7 +2737,6 @@ gckEVENT_CommitDone(
     IN gceKERNEL_WHERE FromWhere
     );
 
-#if gcdVIRTUAL_COMMAND_BUFFER
 /* Schedule a FreeVirtualCommandBuffer event. */
 gceSTATUS
 gckEVENT_DestroyVirtualCommandBuffer(
@@ -2714,7 +2746,6 @@ gckEVENT_DestroyVirtualCommandBuffer(
     IN gctPOINTER Logical,
     IN gceKERNEL_WHERE FromWhere
     );
-#endif
 
 gceSTATUS
 gckEVENT_Submit(
@@ -2854,12 +2885,19 @@ gckCOMMAND_Detach(
     IN gckCONTEXT Context
     );
 
-#if gcdVIRTUAL_COMMAND_BUFFER
+/* Dump command buffer being executed by GPU. */
 gceSTATUS
 gckCOMMAND_DumpExecutingBuffer(
     IN gckCOMMAND Command
     );
-#endif
+
+/* Whether a kernel command buffer address. */
+gceSTATUS
+gckCOMMAND_AddressInKernelCommandBuffer(
+    IN gckCOMMAND Command,
+    IN gctPOINTER Logical,
+    OUT gctBOOL *In
+    );
 
 /******************************************************************************\
 ********************************* gckMMU Object ********************************
@@ -2930,6 +2968,7 @@ gckMMU_DumpPageTableEntry(
 gceSTATUS
 gckHARDWARE_QueryProfileRegisters(
     IN gckHARDWARE Hardware,
+    IN gctBOOL Reset,
     OUT gcsPROFILER_COUNTERS * Counters
     );
 #endif
@@ -2938,6 +2977,7 @@ gckHARDWARE_QueryProfileRegisters(
 gceSTATUS
 gckHARDWARE_QueryContextProfile(
     IN gckHARDWARE Hardware,
+    IN gctBOOL Reset,
     IN gckCONTEXT Context,
     OUT gcsPROFILER_COUNTERS * Counters
     );
@@ -2966,6 +3006,11 @@ gckOS_SignalSetHardware(
 gceSTATUS
 gckOS_DetectProcessByName(
     IN gctCONST_POINTER Name
+    );
+
+void
+gckOS_DumpParam(
+    void
     );
 
 #ifdef __cplusplus

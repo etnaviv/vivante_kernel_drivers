@@ -147,6 +147,13 @@ typedef struct _gcsHAL_PRIVATE_DATA
 }
 gcsHAL_PRIVATE_DATA, * gcsHAL_PRIVATE_DATA_PTR;
 
+typedef struct _gcsDEVICE_CONSTRUCT_ARGS
+{
+    gctBOOL             recovery;
+    gctUINT             stuckDump;
+}
+gcsDEVICE_CONSTRUCT_ARGS;
+
 gceSTATUS gckGALDEVICE_Setup_ISR(
     IN gckGALDEVICE Device
     );
@@ -216,6 +223,8 @@ gceSTATUS gckGALDEVICE_Construct(
     IN gctINT Signal,
     IN gctUINT LogFileSize,
     IN gctINT PowerManagement,
+    IN gctINT GpuProfiler,
+    IN gcsDEVICE_CONSTRUCT_ARGS * Args,
     OUT gckGALDEVICE *Device
     );
 

@@ -15,8 +15,10 @@
 #if MRVL_CONFIG_ENABLE_GPUFREQ
 #if MRVL_PLATFORM_PXA1L88
 #include <linux/clk.h>
-#include <plat/clock.h>
 #include <linux/err.h>
+#if MRVL_CONFIG_ENABLE_QOS_SUPPORT
+#include <linux/pm_qos.h>
+#endif
 
 #define GPUFREQ_FREQ_TABLE_MAX_NUM  10
 
@@ -35,8 +37,10 @@ extern int get_gcu2d_freqs_table(unsigned long *gcu2d_freqs_table,
 typedef int (*PFUNC_GET_FREQS_TBL)(unsigned long *, unsigned int *, unsigned int);
 
 struct gpufreq_helanlte {
+#if !MRVL_ENABLE_COMMON_PWRCLK_FRAMEWORK
     /* 2d/3d clk*/
     struct clk *gc_clk;
+#endif
 
     /* predefined freqs_table */
     struct gpufreq_frequency_table freq_table[GPUFREQ_FREQ_TABLE_MAX_NUM+1];
@@ -46,6 +50,7 @@ struct gpufreq_helanlte {
 };
 
 struct gpufreq_helanlte gh[GPUFREQ_GPU_NUMS];
+static gckOS gpu_os;
 
 static int gpufreq_frequency_table_get(unsigned int gpu, struct gpufreq_frequency_table *table_freqs)
 {
@@ -114,7 +119,38 @@ static struct gpufreq_freq_attr *driver_attrs[] = {
 static int helanlte_gpufreq_init (struct gpufreq_policy *policy);
 static int helanlte_gpufreq_verify (struct gpufreq_policy *policy);
 static int helanlte_gpufreq_target (struct gpufreq_policy *policy, unsigned int target_freq, unsigned int relation);
+static int helanlte_gpufreq_set(unsigned int gpu, struct gpufreq_freqs* freqs);
 static unsigned int helanlte_gpufreq_get (unsigned int chip);
+
+#if MRVL_CONFIG_ENABLE_QOS_SUPPORT
+static unsigned int is_qos_inited = 0;
+
+DECLARE_META_REQUEST(3d, min);
+IMPLEMENT_META_NOTIFIER(0, 3d, min, GPUFREQ_RELATION_L);
+DECLARE_META_REQUEST(3d, max);
+IMPLEMENT_META_NOTIFIER(0, 3d, max, GPUFREQ_RELATION_H);
+
+DECLARE_META_REQUEST(2d, min);
+IMPLEMENT_META_NOTIFIER(1, 2d, min, GPUFREQ_RELATION_L);
+DECLARE_META_REQUEST(2d, max);
+IMPLEMENT_META_NOTIFIER(1, 2d, max, GPUFREQ_RELATION_H);
+
+#if MRVL_CONFIG_SHADER_CLK_CONTROL
+DECLARE_META_REQUEST(sh, min);
+IMPLEMENT_META_NOTIFIER(2, sh, min, GPUFREQ_RELATION_L);
+DECLARE_META_REQUEST(sh, max);
+IMPLEMENT_META_NOTIFIER(2, sh, max, GPUFREQ_RELATION_H);
+#endif
+
+static struct _gc_qos gc_qos[] = {
+    DECLARE_META_GC_QOS_3D,
+    DECLARE_META_GC_QOS_2D,
+#if MRVL_CONFIG_SHADER_CLK_CONTROL
+    DECLARE_META_GC_QOS_SH,
+#endif
+};
+
+#endif /* MRVL_CONFIG_ENABLE_QOS_SUPPORT */
 
 static struct gpufreq_driver helanlte_gpufreq_driver = {
     .init   = helanlte_gpufreq_init,
@@ -128,7 +164,9 @@ static struct gpufreq_driver helanlte_gpufreq_driver = {
 static int helanlte_gpufreq_init (struct gpufreq_policy *policy)
 {
     unsigned int gpu = policy->gpu;
+#if !MRVL_ENABLE_COMMON_PWRCLK_FRAMEWORK
     struct clk *gc_clk = gh[gpu].gc_clk;
+#endif
 
     /* get func pointer from kernel functions. */
     switch (gpu) {
@@ -148,6 +186,7 @@ static int helanlte_gpufreq_init (struct gpufreq_policy *policy)
     gpufreq_frequency_table_get(gpu, gh[gpu].freq_table);
     gpufreq_frequency_table_gpuinfo(policy, gh[gpu].freq_table);
 
+#if !MRVL_ENABLE_COMMON_PWRCLK_FRAMEWORK
     if(!gc_clk)
     {
         switch (gpu) {
@@ -170,8 +209,22 @@ static int helanlte_gpufreq_init (struct gpufreq_policy *policy)
         /* store in global variable. */
         gh[gpu].gc_clk = gc_clk;
     }
+#endif
 
     policy->cur = helanlte_gpufreq_get(policy->gpu);
+
+#if MRVL_CONFIG_ENABLE_QOS_SUPPORT
+    if(unlikely(!(is_qos_inited & (1 << gpu))))
+    {
+        pm_qos_add_request(gc_qos[gpu].pm_qos_req_min,
+                           gc_qos[gpu].pm_qos_class_min,
+                           policy->gpuinfo.min_freq);
+        pm_qos_add_request(gc_qos[gpu].pm_qos_req_max,
+                           gc_qos[gpu].pm_qos_class_max,
+                           policy->gpuinfo.max_freq);
+        is_qos_inited |= (1 << gpu);
+    }
+#endif
 
     debug_log(GPUFREQ_LOG_INFO, "GPUFreq for HelanLTE gpu %u initialized, cur_freq %u\n", gpu, policy->cur);
 
@@ -188,11 +241,17 @@ static int helanlte_gpufreq_verify (struct gpufreq_policy *policy)
 static int helanlte_gpufreq_target (struct gpufreq_policy *policy, unsigned int target_freq, unsigned int relation)
 {
     int index;
-    int ret = 0, rate = 0;
+    int ret = 0;
     struct gpufreq_freqs freqs;
     unsigned int gpu = policy->gpu;
-    struct clk *gc_clk = gh[gpu].gc_clk;
     struct gpufreq_frequency_table *freq_table = gh[gpu].freq_table;
+
+#if MRVL_CONFIG_ENABLE_QOS_SUPPORT
+    target_freq = max((unsigned int)pm_qos_request(gc_qos[gpu].pm_qos_class_min),
+                     target_freq);
+    target_freq = min((unsigned int)pm_qos_request(gc_qos[gpu].pm_qos_class_max),
+                     target_freq);
+#endif
 
     /* find a nearest freq in freq_table for target_freq */
     ret = gpufreq_frequency_table_target(policy, freq_table, target_freq, relation, &index);
@@ -206,32 +265,95 @@ static int helanlte_gpufreq_target (struct gpufreq_policy *policy, unsigned int 
     freqs.old_freq = policy->cur;
     freqs.new_freq = freq_table[index].frequency;
 
+#if MRVL_CONFIG_ENABLE_QOS_SUPPORT
+    pr_debug("[%d] Qos_min: %d, Qos_max: %d, Target: %d (KHZ)\n",
+            gpu,
+            pm_qos_request(gc_qos[gpu].pm_qos_class_min),
+            pm_qos_request(gc_qos[gpu].pm_qos_class_max),
+            freqs.new_freq);
+#endif
+
     if(freqs.old_freq == freqs.new_freq)
         return ret;
 
     gpufreq_notify_transition(&freqs, GPUFREQ_PRECHANGE);
 
-    ret = clk_set_rate(gc_clk, KHZ_TO_HZ(freqs.new_freq));
-    if(ret)
+    ret = helanlte_gpufreq_set(gpu, &freqs);
+
+    gpufreq_notify_transition(&freqs, GPUFREQ_POSTCHANGE);
+
+    return ret;
+}
+
+#if MRVL_ENABLE_COMMON_PWRCLK_FRAMEWORK /* == 1 */
+static int helanlte_gpufreq_set(unsigned int gpu, struct gpufreq_freqs* freqs)
+{
+    int ret = 0;
+    unsigned int rate = 0;
+    gceSTATUS status;
+
+    /* update new frequency to hw */
+    status = gckOS_SetClkRate(gpu_os, gpu, freqs->new_freq);
+    if(gcmIS_ERROR(status))
     {
-        debug_log(GPUFREQ_LOG_WARNING, "[%d] failed to set target rate %u to clk %p\n",
-                        gpu, freqs.new_freq, gc_clk);
+        debug_log(GPUFREQ_LOG_WARNING, "[%d] failed to set target rate %u KHZ\n",
+                        gpu, freqs->new_freq);
     }
 
     /* update current frequency after adjustment */
-    rate = helanlte_gpufreq_get(policy->gpu);
+    rate = helanlte_gpufreq_get(gpu);
     if(rate == -EINVAL)
     {
-        debug_log(GPUFREQ_LOG_WARNING, "failed get rate for gpu %u\n", policy->gpu);
-        freqs.new_freq = freqs.old_freq;
+        debug_log(GPUFREQ_LOG_WARNING, "failed get rate for gpu %u\n", gpu);
+        freqs->new_freq = freqs->old_freq;
         ret = -EINVAL;
     }
     else
     {
-        freqs.new_freq = rate;
+        freqs->new_freq = rate;
     }
 
-    gpufreq_notify_transition(&freqs, GPUFREQ_POSTCHANGE);
+    return ret;
+}
+
+static unsigned int helanlte_gpufreq_get (unsigned int gpu)
+{
+    gceSTATUS status;
+    unsigned int rate = ~0;
+
+    gcmkONERROR(gckOS_QueryClkRate(gpu_os, gpu, &rate));
+    return rate;
+
+OnError:
+    debug_log(GPUFREQ_LOG_ERROR, "failed to get clk rate of gpu %u\n", gpu);
+    return -EINVAL;
+}
+#else /* MRVL_ENABLE_COMMON_PWRCLK_FRAMEWORK == 0 */
+static int helanlte_gpufreq_set(unsigned int gpu, struct gpufreq_freqs* freqs)
+{
+    int ret = 0;
+    unsigned int rate = 0;
+    struct clk *gc_clk = gh[gpu].gc_clk;
+
+    ret = clk_set_rate(gc_clk, KHZ_TO_HZ(freqs->new_freq));
+    if(ret)
+    {
+        debug_log(GPUFREQ_LOG_WARNING, "[%d] failed to set target rate %u to clk %p\n",
+                        gpu, freqs->new_freq, gc_clk);
+    }
+
+    /* update current frequency after adjustment */
+    rate = helanlte_gpufreq_get(gpu);
+    if(rate == -EINVAL)
+    {
+        debug_log(GPUFREQ_LOG_WARNING, "failed get rate for gpu %u\n", gpu);
+        freqs->new_freq = freqs->old_freq;
+        ret = -EINVAL;
+    }
+    else
+    {
+        freqs->new_freq = rate;
+    }
 
     return ret;
 }
@@ -254,19 +376,47 @@ static unsigned int helanlte_gpufreq_get (unsigned int gpu)
 
     return HZ_TO_KHZ(rate);
 }
+#endif
 
 /***************************************************
 **  interfaces exported to GC driver
 ****************************************************/
 int __GPUFREQ_EXPORT_TO_GC gpufreq_init(gckOS Os)
 {
+    if(!gpu_os)
+        gpu_os = Os;
+
+    WARN_ON(!gpu_os);
+
     gpufreq_early_init();
+#if MRVL_CONFIG_ENABLE_QOS_SUPPORT
+    {
+        unsigned int gpu = 0;
+        for_each_gpu(gpu)
+        {
+            pm_qos_add_notifier(gc_qos[gpu].pm_qos_class_min, gc_qos[gpu].notifier_min);
+            pm_qos_add_notifier(gc_qos[gpu].pm_qos_class_max, gc_qos[gpu].notifier_max);
+        }
+    }
+#endif
+
     gpufreq_register_driver(Os, &helanlte_gpufreq_driver);
     return 0;
 }
 
 void __GPUFREQ_EXPORT_TO_GC gpufreq_exit(gckOS Os)
 {
+#if MRVL_CONFIG_ENABLE_QOS_SUPPORT
+    {
+        unsigned int gpu = 0;
+        for_each_gpu(gpu)
+        {
+            pm_qos_remove_notifier(gc_qos[gpu].pm_qos_class_min, gc_qos[gpu].notifier_min);
+            pm_qos_remove_notifier(gc_qos[gpu].pm_qos_class_max, gc_qos[gpu].notifier_max);
+        }
+    }
+#endif
+
     gpufreq_unregister_driver(Os, &helanlte_gpufreq_driver);
     gpufreq_late_exit();
 }

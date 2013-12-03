@@ -69,6 +69,13 @@ extern "C" {
 #define gcdMMU_STLB_4K_PAGE         0x00000000
 
 /*******************************************************************************
+***** Stuck Dump Level ********************************************************/
+
+#define gcdSTUCK_DUMP_MINIMAL       1
+#define gcdSTUCK_DUMP_MIDDLE        2
+#define gcdSTUCK_DUMP_MAXIMAL       3
+
+/*******************************************************************************
 ***** Process Secure Cache ****************************************************/
 
 #define gcdSECURE_CACHE_LRU         1
@@ -145,6 +152,10 @@ typedef enum _gceDATABASE_TYPE
 }
 gceDATABASE_TYPE;
 
+#define gcdDATABASE_TYPE_MASK           0x000000FF
+#define gcdDATABASE_SUBTYPE_MASK        0x0000FF00
+#define gcdDATABASE_SUBTYPE_SHIFT       8
+
 typedef struct _gcsDATABASE_RECORD *    gcsDATABASE_RECORD_PTR;
 typedef struct _gcsDATABASE_RECORD
 {
@@ -180,6 +191,9 @@ typedef struct _gcsDATABASE
     gcsDATABASE_COUNTERS                contiguous;
     gcsDATABASE_COUNTERS                mapUserMemory;
     gcsDATABASE_COUNTERS                mapMemory;
+
+    gcsDATABASE_COUNTERS                vidMemDetail[gcvSURF_NUM_TYPES];
+    gctPOINTER                          counterMutex;
 
     /* Idle time management. */
     gctUINT64                           lastIdle;
@@ -287,6 +301,21 @@ gckKERNEL_QueryIdleProfile(
     OUT    gctUINT32_PTR IdleTime
     );
 
+/* Dump the video memory usage for process specified. */
+gceSTATUS
+gckKERNEL_DumpVidMemUsage(
+    IN gckKERNEL Kernel,
+    IN gctINT32 ProcessID
+    );
+
+gceSTATUS
+gckKERNEL_FindDatabase(
+    IN gckKERNEL Kernel,
+    IN gctUINT32 ProcessID,
+    IN gctBOOL LastProcessID,
+    OUT gcsDATABASE_PTR * Database
+    );
+
 gceSTATUS
 gckKERNEL_FindHandleDatbase(
     IN gckKERNEL Kernel,
@@ -299,6 +328,13 @@ gceSTATUS
 gckKERNEL_GetProcessMMU(
     IN gckKERNEL Kernel,
     OUT gckMMU * Mmu
+    );
+
+gceSTATUS
+gckKERNEL_SetRecovery(
+    IN gckKERNEL Kernel,
+    IN gctBOOL   Recovery,
+    IN gctUINT32 StuckDump
     );
 
 gceSTATUS
@@ -439,13 +475,13 @@ struct _gckDB
     gctPOINTER                  pointerDatabaseMutex;
 };
 
-#if gcdVIRTUAL_COMMAND_BUFFER
 typedef struct _gckVIRTUAL_COMMAND_BUFFER * gckVIRTUAL_COMMAND_BUFFER_PTR;
 typedef struct _gckVIRTUAL_COMMAND_BUFFER
 {
     gctPHYS_ADDR                physical;
     gctPOINTER                  userLogical;
     gctPOINTER                  kernelLogical;
+    gctSIZE_T                   bytes;
     gctSIZE_T                   pageCount;
     gctPOINTER                  pageTable;
     gctUINT32                   gpuAddress;
@@ -458,7 +494,6 @@ typedef struct _gckVIRTUAL_COMMAND_BUFFER
 #endif
 }
 gckVIRTUAL_COMMAND_BUFFER;
-#endif
 
 /* gckKERNEL object. */
 struct _gckKERNEL
@@ -493,9 +528,8 @@ struct _gckKERNEL
 #if VIVANTE_PROFILER
     /* Enable profiling */
     gctBOOL                     profileEnable;
-
-    /* The profile file name */
-    gctCHAR                     profileFileName[gcdMAX_PROFILE_FILE_NAME];
+    /* Clear profile register or not*/
+    gctBOOL                     profileCleanRegister;
 #endif
 
 #ifdef QNX_SINGLE_THREADED_DEBUGGING
@@ -524,11 +558,13 @@ struct _gckKERNEL
     gckVGKERNEL                 vg;
 #endif
 
-#if gcdVIRTUAL_COMMAND_BUFFER
+    /* Virtual command buffer list. */
     gckVIRTUAL_COMMAND_BUFFER_PTR virtualBufferHead;
     gckVIRTUAL_COMMAND_BUFFER_PTR virtualBufferTail;
     gctPOINTER                    virtualBufferLock;
-#endif
+
+    /* Enable virtual command buffer. */
+    gctBOOL                     virtualCommandBuffer;
 
 #if gcdDVFS
     gckDVFS                     dvfs;
@@ -537,6 +573,12 @@ struct _gckKERNEL
 #if gcdANDROID_NATIVE_FENCE_SYNC
     gctHANDLE                   timeline;
 #endif
+
+    /* Enable recovery. */
+    gctBOOL                     recovery;
+
+    /* Level of dump information after stuck. */
+    gctUINT                     stuckDump;
 };
 
 struct _FrequencyHistory
@@ -747,6 +789,9 @@ struct _gckEVENT
 #endif
     volatile gctUINT            pending;
 #endif
+#if gcdMULTI_GPU
+    gctUINT32                   busy;
+#endif
 
     /* List of free event structures and its mutex. */
     gcsEVENT_PTR                freeEventList;
@@ -937,6 +982,8 @@ typedef struct _gcsVIDMEM_NODE
 
     gctPOINTER                  mapMutex;
 #endif
+
+    gceSURF_TYPE                type;
 }
 gcsVIDMEM_NODE;
 
@@ -972,6 +1019,7 @@ gceSTATUS
 gckVIDMEM_NODE_Allocate(
     IN gckKERNEL Kernel,
     IN gcuVIDMEM_NODE_PTR VideoNode,
+    IN gceSURF_TYPE Type,
     IN gctUINT32 * Handle
     );
 
@@ -1076,17 +1124,18 @@ struct _gckMMU
 #endif
 };
 
-#if gcdVIRTUAL_COMMAND_BUFFER
 gceSTATUS
 gckOS_CreateKernelVirtualMapping(
     IN gctPHYS_ADDR Physical,
+    IN gctSIZE_T Bytes,
     OUT gctSIZE_T * PageCount,
     OUT gctPOINTER * Logical
     );
 
 gceSTATUS
 gckOS_DestroyKernelVirtualMapping(
-    IN gctPOINTER Logical
+    IN gctPOINTER Logical,
+    IN gctSIZE_T Bytes
     );
 
 gceSTATUS
@@ -1119,7 +1168,6 @@ gckKERNEL_QueryGPUAddress(
     IN gctUINT32 GpuAddress,
     OUT gckVIRTUAL_COMMAND_BUFFER_PTR * Buffer
     );
-#endif
 
 gceSTATUS
 gckKERNEL_AttachProcess(

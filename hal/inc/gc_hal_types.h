@@ -744,53 +744,6 @@ gceSTATUS;
 
 /*----------------------------------------------------------------------------*/
 
-#if gcdSTREAM_OUT_BUFFER
-#define gcmDEFINESTATEBUFFER(CommandBuffer, StateDelta, Memory, ReserveSize) \
-    gcmDEFINESECUREUSER() \
-    gctSIZE_T ReserveSize; \
-    gcoCMDBUF CommandBuffer; \
-    gcoCMDBUF CommandBuffer ## SO = gcvNULL; \
-    gctUINT32_PTR Memory; \
-    gcsSTATE_DELTA_PTR StateDelta
-
-#define gcmBEGINSTATEBUFFER(Hardware, CommandBuffer, StateDelta, Memory, ReserveSize) \
-{ \
-    gcmONERROR(gcoBUFFER_Reserve( \
-        Hardware->buffer, ReserveSize, gcvTRUE, &CommandBuffer \
-        )); \
-    \
-    if (Hardware->streamoutEnabled) \
-    { \
-        gcmONERROR(gcoBUFFER_Reserve( \
-            Hardware->streamoutBuffer, ReserveSize, gcvTRUE, &CommandBuffer ## SO \
-            )); \
-    } \
-    \
-    Memory = (gctUINT32_PTR) gcmUINT64_TO_PTR(CommandBuffer->lastReserve); \
-    \
-    StateDelta = Hardware->delta; \
-    \
-    gcmBEGINSECUREUSER(); \
-}
-
-#define gcmENDSTATEBUFFER(Hardware, CommandBuffer, Memory, ReserveSize) \
-{ \
-    gcmENDSECUREUSER(); \
-    \
-    gcmASSERT( \
-        gcmUINT64_TO_TYPE(CommandBuffer->lastReserve, gctUINT8_PTR) + ReserveSize \
-        == \
-         (gctUINT8_PTR) Memory \
-        ); \
-    \
-    if (Hardware->streamoutEnabled) \
-    { \
-        gcoOS_MemCopy(gcmUINT64_TO_PTR(CommandBuffer ## SO->lastReserve), \
-                      gcmUINT64_TO_PTR(CommandBuffer->lastReserve), \
-                      ReserveSize); \
-    } \
-}
-#else
 #define gcmDEFINESTATEBUFFER(CommandBuffer, StateDelta, Memory, ReserveSize) \
     gcmDEFINESECUREUSER() \
     gctSIZE_T ReserveSize; \
@@ -821,7 +774,6 @@ gceSTATUS;
          (gctUINT8_PTR) Memory \
         ); \
 }
-#endif
 
 /*----------------------------------------------------------------------------*/
 
@@ -1221,7 +1173,7 @@ struct _gckLINKDATA
 {
     gctUINT32                   start;
     gctUINT32                   end;
-    gctINT                      pid;
+    gctUINT32                   pid;
 };
 
 typedef struct _gckLINKQUEUE * gckLINKQUEUE;

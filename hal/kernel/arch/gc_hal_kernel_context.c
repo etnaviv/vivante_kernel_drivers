@@ -204,6 +204,15 @@
         gcvFALSE, gcvTRUE                                                      \
         )
 
+#define _STATE_COUNT_OFFSET_HINT(reg, offset, count)                           \
+    _State(                                                                    \
+        Context, index,                                                        \
+        (reg ## _Address >> 2) + offset,                                       \
+        reg ## _ResetValue,                                                    \
+        count,                                                                 \
+        gcvFALSE, gcvTRUE                                                      \
+        )
+
 #define _STATE_X(reg)                                                          \
     _State(                                                                    \
         Context, index,                                                        \
@@ -1007,6 +1016,50 @@ _InitializeContextBuffer(
 	index += _State( Context, index,0x01700 >> 2,0x00000000,Context->hardware->identity.pixelPipes,gcvFALSE,gcvFALSE);
 	    }
 
+#if gcd3DBLIT
+	index += _State( Context, index,((0x14000 >> 2) + (0<<1)),0x00000000,2,gcvFALSE,gcvTRUE);
+		index += _State( Context, index,0x14008 >> 2,0x00000000,1,gcvFALSE,gcvFALSE);
+		index += _State( Context, index,0x1400C >> 2,0x0001C800,1,gcvFALSE,gcvFALSE);
+		index += _State( Context, index,0x14010 >> 2,0x00000000,1,gcvFALSE,gcvTRUE);
+		index += _State( Context, index,0x14014 >> 2,0x00000000,1,gcvFALSE,gcvFALSE);
+		index += _State( Context, index,((0x14018 >> 2) + (0<<1)),0x00000000,2,gcvFALSE,gcvTRUE);
+		index += _State( Context, index,0x14020 >> 2,0x00000000,1,gcvFALSE,gcvTRUE);
+		index += _State( Context, index,0x14024 >> 2,0x00000000,1,gcvFALSE,gcvFALSE);
+		index += _State( Context, index,0x14028 >> 2,0x0001C800,1,gcvFALSE,gcvFALSE);
+		index += _State( Context, index,0x1402C >> 2,0x00000000,1,gcvFALSE,gcvFALSE);
+		index += _State( Context, index,0x14030 >> 2,0x00000000,1,gcvFALSE,gcvFALSE);
+		index += _State( Context, index,0x14034 >> 2,0x00000000,1,gcvFALSE,gcvFALSE);
+		index += _State( Context, index,0x14038 >> 2,0x00000000,1,gcvFALSE,gcvFALSE);
+		index += _State( Context, index,0x1403C >> 2,0x00000000,1,gcvFALSE,gcvFALSE);
+		index += _State( Context, index,0x14040 >> 2,0x00000000,1,gcvFALSE,gcvFALSE);
+		index += _State( Context, index,0x14044 >> 2,0x00000000,1,gcvFALSE,gcvFALSE);
+		index += _State( Context, index,0x14048 >> 2,0x00000000,1,gcvFALSE,gcvFALSE);
+		index += _State( Context, index,0x1404C >> 2,0x00000000,1,gcvFALSE,gcvFALSE);
+		index += _State( Context, index,0x14050 >> 2,0x00000000,1,gcvFALSE,gcvFALSE);
+		index += _State( Context, index,0x14058 >> 2,0x00000000,1,gcvFALSE,gcvFALSE);
+		index += _State( Context, index,0x1405C >> 2,0x00000000,1,gcvFALSE,gcvFALSE);
+		index += _State( Context, index,0x14054 >> 2,0x00000000,1,gcvFALSE,gcvFALSE);
+		index += _State( Context, index,0x14100 >> 2,0x00000000,64,gcvFALSE,gcvFALSE);
+		index += _State( Context, index,0x14200 >> 2,0x00000000,64,gcvFALSE,gcvFALSE);
+		index += _State( Context, index,0x14064 >> 2,0x00000000,1,gcvFALSE,gcvFALSE);
+		index += _State( Context, index,0x14068 >> 2,0x00000000,1,gcvFALSE,gcvFALSE);
+	
+	index += _State( Context, index,0x1406C >> 2,0x00000000,1,gcvFALSE,gcvFALSE);
+		index += _State( Context, index,0x14070 >> 2,0x00000000,1,gcvFALSE,gcvFALSE);
+		index += _State( Context, index,0x14074 >> 2,0x00000000,1,gcvFALSE,gcvFALSE);
+		index += _State( Context, index,0x14078 >> 2,0x00000000,1,gcvFALSE,gcvFALSE);
+		index += _State( Context, index,0x1407C >> 2,0x00000000,1,gcvFALSE,gcvFALSE);
+		index += _State( Context, index,0x14080 >> 2,0x00000000,1,gcvFALSE,gcvFALSE);
+		index += _State( Context, index,0x14084 >> 2,0x00000000,1,gcvFALSE,gcvFALSE);
+		index += _State( Context, index,0x14088 >> 2,0x00000000,1,gcvFALSE,gcvFALSE);
+		index += _State( Context, index,0x1408C >> 2,0x00000000,1,gcvFALSE,gcvFALSE);
+		index += _State( Context, index,0x14090 >> 2,0x00000000,1,gcvFALSE,gcvFALSE);
+	
+	index += _State( Context, index,0x14094 >> 2,0x00000000,1,gcvFALSE,gcvFALSE);
+		index += _State( Context, index,0x14098 >> 2,0x00000000,1,gcvFALSE,gcvFALSE);
+	
+#endif
+
     /* Tile status. */
 	index += _State( Context, index,0x01654 >> 2,0x00200000,1,gcvFALSE,gcvFALSE);
 	
@@ -1026,14 +1079,18 @@ _InitializeContextBuffer(
 		index += _State( Context, index,0x01740 >> 2,0x00000000,8,gcvFALSE,gcvTRUE);
 		index += _State( Context, index,0x01760 >> 2,0x00000000,8,gcvFALSE,gcvFALSE);
 	
-	index += _State( Context, index,0x01780 >> 2,0x00000000,8,gcvFALSE,gcvFALSE);
-	
+
     if (halti2)
     {
-	index += _State( Context, index,0x016BC >> 2,0x00000000,1,gcvFALSE,gcvFALSE);
-	
-        /*TBD: need add MRT tile status registers here */
-    }
+	index += _State( Context, index,0x01780 >> 2,0x00000000,8,gcvFALSE,gcvFALSE);
+		index += _State( Context, index,0x016BC >> 2,0x00000000,1,gcvFALSE,gcvFALSE);
+		index += _State( Context, index,(0x017A0 >> 2) + 1,0x00000000,7,gcvFALSE,gcvFALSE);
+		index += _State( Context, index,(0x017C0 >> 2) + 1,0x00000000,7,gcvFALSE,gcvTRUE);
+		index += _State( Context, index,(0x017E0 >> 2) + 1,0x00000000,7,gcvFALSE,gcvTRUE);
+		index += _State( Context, index,(0x01A00 >> 2) + 1,0x00000000,7,gcvFALSE,gcvFALSE);
+		index += _State( Context, index,(0x01A20 >> 2) + 1,0x00000000,7,gcvFALSE,gcvFALSE);
+		index += _State( Context, index,(0x01A40 >> 2) + 1,0x00000000,7,gcvFALSE,gcvFALSE);
+	    }
 
     index += _CLOSE_RANGE();
 
@@ -1140,25 +1197,26 @@ _DestroyContext(
             /* Free state delta map. */
             if (buffer->logical != gcvNULL)
             {
-#if gcdVIRTUAL_COMMAND_BUFFER
-                gcmkONERROR(gckEVENT_DestroyVirtualCommandBuffer(
-                    Context->hardware->kernel->eventObj,
-                    Context->totalSize,
-                    buffer->physical,
-                    buffer->logical,
-                    gcvKERNEL_PIXEL
-                    ));
-
-#else
-                gcmkONERROR(gckEVENT_FreeContiguousMemory(
-                    Context->hardware->kernel->eventObj,
-                    Context->totalSize,
-                    buffer->physical,
-                    buffer->logical,
-                    gcvKERNEL_PIXEL
-                    ));
-
-#endif
+                if (Context->hardware->kernel->virtualCommandBuffer)
+                {
+                    gcmkONERROR(gckEVENT_DestroyVirtualCommandBuffer(
+                        Context->hardware->kernel->eventObj,
+                        Context->totalSize,
+                        buffer->physical,
+                        buffer->logical,
+                        gcvKERNEL_PIXEL
+                        ));
+                }
+                else
+                {
+                    gcmkONERROR(gckEVENT_FreeContiguousMemory(
+                        Context->hardware->kernel->eventObj,
+                        Context->totalSize,
+                        buffer->physical,
+                        buffer->logical,
+                        gcvKERNEL_PIXEL
+                        ));
+                }
 
                 buffer->logical = gcvNULL;
             }
@@ -1400,25 +1458,26 @@ gckCONTEXT_Construct(
             ));
 
         /* Create a new physical context buffer. */
-#if gcdVIRTUAL_COMMAND_BUFFER
-        gcmkONERROR(gckKERNEL_AllocateVirtualCommandBuffer(
-            context->hardware->kernel,
-            gcvFALSE,
-            &context->totalSize,
-            &buffer->physical,
-            &pointer
-            ));
-
-#else
-        gcmkONERROR(gckOS_AllocateContiguous(
-            Os,
-            gcvFALSE,
-            &context->totalSize,
-            &buffer->physical,
-            &pointer
-            ));
-
-#endif
+        if (context->hardware->kernel->virtualCommandBuffer)
+        {
+            gcmkONERROR(gckKERNEL_AllocateVirtualCommandBuffer(
+                context->hardware->kernel,
+                gcvFALSE,
+                &context->totalSize,
+                &buffer->physical,
+                &pointer
+                ));
+        }
+        else
+        {
+            gcmkONERROR(gckOS_AllocateContiguous(
+                Os,
+                gcvFALSE,
+                &context->totalSize,
+                &buffer->physical,
+                &pointer
+                ));
+        }
 
         buffer->logical = pointer;
 

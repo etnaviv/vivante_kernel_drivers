@@ -364,6 +364,93 @@ static ssize_t store_poweroff_idle_timeout (struct device *dev,
 gc_sysfs_attr_rw(poweroff_idle_timeout);
 #endif
 
+#if MRVL_ENABLE_COMMON_PWRCLK_FRAMEWORK /* == 1 */
+
+static ssize_t show_clk_rate (struct device *dev,
+                    struct device_attribute *attr,
+                    char * buf)
+{
+    gceSTATUS status;
+    unsigned int clockRate = 0;
+    int i = 0, len = 0;
+
+    for(i = 0; i < gcdMAX_GPU_COUNT; i++)
+    {
+        if(galDevice->kernels[i] != gcvNULL)
+        {
+            status = gckOS_QueryClkRate(galDevice->os, i, &clockRate);
+            if(status == gcvSTATUS_OK)
+            {
+                len += sprintf(buf+len, "[%s] current frequency: %u MHZ\n", _core_desc[i], clockRate/1000);
+            }
+            else
+            {
+                len += sprintf(buf+len, "[%s] failed to get clock rate\n", _core_desc[i]);
+            }
+
+#if MRVL_3D_CORE_SH_CLOCK_SEPARATED
+            if(i == gcvCORE_MAJOR)
+            {
+                unsigned int shClkRate = 0;
+
+                status = gckOS_QueryClkRate(galDevice->os, gcvCORE_SH, &shClkRate);
+                if(status == gcvSTATUS_OK)
+                {
+                    len += sprintf(buf+len, "[%s] current frequency: %u MHZ\n", "SH", shClkRate/1000);
+                }
+                else
+                {
+                    len += sprintf(buf+len, "[%s] failed to get clock rate\n", "SH");
+                }
+            }
+#endif
+        }
+    }
+
+    return len;
+}
+
+static ssize_t store_clk_rate (struct device *dev,
+                    struct device_attribute *attr,
+                    const char *buf, size_t count)
+{
+    gceSTATUS status;
+    int core, frequency, i, gpu_count;
+
+    for (i = 0, gpu_count = 0; i < gcdMAX_GPU_COUNT; i++)
+        if (galDevice->kernels[i] != gcvNULL)
+            gpu_count++;
+
+#if MRVL_3D_CORE_SH_CLOCK_SEPARATED
+    gpu_count++;
+#endif
+
+    /* read input and verify */
+    SYSFS_VERIFY_INPUT(sscanf(buf, "%d,%d", &core, &frequency), 2);
+    SYSFS_VERIFY_INPUT_RANGE(core, 0, (gpu_count-1));
+    SYSFS_VERIFY_INPUT_RANGE(frequency, 156, 624);
+
+#if MRVL_3D_CORE_SH_CLOCK_SEPARATED
+    if(core ==gcvCORE_SH)
+    {
+        status = gckOS_SetClkRate(galDevice->os, gcvCORE_SH, frequency*1000);
+    }
+    else
+#endif
+    {
+        status = gckOS_SetClkRate(galDevice->os, core, frequency*1000);
+    }
+
+    if(gcmIS_ERROR(status))
+    {
+        printk("fail to set core[%d] frequency to %d MHZ\n", core, frequency);
+    }
+
+    return count;
+}
+
+#else /* MRVL_ENABLE_COMMON_PWRCLK_FRAMEWORK == 0 */
+
 static ssize_t show_clk_rate (struct device *dev,
                     struct device_attribute *attr,
                     char * buf)
@@ -443,6 +530,8 @@ static ssize_t store_clk_rate (struct device *dev,
 
     return count;
 }
+
+#endif /* MRVL_ENABLE_COMMON_PWRCLK_FRAMEWORK */
 
 gc_sysfs_attr_rw(pm_state);
 gc_sysfs_attr_rw(profiler_debug);
@@ -573,39 +662,7 @@ static ssize_t show_current_freq (struct device *dev,
                     struct device_attribute *attr,
                     char * buf)
 {
-    gceSTATUS status;
-    unsigned int clockRate = 0;
-    int i = 0, len = 0;
-
-    for(i = 0; i < gcdMAX_GPU_COUNT; i++)
-    {
-        if(galDevice->kernels[i] != gcvNULL)
-        {
-            status = gckOS_QueryClkRate(galDevice->os, i, &clockRate);
-            len += sprintf(buf+len, "[%s] current frequency: %u MHZ\n", _core_desc[i], clockRate/1000/1000);
-
-#if MRVL_CONFIG_SHADER_CLK_CONTROL
-            if(i == 0)
-            {
-                unsigned int shClkRate = 0;
-
-                status = gckOS_QueryShClkRate(galDevice->os, gcvCORE_MAJOR, &shClkRate);
-                if(!status)
-                {
-                    len += sprintf(buf+len, "[%s] current frequency: %u MHZ\n", "SH", shClkRate/1000/1000);
-                }
-                else
-                {
-                    len += sprintf(buf+len, "[SH] failed to get clock clk\n");
-                }
-            }
-#endif
-        }
-    }
-
-
-
-    return len;
+    return show_clk_rate(dev, attr, buf);
 }
 
 static ssize_t show_control (struct device *dev,

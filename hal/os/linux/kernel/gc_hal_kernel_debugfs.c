@@ -33,7 +33,9 @@
 #include <linux/poll.h>
 #include <asm/uaccess.h>
 #include <linux/completion.h>
+#include <linux/seq_file.h>
 #include "gc_hal_kernel_linux.h"
+#include "gc_hal_kernel.h"
 
 /*
    Prequsite:
@@ -58,6 +60,12 @@
 
    5)To write into debugfs from kernel side, Use the function called gckDEBUGFS_Print
 
+   How to Get Video Memory Usage:
+   1) Select a process whose video memory usage can be dump, no need to reset it until <pid> is needed to be change.
+        echo <pid>  > /sys/kernel/debug/gpu/vidmem
+
+   2) Get video memory usage.
+        cat /sys/kernel/debug/gpu/vidmem
 
    USECASE Kernel Dump:
 
@@ -100,6 +108,7 @@ struct _gcsDEBUGFS_Node
 #endif
     struct dentry *parent ; /*parent directory*/
     struct dentry *filen ; /*filename*/
+    struct dentry *vidmem;
     struct semaphore sem ; /* mutual exclusion semaphore */
     char *data ; /* The circular buffer data */
     int size ; /* Size of the buffer pointed to by 'data' */
@@ -263,7 +272,6 @@ _WriteToNode (
     }
 }
 
-
 /*******************************************************************************
  **
  **         PRINTING UTILITY (START)
@@ -347,7 +355,7 @@ _DebugFSPrint (
 
    if(in_interrupt())
     {
-     return - ERESTARTSYS ;
+        return - ERESTARTSYS ;
     }
 
     if(down_interruptible( gcmkNODE_SEM ( gc_dbgfs.currentNode ) ) )
@@ -528,6 +536,119 @@ _DebugFSWrite (
     return n ;
 }
 
+int dumpProcess = 0;
+
+static int vidmem_show(struct seq_file *file, void *unused)
+{
+    gctUINT32 i = 0;
+    gceSTATUS status;
+    gcsDATABASE_PTR database;
+    gcsDATABASE_COUNTERS * counter;
+    gckGALDEVICE device = file->private;
+
+    gckKERNEL kernel = device->kernels[gcvCORE_MAJOR];
+
+    static gctCONST_STRING surfaceTypes[] = {
+        "UNKNOWN",
+        "Index",
+        "Vertex",
+        "Texture",
+        "RT",
+        "Depth",
+        "Bitmap",
+        "TS",
+        "Image",
+        "Mask",
+        "Scissor",
+        "HZDepth",
+    };
+
+    /* Find the database. */
+    gcmkONERROR(
+        gckKERNEL_FindDatabase(kernel, dumpProcess, gcvFALSE, &database));
+
+    seq_printf(file, "VidMem Usage (Process %d):\n", dumpProcess);
+
+    /* Get pointer to counters. */
+    counter = &database->vidMem;
+
+    seq_printf(file,"%-9s%10s","", "All");
+
+    for (i = 1; i < gcvSURF_NUM_TYPES; i++)
+    {
+        counter = &database->vidMemDetail[i];
+
+        seq_printf(file, "%10s",surfaceTypes[i]);
+    }
+
+    seq_printf(file, "\n");
+
+    seq_printf(file,"%-9s","Current");
+
+    seq_printf(file,"%10lld", database->vidMem.bytes);
+
+    for (i = 1; i < gcvSURF_NUM_TYPES; i++)
+    {
+        counter = &database->vidMemDetail[i];
+
+        seq_printf(file,"%10lld", counter->bytes);
+    }
+
+    seq_printf(file, "\n");
+
+    seq_printf(file,"%-9s","Maximum");
+
+    seq_printf(file,"%10lld", database->vidMem.maxBytes);
+
+    for (i = 1; i < gcvSURF_NUM_TYPES; i++)
+    {
+        counter = &database->vidMemDetail[i];
+
+        seq_printf(file,"%10lld", counter->maxBytes);
+    }
+
+    seq_printf(file, "\n");
+
+    seq_printf(file,"%-9s","Total");
+
+    seq_printf(file,"%10lld", database->vidMem.totalBytes);
+
+    for (i = 1; i < gcvSURF_NUM_TYPES; i++)
+    {
+        counter = &database->vidMemDetail[i];
+
+        seq_printf(file,"%10lld", counter->totalBytes);
+    }
+
+    seq_printf(file, "\n");
+
+    return 0;
+
+OnError:
+    return 0;
+}
+
+static int
+vidmem_open(
+    struct inode *inode,
+    struct file *file
+    )
+{
+    return single_open(file, vidmem_show, inode->i_private);
+}
+
+static ssize_t
+vidmem_write(
+    struct file *file,
+    const char __user *buf,
+    size_t count,
+    loff_t *pos
+    )
+{
+    dumpProcess = simple_strtol(buf, NULL, 0);
+    return count;
+}
+
 /*******************************************************************************
  **
  ** File Operations Table
@@ -537,6 +658,14 @@ static const struct file_operations debugfs_operations = {
                                                           .owner = THIS_MODULE ,
                                                           .read = _DebugFSRead ,
                                                           .write = _DebugFSWrite ,
+} ;
+
+static const struct file_operations vidmem_operations = {
+    .owner = THIS_MODULE ,
+    .open = vidmem_open,
+    .read = seq_read,
+    .write = vidmem_write,
+    .llseek = seq_lseek,
 } ;
 
 /*******************************************************************************
@@ -632,11 +761,12 @@ gckDEBUGFS_Terminate ( void )
 
 gctINT
 gckDEBUGFS_CreateNode (
-                               IN gctINT SizeInKB ,
-                               IN gctCONST_STRING ParentName ,
-                               IN gctCONST_STRING NodeName ,
-                               OUT gcsDEBUGFS_Node **Node
-                               )
+    IN gctPOINTER Device,
+    IN gctINT SizeInKB ,
+    IN gctCONST_STRING ParentName ,
+    IN gctCONST_STRING NodeName ,
+    OUT gcsDEBUGFS_Node **Node
+    )
 {
     gcsDEBUGFS_Node*node ;
     /* allocate space for our metadata and initialize it */
@@ -661,18 +791,23 @@ gckDEBUGFS_CreateNode (
     sema_init ( gcmkNODE_SEM ( node ) , 1 ) ;
     /*End the sync primitives*/
 
-
-    /* figure out how much of a buffer this should be and allocate the buffer */
-    node->size = 1024 * SizeInKB ;
-    if ( ( node->data = ( char * ) vmalloc ( sizeof (char ) * node->size ) ) == NULL )
-        goto data_malloc_failed ;
-
     /*creating the debug file system*/
-    node->parent = debugfs_create_dir ( ParentName , NULL ) ;
+    node->parent = debugfs_create_dir(ParentName, NULL);
 
-    /*creating the file*/
-    node->filen = debugfs_create_file ( NodeName , S_IRUGO | S_IWUSR , node->parent , NULL ,
-                                        &debugfs_operations ) ;
+    if (SizeInKB)
+    {
+        /* figure out how much of a buffer this should be and allocate the buffer */
+        node->size = 1024 * SizeInKB ;
+        if ( ( node->data = ( char * ) vmalloc ( sizeof (char ) * node->size ) ) == NULL )
+            goto data_malloc_failed ;
+
+        /*creating the file*/
+        node->filen = debugfs_create_file(NodeName, S_IRUGO|S_IWUSR, node->parent, NULL,
+                                          &debugfs_operations);
+    }
+
+    node->vidmem
+        = debugfs_create_file("vidmem", S_IRUGO|S_IWUSR, node->parent, Device, &vidmem_operations);
 
     /* add it to our linked list */
     node->next = gc_dbgfs.linkedlist ;
@@ -718,6 +853,11 @@ gckDEBUGFS_FreeNode (
     vfree ( Node->data ) ;
 
     /*Close Debug fs*/
+    if (Node->vidmem)
+    {
+        debugfs_remove(Node->vidmem);
+    }
+
     if ( Node->filen )
     {
         debugfs_remove ( Node->filen ) ;

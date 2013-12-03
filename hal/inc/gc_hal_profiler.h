@@ -180,7 +180,7 @@ extern "C" {
 #define VPG_ES30_TIME   0x180000
 #define VPG_FRAME       0x190000
 #define VPG_ES11_DRAW   0x200000
-#define VPG_ES20_DRAW   0x210000
+#define VPG_ES30_DRAW   0x210000
 #define VPG_END         0xff0000
 
 /* Info. */
@@ -324,7 +324,7 @@ extern "C" {
 
 #define VPC_PROGRAMHANDLE           (VPG_PROG + 1)
 
-#define VPC_ES20_DRAW_NO            (VPG_ES20_DRAW + 1)
+#define VPC_ES30_DRAW_NO            (VPG_ES30_DRAW + 1)
 #define VPC_ES11_DRAW_NO            (VPG_ES11_DRAW + 1)
 #endif
 

@@ -106,7 +106,16 @@
 #if defined(ANDROID)
 #define MRVL_ENABLE_GC_POWER_CLOCK              1
 #else
-#define MRVL_ENABLE_GC_POWER_CLOCK              0
+#define MRVL_ENABLE_GC_POWER_CLOCK              1
+#endif
+
+/*
+ * Use common power/clock framework
+ */
+#if (MRVL_PLATFORM_PXA1L88)
+#define MRVL_ENABLE_COMMON_PWRCLK_FRAMEWORK     1
+#else
+#define MRVL_ENABLE_COMMON_PWRCLK_FRAMEWORK     0
 #endif
 
 /* FIXME: EDEN 2D could NOT be power off now, so hack it here */
@@ -136,20 +145,18 @@
 #define MRVL_CONFIG_POWER_CLOCK_SEPARATED       0
 #endif
 
-#if (defined ANDROID) && (!VIVANTE_PROFILER) && \
+#if (!VIVANTE_PROFILER) && \
     (MRVL_PLATFORM_PXA1L88 || MRVL_PLATFORM_TTD2)
 #define MRVL_POLICY_CLKOFF_WHEN_IDLE            1
 #else
 #define MRVL_POLICY_CLKOFF_WHEN_IDLE            0
 #endif
 
-/* do not claim contiguous memory as platform device resource since it conflits with other resource */
-#if MRVL_PLATFORM_MMP3 || MRVL_PLATFORM_NEVO || MRVL_PLATFORM_988 || \
-    MRVL_PLATFORM_PXA1088 || MRVL_PLATFORM_PXA1L88 || MRVL_PLATFORM_TTD2 || \
-    MRVL_PLATFORM_ADIR
-#define MRVL_CONTIGUOUS_AS_IORESOURCE_MEM       0
+/* Reserve memory by using memblock when board inits */
+#if defined(CONFIG_GPU_RESERVE_MEM)
+#define MRVL_USE_GPU_RESERVE_MEM                1
 #else
-#define MRVL_CONTIGUOUS_AS_IORESOURCE_MEM       1
+#define MRVL_USE_GPU_RESERVE_MEM                0
 #endif
 
 /* API log enable */
@@ -266,12 +273,18 @@
 #define MRVL_CONFIG_ENABLE_GPUFREQ              0
 #endif
 
+#if (defined ANDROID) && (MRVL_PLATFORM_PXA1L88)
+#define MRVL_CONFIG_ENABLE_QOS_SUPPORT          1
+#else
+#define MRVL_CONFIG_ENABLE_QOS_SUPPORT          0
+#endif
+
 /*
     MRVL_DFC_PROTECT_REG_ACCESS
         -- Protect register access when DFC to workaround Eden Z1 GC DFC issue
 */
 #if MRVL_CONFIG_ENABLE_GPUFREQ && (MRVL_PLATFORM_TTD2)
-#define MRVL_DFC_PROTECT_REG_ACCESS             1
+#define MRVL_DFC_PROTECT_REG_ACCESS             0
 #else
 #define MRVL_DFC_PROTECT_REG_ACCESS             0
 #endif
@@ -384,9 +397,12 @@
 /* @Ziyi: If any change happened between these 2 comments please contact zyxu@marvell.com, Thanks. */
 /* #################### [START ==DO NOT CHANGE THIS MARCRO== START] #################### */
 
-#define _GC_VERSION_STRING_                     "GC version eden-jb42-alpha4-r2"
+#define _GC_VERSION_STRING_                     "GC version eden-jb42-alpha5-r1"
 
 /* Do not align u/v stride to 16 */
 #define VIVANTE_ALIGN_UVSTRIDE                  0
+
+/* Enable single layer RGB bypass in HWC-GCU */
+#define RGB_BYPASS                              0
 
 #endif /* __gc_hal_options_mrvl_h_*/

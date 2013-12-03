@@ -15,7 +15,6 @@
 #if MRVL_CONFIG_ENABLE_GPUFREQ
 #if MRVL_PLATFORM_TTD2
 #include <linux/clk.h>
-#include <plat/clock.h>
 #include <linux/err.h>
 
 #define GPUFREQ_FREQ_TABLE_MAX_NUM  10
@@ -26,6 +25,7 @@
     _table[_index].frequency = _freq;  \
 }
 
+#if 0
 extern int get_gc3d_freqs_table(unsigned long *gcu3d_freqs_table,
                         unsigned int *item_counts, unsigned int max_item_counts);
 
@@ -34,6 +34,40 @@ extern int get_gc3d_sh_freqs_table(unsigned long *gcu3d_sh_freqs_table,
 
 extern int get_gc2d_freqs_table(unsigned long *gcu2d_freqs_table,
                         unsigned int *item_counts, unsigned int max_item_counts);
+#endif
+
+int get_gc3d_freqs_table(unsigned long *gcu3d_freqs_table,
+                        unsigned int *item_counts, unsigned int max_item_counts)
+{
+    gcu3d_freqs_table[0] = 156000000;
+    gcu3d_freqs_table[1] = 208000000;
+    gcu3d_freqs_table[2] = 312000000;
+    gcu3d_freqs_table[3] = 528000000;
+    *item_counts = 4;
+    return 0;
+}
+
+int get_gc3d_sh_freqs_table(unsigned long *gcu3d_sh_freqs_table,
+                        unsigned int *item_counts, unsigned int max_item_counts)
+{
+    gcu3d_sh_freqs_table[0] = 156000000;
+    gcu3d_sh_freqs_table[1] = 208000000;
+    gcu3d_sh_freqs_table[2] = 312000000;
+    gcu3d_sh_freqs_table[3] = 528000000;
+    *item_counts = 4;
+    return 0;
+}
+
+int get_gc2d_freqs_table(unsigned long *gcu2d_freqs_table,
+                        unsigned int *item_counts, unsigned int max_item_counts)
+{
+    gcu2d_freqs_table[0] = 156000000;
+    gcu2d_freqs_table[1] = 208000000;
+    gcu2d_freqs_table[2] = 312000000;
+    gcu2d_freqs_table[3] = 528000000;
+    *item_counts = 4;
+    return 0;
+}
 
 typedef int (*PFUNC_GET_FREQS_TBL)(unsigned long *, unsigned int *, unsigned int);
 

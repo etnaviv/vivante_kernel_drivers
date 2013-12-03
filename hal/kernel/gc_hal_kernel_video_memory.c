@@ -1415,7 +1415,7 @@ gckVIDMEM_Lock(
     gctBOOL locked = gcvFALSE;
     gckOS os = gcvNULL;
 #if !gcdPROCESS_ADDRESS_SPACE
-    gctBOOL needMapping = gcvTRUE;
+    gctBOOL needMapping = gcvFALSE;
 #endif
     gctUINT32 baseAddress;
 
@@ -1484,6 +1484,11 @@ gckVIDMEM_Lock(
         /* Grab the mutex. */
         gcmkONERROR(gckOS_AcquireMutex(os, Node->Virtual.mutex, gcvINFINITE));
         acquired = gcvTRUE;
+
+#if gcdPAGED_MEMORY_CACHEABLE
+        /* Force video memory cacheable. */
+        Cacheable = gcvTRUE;
+#endif
 
         gcmkONERROR(
             gckOS_LockPages(os,
@@ -2448,6 +2453,7 @@ gceSTATUS
 gckVIDMEM_NODE_Allocate(
     IN gckKERNEL Kernel,
     IN gcuVIDMEM_NODE_PTR VideoNode,
+    IN gceSURF_TYPE Type,
     IN gctUINT32 * Handle
     )
 {
@@ -2466,6 +2472,7 @@ gckVIDMEM_NODE_Allocate(
 
     node->node = VideoNode;
     node->name = 0;
+    node->type = Type;
 #if gcdPROCESS_ADDRESS_SPACE
     node->mapHead =
     node->mapTail = gcvNULL;

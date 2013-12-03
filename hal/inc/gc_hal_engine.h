@@ -63,6 +63,24 @@ gcoHAL_QueryShaderCaps(
     );
 
 gceSTATUS
+gcoHAL_QueryShaderCapsEx(
+                         IN gcoHAL Hal,
+                         OUT gctUINT * ShaderCoreCount,
+                         OUT gctUINT * ThreadCount,
+                         OUT gctUINT * VertexInstructionCount,
+                         OUT gctUINT * FragmentInstructionCount
+                         );
+
+gceSTATUS
+gcoHAL_QuerySamplerBase(
+                        IN  gcoHAL Hal,
+                        OUT gctSIZE_T * VertexCount,
+                        OUT gctINT_PTR VertexBase,
+                        OUT gctSIZE_T * FragmentCount,
+                        OUT gctINT_PTR FragmentBase
+                        );
+
+gceSTATUS
 gcoHAL_QueryTextureCaps(
     IN gcoHAL Hal,
     OUT gctUINT * MaxWidth,
@@ -1258,6 +1276,22 @@ gco3D_PrimitiveRestart(
     IN gco3D Engine,
     IN gctBOOL PrimitiveRestart);
 
+#if gcdSTREAM_OUT_BUFFER
+
+gceSTATUS
+gco3D_BeginStreamOut(
+    IN gco3D Engine);
+
+gceSTATUS
+gco3D_EndStreamOut(
+    IN gco3D Engine);
+
+gceSTATUS
+gco3D_AdvanceStreamOut(
+    IN gco3D Engine);
+
+#endif
+
 /*----------------------------------------------------------------------------*/
 /*-------------------------- gco3D Fragment Processor ------------------------*/
 
@@ -1386,19 +1420,6 @@ gco3D_SetAlphaTextureFunction(
     IN gctINT Scale
     );
 
-#if gcdSTREAM_OUT_BUFFER
-gceSTATUS
-gco3D_BeginStreamOut(
-    IN gco3D Engine
-    );
-
-gceSTATUS
-gco3D_EndStreamOut(
-    IN gco3D Engine
-    );
-
-#endif
-
 /******************************************************************************\
 ******************************* gcoTEXTURE Object *******************************
 \******************************************************************************/
@@ -1447,7 +1468,6 @@ typedef struct _gcsTEXTURE
     gceTEXTURE_COMPARE_MODE     compareMode;
     gceCOMPARE                  compareFunc;
 
-    gctBOOL                     __flag;
 }
 gcsTEXTURE, * gcsTEXTURE_PTR;
 
@@ -1694,6 +1714,14 @@ gcoTEXTURE_GetClosestFormat(
     );
 
 gceSTATUS
+gcoTEXTURE_GetClosestFormatEx(
+    IN gcoHAL Hal,
+    IN gceSURF_FORMAT InFormat,
+    IN gceTEXTURE_TYPE TextureType,
+    OUT gceSURF_FORMAT* OutFormat
+    );
+
+gceSTATUS
 gcoTEXTURE_GetFormatInfo(
     IN gcoTEXTURE Texture,
     IN gctINT preferLevel,
@@ -1713,13 +1741,13 @@ gcoTEXTURE_RenderIntoMipMap(
     );
 
 gceSTATUS
-gcoTEXTURE_IsRenderable(
+gcoTEXTURE_RenderIntoMipMap2(
     IN gcoTEXTURE Texture,
-    IN gctUINT Level
+    IN gctINT Level
     );
 
 gceSTATUS
-gcoTEXTURE_IsRenderableEx(
+gcoTEXTURE_IsRenderable(
     IN gcoTEXTURE Texture,
     IN gctUINT Level
     );
@@ -1793,6 +1821,10 @@ typedef enum _gceVERTEX_FORMAT
     gcvVERTEX_INT_10_10_10_2,
     gcvVERTEX_UNSIGNED_INT_2_10_10_10_REV,
     gcvVERTEX_INT_2_10_10_10_REV,
+    /* integer format */
+    gcvVERTEX_INT8,
+    gcvVERTEX_INT16,
+    gcvVERTEX_INT32,
 }
 gceVERTEX_FORMAT;
 
@@ -1826,6 +1858,12 @@ gceSTATUS
 gcoSTREAM_Size(
     IN gcoSTREAM Stream,
     OUT gctSIZE_T *Size
+    );
+
+gceSTATUS
+gcoSTREAM_Node(
+    IN gcoSTREAM Stream,
+    OUT gcsSURF_NODE_PTR * Node
     );
 
 gceSTATUS
@@ -2342,6 +2380,14 @@ gcoBUFOBJ_GetSize(
     IN gcoBUFOBJ BufObj,
     OUT gctSIZE_T_PTR Size
     );
+
+/* Return memory node of the bufobj */
+gceSTATUS
+gcoBUFOBJ_GetNode(
+    IN gcoBUFOBJ BufObj,
+    OUT gcsSURF_NODE_PTR * Node
+    );
+
 /* Handle GPU cache operations */
 gceSTATUS
 gcoBUFOBJ_GPUCacheOperation(

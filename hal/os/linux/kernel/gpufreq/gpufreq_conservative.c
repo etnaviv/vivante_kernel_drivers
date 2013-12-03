@@ -13,6 +13,7 @@
 #if MRVL_CONFIG_ENABLE_GPUFREQ
 #include <linux/kernel.h>
 #include <linux/atomic.h>
+#include <linux/version.h>
 
 #define DEF_SAMPLING_DOWN_FACTOR            (1)
 #define MAX_SAMPLING_DOWN_FACTOR            (100000)
@@ -499,8 +500,13 @@ static int gpufreq_gov_conservative_init(void)
     /* successfully registered, then init work. */
     for_each_gpu(gpu)
     {
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,7,0))
+        INIT_DEFERRABLE_WORK(&conservative_info_s[gpu].work,
+                                 do_conservative_timer);
+#else
         INIT_DELAYED_WORK_DEFERRABLE(&conservative_info_s[gpu].work,
                                      do_conservative_timer);
+#endif
     }
 
     return 0;

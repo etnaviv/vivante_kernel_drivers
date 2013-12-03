@@ -74,6 +74,7 @@ else
 ifneq ($(QNX), 1)
 LIBS += -lrt
 endif
+PFLAGS += -Wl,-rpath $(SDK_DIR)/drivers
 endif
 
 ifeq ($(PROGRAM), 1)

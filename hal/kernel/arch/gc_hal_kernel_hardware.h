@@ -98,6 +98,7 @@ struct _gckHARDWARE
 #endif
 
     gctBOOL                     powerManagement;
+    gctBOOL                     gpuProfiler;
 
 #if MRVL_CONFIG_ENABLE_GPUFREQ
     struct gcsDEVOBJECT         devObj;

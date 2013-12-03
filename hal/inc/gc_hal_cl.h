@@ -106,6 +106,24 @@ gceSTATUS
 gcoCL_InitializeEnv(
     );
 
+/**********************************************************************
+**
+**  gcoCL_SetHardware
+**
+**  Set the gcoHARDWARE object for current thread.
+**
+**  INPUT:
+**
+**      Nothing
+**
+**  OUTPUT:
+**
+**      Nothing
+*/
+gceSTATUS
+gcoCL_SetHardware(
+    );
+
 /*******************************************************************************
 **
 **  gcoCL_AllocateMemory
@@ -236,6 +254,98 @@ gcoCL_InvalidateMemoryCache(
 
 /*******************************************************************************
 **
+**  gcoCL_ShareMemoryWithStream
+**
+**  Share memory with a stream.
+**
+**  INPUT:
+**
+**      gcoSTREAM Stream
+**          Pointer to the stream object.
+**
+**  OUTPUT:
+**
+**      gctSIZE_T * Bytes
+**          Pointer to a variable that will receive the aligned number of bytes
+**          allocated.
+**
+**      gctPHYS_ADDR * Physical
+**          Pointer to a variable that will receive the physical addresses of
+**          the allocated memory.
+**
+**      gctPOINTER * Logical
+**          Pointer to a variable that will receive the logical address of the
+**          allocation.
+**
+**      gcsSURF_NODE_PTR  * Node
+**          Pointer to a variable that will receive the gcsSURF_NODE structure
+**          pointer that describes the video memory to lock.
+*/
+gceSTATUS
+gcoCL_ShareMemoryWithStream(
+    IN gcoSTREAM            Stream,
+    OUT gctSIZE_T *         Bytes,
+    OUT gctPHYS_ADDR *      Physical,
+    OUT gctPOINTER *        Logical,
+    OUT gcsSURF_NODE_PTR *  Node
+    );
+
+/*******************************************************************************
+**
+**  gcoCL_ShareMemoryWithBufObj
+**
+**  Share memory with a BufObj.
+**
+**  INPUT:
+**
+**      gcoBUFOBJ Stream
+**          Pointer to the stream object.
+**
+**  OUTPUT:
+**
+**      gctSIZE_T * Bytes
+**          Pointer to a variable that will receive the aligned number of bytes
+**          allocated.
+**
+**      gctPHYS_ADDR * Physical
+**          Pointer to a variable that will receive the physical addresses of
+**          the allocated memory.
+**
+**      gctPOINTER * Logical
+**          Pointer to a variable that will receive the logical address of the
+**          allocation.
+**
+**      gcsSURF_NODE_PTR  * Node
+**          Pointer to a variable that will receive the gcsSURF_NODE structure
+**          pointer that describes the video memory to lock.
+*/
+gceSTATUS
+gcoCL_ShareMemoryWithBufObj(
+    IN gcoBUFOBJ            BufObj,
+    OUT gctSIZE_T *         Bytes,
+    OUT gctPHYS_ADDR *      Physical,
+    OUT gctPOINTER *        Logical,
+    OUT gcsSURF_NODE_PTR *  Node
+    );
+
+/*******************************************************************************
+**
+**  gcoCL_UnshareMemory
+**
+**  Unshare memory with a stream.
+**
+**  INPUT:
+**
+**      gcsSURF_NODE_PTR  Node
+**          Pointer to a  gcsSURF_NODE structure
+*/
+gceSTATUS
+gcoCL_UnshareMemory(
+    IN gcsSURF_NODE_PTR     Node
+    );
+
+/*******************************************************************************
+**
 **  gcoCL_FlushSurface
 **
 **  Flush surface to the kernel.
@@ -253,6 +363,19 @@ gcoCL_InvalidateMemoryCache(
 gceSTATUS
 gcoCL_FlushSurface(
     IN gcoSURF              Surface
+    );
+
+gceSTATUS
+gcoCL_LockSurface(
+    IN gcoSURF Surface,
+    OUT gctUINT32 * Address,
+    OUT gctPOINTER * Memory
+    );
+
+gceSTATUS
+gcoCL_UnlockSurface(
+    IN gcoSURF Surface,
+    IN gctPOINTER Memory
     );
 
 /*******************************************************************************
@@ -360,15 +483,138 @@ gcoCL_QueryDeviceInfo(
     OUT gcoCL_DEVICE_INFO_PTR   DeviceInfo
     );
 
+/*******************************************************************************
+**
+**  gcoCL_Commit
+**
+**  Commit the current command buffer to hardware and optionally wait until the
+**  hardware is finished.
+**
+**  INPUT:
+**
+**      gctBOOL Stall
+**          gcvTRUE if the thread needs to wait until the hardware has finished
+**          executing the committed command buffer.
+**
+**  OUTPUT:
+**
+**      Nothing.
+*/
+gceSTATUS
+gcoCL_Commit(
+    IN gctBOOL Stall
+    );
+
+gceSTATUS
+gcoCL_Flush(
+    IN gctBOOL      Stall
+    );
+
+/*******************************************************************************
+**
+**  gcoCL_CreateSignal
+**
+**  Create a new signal.
+**
+**  INPUT:
+**
+**      gctBOOL ManualReset
+**          If set to gcvTRUE, gcoOS_Signal with gcvFALSE must be called in
+**          order to set the signal to nonsignaled state.
+**          If set to gcvFALSE, the signal will automatically be set to
+**          nonsignaled state by gcoOS_WaitSignal function.
+**
+**  OUTPUT:
+**
+**      gctSIGNAL * Signal
+**          Pointer to a variable receiving the created gctSIGNAL.
+*/
+gceSTATUS
+gcoCL_CreateSignal(
+    IN gctBOOL ManualReset,
+    OUT gctSIGNAL * Signal
+    );
+
+/*******************************************************************************
+**
+**  gcoCL_DestroySignal
+**
+**  Destroy a signal.
+**
+**  INPUT:
+**
+**      gctSIGNAL Signal
+**          Pointer to the gctSIGNAL.
+**
+**  OUTPUT:
+**
+**      Nothing.
+*/
+gceSTATUS
+gcoCL_DestroySignal(
+    IN gctSIGNAL Signal
+    );
+
 gceSTATUS
 gcoCL_SubmitSignal(
     IN gctSIGNAL    Signal,
     IN gctHANDLE    Process
     );
 
+/*******************************************************************************
+**
+**  gcoCL_WaitSignal
+**
+**  Wait for a signal to become signaled.
+**
+**  INPUT:
+**
+**      gctSIGNAL Signal
+**          Pointer to the gctSIGNAL.
+**
+**      gctUINT32 Wait
+**          Number of milliseconds to wait.
+**          Pass the value of gcvINFINITE for an infinite wait.
+**
+**  OUTPUT:
+**
+**      Nothing.
+*/
 gceSTATUS
-gcoCL_Flush(
-    IN gctBOOL      Stall
+gcoCL_WaitSignal(
+    IN gctSIGNAL Signal,
+    IN gctUINT32 Wait
+    );
+
+/*******************************************************************************
+**                                gcoCL_LoadKernel
+********************************************************************************
+**
+**  Load a pre-compiled and pre-linked kernel program into the hardware.
+**
+**  INPUT:
+**
+**      gctSIZE_T StateBufferSize
+**          The number of bytes in the 'StateBuffer'.
+**
+**      gctPOINTER StateBuffer
+**          Pointer to the states that make up the shader program.
+**
+**      gcsHINT_PTR Hints
+**          Pointer to a gcsHINT structure that contains information required
+**          when loading the shader states.
+*/
+gceSTATUS
+gcoCL_LoadKernel(
+    IN gctSIZE_T StateBufferSize,
+    IN gctPOINTER StateBuffer,
+    IN gcsHINT_PTR Hints
+    );
+
+gceSTATUS
+gcoCL_InvokeThreadWalker(
+    IN gcsTHREAD_WALKER_INFO_PTR Info,
+    IN gctBOOL Dirty
     );
 
 #ifdef __cplusplus

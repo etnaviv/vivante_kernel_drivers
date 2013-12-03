@@ -632,6 +632,16 @@ int __gpufreq_driver_target(IN struct gpufreq_policy *policy,
     return ret;
 }
 
+int __gpufreq_driver_get(IN unsigned int gpu)
+{
+    int ret = -EINVAL;
+
+    if(gpufreq_driver->get)
+        ret = gpufreq_driver->get(gpu);
+
+    return ret;
+}
+
 static int gpufreq_governor_get(struct gpufreq_governor *governor, unsigned int event)
 {
     /* this governor was not added to governor list */

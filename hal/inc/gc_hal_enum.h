@@ -69,7 +69,7 @@ typedef enum _gceFEATURE
     gcvFEATURE_YUY2_AVERAGING,
     gcvFEATURE_FLIP_Y,
     gcvFEATURE_EARLY_Z,
-    gcvFEATURE_Z_COMPRESSION,
+    gcvFEATURE_COMPRESSION,
     gcvFEATURE_MSAA,
     gcvFEATURE_SPECIAL_ANTI_ALIASING,
     gcvFEATURE_SPECIAL_MSAA_LOD,
@@ -128,7 +128,7 @@ typedef enum _gceFEATURE
     gcvFEATURE_TEX_COMPRRESSION_SUPERTILED,
     gcvFEATURE_FAST_MSAA,
     gcvFEATURE_BUG_FIXED_INDEXED_TRIANGLE_STRIP,
-    gcvFEATURE_TEXTURE_TILED_READ,
+    gcvFEATURE_TEXTURE_TILE_STATUS_READ,
     gcvFEATURE_DEPTH_BIAS_FIX,
     gcvFEATURE_RECT_PRIMITIVE,
     gcvFEATURE_BUG_FIXES11,
@@ -175,16 +175,23 @@ typedef enum _gceFEATURE
     gcvFEATURE_2D_COMPRESSION,
     gcvFEATURE_2D_OPF_YUV_OUTPUT,
     gcvFEATURE_2D_MULTI_SRC_BLT_TO_UNIFIED_DST_RECT,
-    gcvFEATURE_DECOMPRESS_Z16,
-    gcvFEATURE_TEXTURE_TILE_STATUS_ENABLED,
+    gcvFEATURE_V2_COMPRESSION_Z16_FIX,
 
     gcvFEATURE_VERTEX_INST_ID_AS_INTEGER,
     gcvFEATURE_2D_YUV_MODE,
     gcvFEATURE_ACE,
-    gcvFEATURE_COLOR_COMPRESSION_V3,
+    gcvFEATURE_COLOR_COMPRESSION,
 
     gcvFEATURE_32BPP_COMPONENT_TEXTURE_CHANNEL_SWIZZLE,
     gcvFEATURE_64BPP_HW_CLEAR_SUPPORT,
+    gcvFEATURE_TX_LERP_PRECISION_FIX,
+    gcvFEATURE_COMPRESSION_V2,
+    gcvFEATURE_MMU,
+    gcvFEATURE_COMPRESSION_V3,
+    gcvFEATURE_TX_DECOMPRESSOR,
+    gcvFEATURE_MRT_TILE_STATUS_BUFFER,
+    gcvFEATURE_COMPRESSION_V1,
+    gcvFEATURE_V1_COMPRESSION_Z16_DECOMPRESS_FIX,
 
     /* Insert features above this comment only. */
     gcvFEATURE_COUNT                /* Not a feature. */
@@ -197,6 +204,7 @@ typedef enum _gceSWWA
     gcvSWWA_601 = 0,
     gcvSWWA_706,
     gcvSWWA_1163,
+    gcvSWWA_1165,
     /* Insert SWWA above this comment only. */
     gcvSWWA_COUNT                   /* Not a SWWA. */
 }
@@ -258,6 +266,8 @@ typedef enum _gceSURF_TYPE
     gcvSURF_TILE_STATUS_DIRTY  = 0x1000, /* Init tile status to all dirty */
 
     gcvSURF_LINEAR             = 0x2000,
+
+    gcvSURF_CREATE_AS_TEXTURE  = 0x4000,  /* create it as a texture */
 
     gcvSURF_TEXTURE_LINEAR               = gcvSURF_TEXTURE
                                          | gcvSURF_LINEAR,
@@ -407,7 +417,6 @@ typedef enum _gceSURF_FORMAT
     gcvSURF_B8G8R8_SNORM,
     gcvSURF_X8B8G8R8_SNORM,
     gcvSURF_A8B8G8R8_SNORM,
-    gcvSURF_A8B12G12R12,
     gcvSURF_A8B12G12R12_2_A8R8G8B8,
 
     /* Compressed formats. */
@@ -916,6 +925,21 @@ typedef enum _gce2D_STATE
 }
 gce2D_STATE;
 
+/* Texture object types */
+typedef enum _gceTEXTURE_TYPE
+{
+    gcvTEXTURE_UNKNOWN = 0,
+    gcvTEXTURE_1D,
+    gcvTEXTURE_2D,
+    gcvTEXTURE_3D,
+    gcvTEXTURE_CUBEMAP,
+    gcvTEXTURE_1D_ARRAY,
+    gcvTEXTURE_2D_ARRAY,
+    gcvTEXTURE_EXTERNAL
+}
+gceTEXTURE_TYPE;
+
+
 #ifndef VIVANTE_NO_3D
 /* Texture functions. */
 typedef enum _gceTEXTURE_FUNCTION
@@ -930,20 +954,6 @@ typedef enum _gceTEXTURE_FUNCTION
     gcvTEXTURE_DOT3
 }
 gceTEXTURE_FUNCTION;
-
-/* Texture object types */
-typedef enum _gceTEXTURE_TYPE
-{
-    gcvTEXTURE_UNKNOWN = 0,
-    gcvTEXTURE_1D,
-    gcvTEXTURE_2D,
-    gcvTEXTURE_3D,
-    gcvTEXTURE_CUBEMAP,
-    gcvTEXTURE_1D_ARRAY,
-    gcvTEXTURE_2D_ARRAY,
-    gcvTEXTURE_EXTERNAL
-}
-gceTEXTURE_TYPE;
 
 /* Texture sources. */
 typedef enum _gceTEXTURE_SOURCE
@@ -1301,7 +1311,6 @@ typedef enum _gceINDEX_TYPE
 }
 gceINDEX_TYPE;
 
-#if gcdMULTI_GPU
 /* Multi GPU rendering modes. */
 typedef enum _gceMULTI_GPU_RENDERING_MODE
 {
@@ -1313,7 +1322,31 @@ typedef enum _gceMULTI_GPU_RENDERING_MODE
     gcvMULTI_GPU_RENDERING_MODE_INTERLEAVED_128x128
 }
 gceMULTI_GPU_RENDERING_MODE;
-#endif
+
+typedef enum _gceCORE_3D_MASK
+{
+    gcvCORE_3D_0_MASK   = (1 << 0),
+    gcvCORE_3D_1_MASK   = (1 << 1),
+
+    gcvCORE_3D_ALL_MASK = (0xFFFF)
+}
+gceCORE_3D_MASK;
+
+typedef enum _gceCORE_3D_ID
+{
+    gcvCORE_3D_0_ID       = 0,
+    gcvCORE_3D_1_ID       = 1,
+
+    gcvCORE_3D_ID_INVALID = ~0UL
+}
+gceCORE_3D_ID;
+
+typedef enum _gceMULTI_GPU_MODE
+{
+    gcvMULTI_GPU_MODE_COMBINED    = 0,
+    gcvMULTI_GPU_MODE_INDEPENDENT = 1
+}
+gceMULTI_GPU_MODE;
 
 typedef enum _gceMACHINECODE
 {
@@ -1332,6 +1365,11 @@ typedef enum _gceMACHINECODE
 }
 gceMACHINECODE;
 
+/* GL_VIV internal usage */
+#ifndef GL_MAP_BUFFER_OBJ_VIV
+#define GL_MAP_BUFFER_OBJ_VIV       0x10000
+#endif
+
 /******************************************************************************\
 ****************************** Object Declarations *****************************
 \******************************************************************************/
@@ -1345,15 +1383,15 @@ typedef struct _gcsHAL_INTERFACE    * gcsHAL_INTERFACE_PTR;
 typedef struct _gcs2D_PROFILE       * gcs2D_PROFILE_PTR;
 
 #if gcdENABLE_VG
-typedef struct _gcoVGHARDWARE *         gcoVGHARDWARE;
+typedef struct _gcoVGHARDWARE *            gcoVGHARDWARE;
 typedef struct _gcoVGBUFFER *           gcoVGBUFFER;
 typedef struct _gckVGHARDWARE *         gckVGHARDWARE;
-typedef struct _gcsVGCONTEXT *          gcsVGCONTEXT_PTR;
-typedef struct _gcsVGCONTEXT_MAP *      gcsVGCONTEXT_MAP_PTR;
-typedef struct _gcsVGCMDQUEUE *         gcsVGCMDQUEUE_PTR;
-typedef struct _gcsTASK_MASTER_TABLE *  gcsTASK_MASTER_TABLE_PTR;
-typedef struct _gckVGKERNEL *           gckVGKERNEL;
-typedef void *                          gctTHREAD;
+typedef struct _gcsVGCONTEXT *            gcsVGCONTEXT_PTR;
+typedef struct _gcsVGCONTEXT_MAP *        gcsVGCONTEXT_MAP_PTR;
+typedef struct _gcsVGCMDQUEUE *            gcsVGCMDQUEUE_PTR;
+typedef struct _gcsTASK_MASTER_TABLE *    gcsTASK_MASTER_TABLE_PTR;
+typedef struct _gckVGKERNEL *            gckVGKERNEL;
+typedef void *                            gctTHREAD;
 #endif
 
 #ifdef __cplusplus

@@ -40,7 +40,6 @@ ABI             ?= 0
 ANDROID         ?= 0
 ENUM_WORKAROUND ?= 0
 ENDIANNESS		?=
-QNX             ?= 0
 LINUX_OABI		?= 0
 USE_ARMCC		?= 0
 VIVANTE_ENABLE_VG       ?= 0
@@ -97,6 +96,8 @@ TOOL_DIR     ?= /home/software/Linux
 ANDROID_HOME ?=
 KERNEL_DIR   ?= $(TOOL_DIR)/kernel
 X11_ARM_DIR  ?= $(TOOL_DIR)/X11_ARM
+ROOTFS_USR   ?= $(TOOL_DIR)/RootFS/usr
+WAYLAND_DIR  ?= $(TOOL_DIR)/wayland
 
 ################################################################
 # Target directory.
@@ -171,12 +172,8 @@ ifeq ($(ANDROID), 1)
     CFLAGS += -DANDROID_SDK_VERSION=$(PLATFORM_SDK_VERSION)
 endif
 
-ifeq ($(QNX), 1)
-	CFLAGS += -D__QNXNTO__
-else
-	ifneq ($(USE_ARMCC),1)
-		CFLAGS += -DLINUX
-	endif
+ifneq ($(USE_ARMCC),1)
+	CFLAGS += -DLINUX
 endif
 
 ifeq ($(LINUX_OABI), 1)
@@ -190,12 +187,16 @@ ifeq ($(CPU_TYPE), 0)
 else
 	CFLAGS += -mtune=$(CPU_TYPE)
 	AFLAGS += -mtune=$(CPU_TYPE)
+	LFLAGS += -mtune=$(CPU_TYPE)
+	PFLAGS += -mtune=$(CPU_TYPE)
 endif
 
 ifeq ($(CPU_ARCH), 0)
 else
 	CFLAGS += -march=$(CPU_ARCH)
 	AFLAGS += -march=$(CPU_ARCH)
+	LFLAGS += -march=$(CPU_ARCH)
+	PFLAGS += -march=$(CPU_ARCH)
 endif
 endif
 
@@ -238,7 +239,8 @@ ifeq ($(EGL_API_WL), 1)
 endif
 
 ifeq ($(EGL_API_DRI), 1)
-   CFLAGS += -DEGL_API_DRI
+    CFLAGS += -DEGL_API_DRI
+    CFLAGS += -I$(X11_ARM_DIR)/include/arm-linux-gnueabi
 endif
 
 ifeq ($(EGL_API_DFB), 1)
@@ -247,6 +249,7 @@ endif
 
 ifeq ($(EGL_API_X), 1)
     CFLAGS += -DEGL_API_X
+    CFLAGS += -I$(X11_ARM_DIR)/include/arm-linux-gnueabi
 endif
 
 ifeq ($(EGL_API_ANDROID), 1)
@@ -332,7 +335,15 @@ endif
 ################################################################################
 # Build with profiler
 ifeq ($(USE_PROFILER),1)
-	CFLAGS += -DVIVANTE_PROFILER=1
+CFLAGS += -DVIVANTE_PROFILER=1
+CFLAGS += -DVIVANTE_PROFILER_CONTEXT=1
+else
+CFLAGS += -DVIVANTE_PROFILER=0
+CFLAGS += -DVIVANTE_PROFILER_CONTEXT=0
+endif
+
+ifneq ($(USE_MULTI_GPU), )
+CFLAGS += -DgcdMULTI_GPU=$(USE_MULTI_GPU)
 endif
 
 ifeq ($(ENABLE_GPUTEX), 1)
@@ -374,13 +385,14 @@ CL11_DIR        := $(AQROOT)/driver/khronos/libCL
 CLC_DIR         := $(AQROOT)/compiler/libCLC
 CLICD_DIR       := $(AQROOT)/driver/khronos/libCL/icd
 
-GLSLC_DIR      := $(AQROOT)/compiler/libGLSLC
+VSC_DIR         := $(AQROOT)/compiler/libVSC
+GLSLC_DIR       := $(AQROOT)/compiler/libGLSLC
 ifeq ($(ANDROID), 1)
-GCU_DIR        := $(AQROOT)/gcu/proj/android
-GCU3_DIR       := $(AQROOT)/gcu3/proj/android
+GCU_DIR         := $(AQROOT)/gcu/proj/android
+GCU3_DIR        := $(AQROOT)/gcu3/proj/android
 else
-GCU_DIR        := $(AQROOT)/gcu/proj/linux
-GCU3_DIR       := $(AQROOT)/gcu3/proj/linux
+GCU_DIR         := $(AQROOT)/gcu/proj/linux
+GCU3_DIR        := $(AQROOT)/gcu3/proj/linux
 endif
 
 VIVANTE_LIB_DIR	:= $(AQROOT)/sdk/vivante

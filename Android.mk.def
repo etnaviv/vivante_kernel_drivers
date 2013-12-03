@@ -98,6 +98,7 @@ PROPERTY  := \
 
 AQROOT    := $(call my-dir)
 AQARCH    := $(AQROOT)/arch/$(GPU_TYPE)
+AQVGARCH  := $(AQROOT)/arch/GC350
 
 ARCH_TYPE := $(TARGET_ARCH)
 TAG       := MRVL
@@ -153,6 +154,8 @@ ifeq ($(DEBUG), 1)
 CFLAGS        += -DDBG=1 -DDEBUG -D_DEBUG -O0 -g
 endif
 
+CFLAGS        += -DVIVANTE_PROFILER=0
+CFLAGS        += -DVIVANTE_PROFILER_CONTEXT=0
 
 ifeq ($(FORCE_ALL_VIDEO_MEMORY_CACHED), 1)
 CFLAGS        += -DgcdPAGED_MEMORY_CACHEABLE=1

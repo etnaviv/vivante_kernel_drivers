@@ -32,44 +32,6 @@
 /******************************************************************************\
 *************************** Memory Allocation Wrappers *************************
 \******************************************************************************/
-
-static gceSTATUS
-_AllocateMemory(
-    IN gckGALDEVICE Device,
-    IN gctSIZE_T Bytes,
-    OUT gctPOINTER *Logical,
-    OUT gctPHYS_ADDR *Physical,
-    OUT gctUINT32 *PhysAddr
-    )
-{
-    gceSTATUS status;
-
-    gcmkHEADER_ARG("Device=0x%x Bytes=%lu", Device, Bytes);
-
-    gcmkVERIFY_ARGUMENT(Device != NULL);
-    gcmkVERIFY_ARGUMENT(Logical != NULL);
-    gcmkVERIFY_ARGUMENT(Physical != NULL);
-    gcmkVERIFY_ARGUMENT(PhysAddr != NULL);
-
-    gcmkONERROR(gckOS_AllocateContiguous(
-        Device->os, gcvFALSE, &Bytes, Physical, Logical
-        ));
-
-    *PhysAddr = ((PLINUX_MDL)*Physical)->dmaHandle - Device->baseAddress;
-
-    /* Success. */
-    gcmkFOOTER_ARG(
-        "*Logical=0x%x *Physical=0x%x *PhysAddr=0x%08x",
-        *Logical, *Physical, *PhysAddr
-        );
-
-    return gcvSTATUS_OK;
-
-OnError:
-    gcmkFOOTER();
-    return status;
-}
-
 static gceSTATUS
 _FreeMemory(
     IN gckGALDEVICE Device,
@@ -83,16 +45,205 @@ _FreeMemory(
 
     gcmkVERIFY_ARGUMENT(Device != NULL);
 
+#if MRVL_USE_GPU_RESERVE_MEM
+    status = gckOS_FreeVidmemFromMemblock(Device->os, Physical);
+#else
     status = gckOS_FreeContiguous(
         Device->os, Physical, Logical,
         ((PLINUX_MDL) Physical)->numPages * PAGE_SIZE
         );
+#endif
 
     gcmkFOOTER();
     return status;
 }
 
+#if MRVL_USE_GPU_RESERVE_MEM
+static gceSTATUS
+_AllocateContiguousMemory(
+    IN gckGALDEVICE Device,
+    IN gckKERNEL Kernel,
+    IN gctUINT32 ContiguousBase,
+    IN gctSIZE_T ContiguousSize,
+    IN gctSIZE_T BankSize
+    )
+{
+    gckGALDEVICE device = (gckGALDEVICE)Device;
+    gckKERNEL kernel = (gckKERNEL)Kernel;
+    gceSTATUS status;
+    gctUINT32 physAddr;
 
+    status = gckOS_AllocateVidmemFromMemblock(device->os,
+                                              ContiguousSize,
+                                              (gctPOINTER)ContiguousBase,
+                                              &device->contiguousPhysical);
+
+    if (gcmIS_SUCCESS(status))
+    {
+        device->contiguousPhysicalName = gcmPTR_TO_NAME(device->contiguousPhysical);
+        physAddr = ((PLINUX_MDL)device->contiguousPhysical)->dmaHandle - device->baseAddress;
+
+        status = gckVIDMEM_Construct(
+            device->os,
+            physAddr | device->systemMemoryBaseAddress,
+            device->contiguousSize,
+            64,
+            BankSize,
+            &device->contiguousVidMem
+            );
+
+        if (!gcmIS_SUCCESS(status))
+        {
+            gcmkVERIFY_OK(_FreeMemory(
+                device,
+                device->contiguousBase,
+                device->contiguousPhysical
+                ));
+
+            gcmRELEASE_NAME(device->contiguousPhysicalName);
+            device->contiguousBase     = gcvNULL;
+            device->contiguousPhysical = gcvNULL;
+        }
+    }
+
+    return status;
+}
+#else
+static gceSTATUS
+_AllocateContiguousMemory(
+    IN gckGALDEVICE Device,
+    IN gckKERNEL Kernel,
+    IN gctUINT32 ContiguousBase,
+    IN gctSIZE_T ContiguousSize,
+    IN gctSIZE_T BankSize
+    )
+{
+    gckGALDEVICE device = (gckGALDEVICE)Device;
+    gckKERNEL kernel = (gckKERNEL)Kernel;
+    gceSTATUS status;
+    gctUINT32 physAddr;
+
+    if (ContiguousBase == 0)
+    {
+        while (device->contiguousSize > 0)
+        {
+            /* Allocate contiguous memory. */
+            status = gckOS_AllocateContiguous(device->os,
+                    gcvFALSE,
+                    &device->contiguousSize,
+                    &device->contiguousPhysical,
+                    &device->contiguousBase);
+
+            if (gcmIS_SUCCESS(status))
+            {
+                device->contiguousPhysicalName = gcmPTR_TO_NAME(device->contiguousPhysical);
+                physAddr = ((PLINUX_MDL)device->contiguousPhysical)->dmaHandle - device->baseAddress;
+
+                status = gckVIDMEM_Construct(
+                        device->os,
+                        physAddr | device->systemMemoryBaseAddress,
+                        device->contiguousSize,
+                        64,
+                        BankSize,
+                        &device->contiguousVidMem
+                        );
+
+                if (gcmIS_SUCCESS(status))
+                {
+                    break;
+                }
+
+                gcmkONERROR(_FreeMemory(
+                            device,
+                            device->contiguousBase,
+                            device->contiguousPhysical
+                            ));
+
+                gcmRELEASE_NAME(device->contiguousPhysicalName);
+                device->contiguousBase     = gcvNULL;
+                device->contiguousPhysical = gcvNULL;
+            }
+
+            if (device->contiguousSize <= (4 << 20))
+            {
+                device->contiguousSize = 0;
+            }
+            else
+            {
+                device->contiguousSize -= (4 << 20);
+            }
+        }
+    }
+    else
+    {
+        /* Create the contiguous memory heap. */
+        status = gckVIDMEM_Construct(
+                device->os,
+                ContiguousBase | device->systemMemoryBaseAddress,
+                ContiguousSize,
+                64, BankSize,
+                &device->contiguousVidMem
+                );
+
+        if (gcmIS_ERROR(status))
+        {
+            /* Error, disable contiguous memory pool. */
+            device->contiguousVidMem = gcvNULL;
+            device->contiguousSize   = 0;
+        }
+        else
+        {
+            struct resource* mem_region = request_mem_region(
+                    ContiguousBase, ContiguousSize, "galcore managed memory"
+                    );
+
+            if (mem_region == gcvNULL)
+            {
+                gcmkTRACE_ZONE(
+                        gcvLEVEL_ERROR, gcvZONE_DRIVER,
+                        "%s(%d): Failed to claim %ld bytes @ 0x%08X\n",
+                        __FUNCTION__, __LINE__,
+                        ContiguousSize, ContiguousBase
+                        );
+
+                gcmkONERROR(gcvSTATUS_OUT_OF_RESOURCES);
+            }
+
+            device->requestedContiguousBase  = ContiguousBase;
+            device->requestedContiguousSize  = ContiguousSize;
+
+#if !gcdDYNAMIC_MAP_RESERVED_MEMORY && gcdENABLE_VG
+            if (gcmIS_CORE_PRESENT(device, gcvCORE_VG))
+            {
+                device->contiguousBase
+#if gcdPAGED_MEMORY_CACHEABLE
+                    = (gctPOINTER) ioremap_cached(ContiguousBase, ContiguousSize);
+#else
+                = (gctPOINTER) ioremap_nocache(ContiguousBase, ContiguousSize);
+#endif
+                if (device->contiguousBase == gcvNULL)
+                {
+                    device->contiguousVidMem = gcvNULL;
+                    device->contiguousSize = 0;
+
+                    gcmkONERROR(gcvSTATUS_OUT_OF_RESOURCES);
+                }
+            }
+#endif
+
+            device->contiguousPhysical = gcvNULL;
+            device->contiguousPhysicalName = 0;
+            device->contiguousSize     = ContiguousSize;
+            device->contiguousMapped   = gcvTRUE;
+        }
+    }
+
+    return gcvSTATUS_OK;
+
+OnError:
+    return status;
+}
+#endif
 
 /******************************************************************************\
 ******************************* Interrupt Handler ******************************
@@ -640,6 +791,8 @@ gckGALDEVICE_Construct(
     IN gctINT Signal,
     IN gctUINT LogFileSize,
     IN gctINT PowerManagement,
+    IN gctINT GpuProfiler,
+    IN gcsDEVICE_CONSTRUCT_ARGS * Args,
     OUT gckGALDEVICE *Device
     )
 {
@@ -647,7 +800,6 @@ gckGALDEVICE_Construct(
     gctUINT32 externalBaseAddress = 0, externalAlignment = 0;
     gctUINT32 horizontalTileSize, verticalTileSize;
     struct resource* mem_region;
-    gctUINT32 physAddr;
     gctUINT32 physical;
     gckGALDEVICE device;
     gceSTATUS status;
@@ -694,25 +846,20 @@ gckGALDEVICE_Construct(
     memset(device, 0, sizeof(struct _gckGALDEVICE));
 
     device->dbgNode = gcvNULL;
-    if(LogFileSize != 0)
+
+    if (gckDEBUGFS_CreateNode(
+            device, LogFileSize, PARENT_FILE,DEBUG_FILE, &(device->dbgNode)))
     {
-        if(gckDEBUGFS_CreateNode(
-                LogFileSize,
-                PARENT_FILE,DEBUG_FILE,
-                &(device->dbgNode))
-            != 0)
-        {
-            gcmkTRACE_ZONE(
-                gcvLEVEL_ERROR, gcvZONE_DRIVER,
-                "%s(%d): Failed to create  the debug file system  %s/%s \n",
-                __FUNCTION__, __LINE__,
-                PARENT_FILE, DEBUG_FILE
-            );
-        }
-        else
-        {
-            gckDEBUGFS_SetCurrentNode(device->dbgNode);
-        }
+        gcmkTRACE_ZONE(
+            gcvLEVEL_ERROR, gcvZONE_DRIVER,
+            "%s(%d): Failed to create  the debug file system  %s/%s \n",
+            __FUNCTION__, __LINE__,
+            PARENT_FILE, DEBUG_FILE
+        );
+    }
+    else if (LogFileSize)
+    {
+        gckDEBUGFS_SetCurrentNode(device->dbgNode);
     }
 
 #if gcdMULTI_GPU
@@ -899,6 +1046,14 @@ gckGALDEVICE_Construct(
             device->kernels[gcvCORE_MAJOR]->hardware, PowerManagement
             ));
 
+        gcmkONERROR(gckHARDWARE_SetGpuProfiler(
+            device->kernels[gcvCORE_MAJOR]->hardware, GpuProfiler
+            ));
+
+        gcmkVERIFY_OK(gckKERNEL_SetRecovery(
+            device->kernels[gcvCORE_MAJOR], Args->recovery, Args->stuckDump
+            ));
+
 #if COMMAND_PROCESSOR_VERSION == 1
         /* Start the command queue. */
         gcmkONERROR(gckCOMMAND_Start(device->kernels[gcvCORE_MAJOR]->command));
@@ -1009,6 +1164,10 @@ gckGALDEVICE_Construct(
 
         gcmkONERROR(gckHARDWARE_SetPowerManagement(
             device->kernels[gcvCORE_2D]->hardware, PowerManagement
+            ));
+
+        gcmkVERIFY_OK(gckKERNEL_SetRecovery(
+            device->kernels[gcvCORE_2D], Args->recovery, Args->stuckDump
             ));
 
 #if COMMAND_PROCESSOR_VERSION == 1
@@ -1244,123 +1403,15 @@ gckGALDEVICE_Construct(
 
     /* set up the contiguous memory */
     device->contiguousSize = ContiguousSize;
+    device->contiguousBase = (gctPOINTER)ContiguousBase;
 
     if (ContiguousSize > 0)
     {
-        if (ContiguousBase == 0)
-        {
-            while (device->contiguousSize > 0)
-            {
-                /* Allocate contiguous memory. */
-                status = _AllocateMemory(
-                    device,
-                    device->contiguousSize,
-                    &device->contiguousBase,
-                    &device->contiguousPhysical,
-                    &physAddr
-                    );
-
-                if (gcmIS_SUCCESS(status))
-                {
-                    device->contiguousPhysicalName = gcmPTR_TO_NAME(device->contiguousPhysical);
-                    status = gckVIDMEM_Construct(
-                        device->os,
-                        physAddr | device->systemMemoryBaseAddress,
-                        device->contiguousSize,
-                        64,
-                        BankSize,
-                        &device->contiguousVidMem
-                        );
-
-                    if (gcmIS_SUCCESS(status))
-                    {
-                        break;
-                    }
-
-                    gcmkONERROR(_FreeMemory(
-                        device,
-                        device->contiguousBase,
-                        device->contiguousPhysical
-                        ));
-
-                    gcmRELEASE_NAME(device->contiguousPhysicalName);
-                    device->contiguousBase     = gcvNULL;
-                    device->contiguousPhysical = gcvNULL;
-                }
-
-                if (device->contiguousSize <= (4 << 20))
-                {
-                    device->contiguousSize = 0;
-                }
-                else
-                {
-                    device->contiguousSize -= (4 << 20);
-                }
-            }
-        }
-        else
-        {
-            /* Create the contiguous memory heap. */
-            status = gckVIDMEM_Construct(
-                device->os,
-                ContiguousBase | device->systemMemoryBaseAddress,
-                ContiguousSize,
-                64, BankSize,
-                &device->contiguousVidMem
-                );
-
-            if (gcmIS_ERROR(status))
-            {
-                /* Error, disable contiguous memory pool. */
-                device->contiguousVidMem = gcvNULL;
-                device->contiguousSize   = 0;
-            }
-            else
-            {
-                mem_region = request_mem_region(
-                    ContiguousBase, ContiguousSize, "galcore managed memory"
-                    );
-
-                if (mem_region == gcvNULL)
-                {
-                    gcmkTRACE_ZONE(
-                        gcvLEVEL_ERROR, gcvZONE_DRIVER,
-                        "%s(%d): Failed to claim %ld bytes @ 0x%08X\n",
-                        __FUNCTION__, __LINE__,
-                        ContiguousSize, ContiguousBase
-                        );
-
-                    gcmkONERROR(gcvSTATUS_OUT_OF_RESOURCES);
-                }
-
-                device->requestedContiguousBase  = ContiguousBase;
-                device->requestedContiguousSize  = ContiguousSize;
-
-#if !gcdDYNAMIC_MAP_RESERVED_MEMORY && gcdENABLE_VG
-                if (gcmIS_CORE_PRESENT(device, gcvCORE_VG))
-                {
-                    device->contiguousBase
-#if gcdPAGED_MEMORY_CACHEABLE
-                        = (gctPOINTER) ioremap_cached(ContiguousBase, ContiguousSize);
-#else
-                        = (gctPOINTER) ioremap_nocache(ContiguousBase, ContiguousSize);
-#endif
-                    if (device->contiguousBase == gcvNULL)
-                    {
-                        device->contiguousVidMem = gcvNULL;
-                        device->contiguousSize = 0;
-
-                        gcmkONERROR(gcvSTATUS_OUT_OF_RESOURCES);
-                    }
-                }
-#endif
-
-                device->contiguousPhysical = gcvNULL;
-                device->contiguousPhysicalName = 0;
-                device->contiguousSize     = ContiguousSize;
-                device->contiguousMapped   = gcvTRUE;
-            }
-        }
+        _AllocateContiguousMemory(device,
+                                  kernel,
+                                  ContiguousBase,
+                                  ContiguousSize,
+                                  BankSize);
     }
 
     /* Initialize GC memory profile*/

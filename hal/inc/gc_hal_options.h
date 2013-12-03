@@ -182,15 +182,6 @@
 #endif
 
 /*
-    gcdVIRTUAL_COMMAND_BUFFER
-        When set to 1, user command buffer and context buffer will be allocated
-        from gcvPOOL_VIRTUAL.
-*/
-#ifndef gcdVIRTUAL_COMMAND_BUFFER
-#   define gcdVIRTUAL_COMMAND_BUFFER            0
-#endif
-
-/*
     gcdENABLE_FSCALE_VAL_ADJUST
         When non-zero, FSCALE_VAL when gcvPOWER_ON can be adjusted externally.
  */
@@ -732,7 +723,11 @@
 
 */
 #ifndef gcdSMP
+#ifdef __APPLE__
 #   define gcdSMP                               1
+#else
+#   define gcdSMP                               1
+#endif
 #endif
 
 /*
@@ -741,14 +736,14 @@
         Use shared resolve buffer for all app buffers.
 */
 #ifndef gcdSHARED_RESOLVE_BUFFER_ENABLED
-#   define gcdSHARED_RESOLVE_BUFFER_ENABLED         0
+#   define gcdSHARED_RESOLVE_BUFFER_ENABLED     0
 #endif
 
 /*
      gcdUSE_TRIANGLE_STRIP_PATCH
  */
 #ifndef gcdUSE_TRIANGLE_STRIP_PATCH
-#   define gcdUSE_TRIANGLE_STRIP_PATCH            1
+#   define gcdUSE_TRIANGLE_STRIP_PATCH          1
 #endif
 
 /*
@@ -767,8 +762,8 @@
         address space, size of which is gcdPROCESS_ADDRESS_SPACE_SIZE.
 */
 #ifndef gcdPROCESS_ADDRESS_SPACE
-#   define gcdPROCESS_ADDRESS_SPACE                   0
-#   define gcdPROCESS_ADDRESS_SPACE_SIZE              0x80000000
+#   define gcdPROCESS_ADDRESS_SPACE             0
+#   define gcdPROCESS_ADDRESS_SPACE_SIZE        0x80000000
 #endif
 
 /*
@@ -818,7 +813,7 @@
         is be used to debug.
 */
 #ifndef gcdLINK_QUEUE_SIZE
-#   define gcdLINK_QUEUE_SIZE                  0
+#   define gcdLINK_QUEUE_SIZE                   5
 #endif
 
 /*  gcdALPHA_KILL_IN_SHADER
@@ -852,7 +847,7 @@
 #endif
 
 #ifndef gcdGLB27_SHADER_REPLACE_OPTIMIZATION
-#   define gcdGLB27_SHADER_REPLACE_OPTIMIZATION 1
+#    define gcdGLB27_SHADER_REPLACE_OPTIMIZATION 1
 #endif
 
 /*
@@ -871,7 +866,7 @@
         instead of query hardware and determine the features.
 */
 #ifndef gcdUSE_HARDWARE_CONFIGURATION_TABLES
-#   define gcdUSE_HARDWARE_CONFIGURATION_TABLES     0
+#   define gcdUSE_HARDWARE_CONFIGURATION_TABLES 0
 #endif
 
 /*
@@ -911,7 +906,11 @@
         Android only for now.
 */
 #ifndef gcdENABLE_RENDER_INTO_WINDOW
+#if gcdDUMP
 #   define gcdENABLE_RENDER_INTO_WINDOW         0
+#else
+#   define gcdENABLE_RENDER_INTO_WINDOW         0
+#endif
 #endif
 
 /*
@@ -920,10 +919,16 @@
         Enable android native fence sync. It is introduced since jellybean-4.2.
         Depends on linux kernel option: CONFIG_SYNC.
 
-        0: disabled
-        1: build framework for native fence sync feature
-        2: enable native fence sync for client window buffers in EGL.
-        3. enable native fence sync for hwcomposer read for input buffers.
+        0: Disabled
+        1: Build framework for native fence sync feature, and EGL extension
+        2: Enable async swap buffers for client
+           * Native fence sync for client 'queueBuffer' in EGL, which is
+             'acquireFenceFd' for layer in compositor side.
+        3. Enable async hwcomposer composition.
+           * 'releaseFenceFd' for layer in compositor side, which is native
+             fence sync when client 'dequeueBuffer'
+           * Native fence sync for compositor 'queueBuffer' in EGL, which is
+             'acquireFenceFd' for framebuffer target for DC
  */
 #ifndef gcdANDROID_NATIVE_FENCE_SYNC
 #   define gcdANDROID_NATIVE_FENCE_SYNC         0
@@ -966,6 +971,52 @@
 
 #ifndef gcdUSE_NPOT_PATCH
 #   define gcdUSE_NPOT_PATCH                    1
+#endif
+
+/*
+    gcd3DBLIT
+
+        TODO: Should be replaced by feature bit if available.
+*/
+#ifndef gcd3DBLIT
+#   define gcd3DBLIT                            0
+#endif
+
+/*
+    gcdINTERNAL_COMMENT
+
+        Wrap internal comment, content wrapped by it and the macor itself
+        will be removed in release driver.
+*/
+#ifndef gcdINTERNAL_COMMENT
+#   define gcdINTERNAL_COMMENT                  0
+#endif
+
+/*
+    gcdRTT_DISABLE_FC
+
+        Disable RTT FC support. For test only.
+*/
+#ifndef gcdRTT_DISABLE_FC
+#   define gcdRTT_DISABLE_FC                    0
+#endif
+
+/*
+    gcdFORCE_MIPMAP
+
+        Force generate mipmap for texture.
+*/
+#ifndef gcdFORCE_MIPMAP
+#   define gcdFORCE_MIPMAP                      1
+#endif
+
+/*
+    gcdFORCE_BILINEAR
+
+        Force bilinear for mipfilter.
+*/
+#ifndef gcdFORCE_BILINEAR
+#   define gcdFORCE_BILINEAR                    1
 #endif
 
 #endif /* __gc_hal_options_h_ */

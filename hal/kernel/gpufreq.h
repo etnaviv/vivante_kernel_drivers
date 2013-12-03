@@ -164,6 +164,8 @@ extern int __gpufreq_driver_target(IN struct gpufreq_policy *policy,
                                    IN unsigned int target_freq,
                                    IN unsigned int relation);
 
+extern int __gpufreq_driver_get(IN unsigned int gpu);
+
 int gpufreq_register_governor(IN struct gpufreq_governor *governor);
 void gpufreq_unregister_governor(IN struct gpufreq_governor *governor);
 
@@ -204,6 +206,83 @@ void gpufreq_verify_within_limits(
             unsigned int min,
             unsigned int max);
 
+/*********************************************************************
+ *                            QoS interfaces                         *
+ *********************************************************************/
+#if MRVL_CONFIG_ENABLE_QOS_SUPPORT
+
+#ifndef gpufreq_min
+#define gpufreq_min     gcmMIN
+#endif
+
+#ifndef gpufreq_max
+#define gpufreq_max     gcmMAX
+#endif
+
+struct _gc_qos {
+    unsigned int gpu;
+    int pm_qos_class_min;
+    struct pm_qos_request *pm_qos_req_min;
+    struct notifier_block *notifier_min;
+    int pm_qos_class_max;
+    struct pm_qos_request *pm_qos_req_max;
+    struct notifier_block *notifier_max;
+};
+
+#define DECLARE_META_REQUEST(CORENAME, MINMAX)                                 \
+    static struct pm_qos_request gpufreq_qos_req_##CORENAME##_##MINMAX = {     \
+        .name = "gpufreq_" #CORENAME "_" #MINMAX,                              \
+    };
+
+#define IMPLEMENT_META_NOTIFIER(GPU, CORENAME, MINMAX, RELATION)               \
+    static int gpufreq_##CORENAME##_##MINMAX##_notify(struct notifier_block *b, \
+                        unsigned long VALUE, void *v)                          \
+    {                                                                          \
+        int ret;                                                               \
+        unsigned int gpu = GPU;                                                \
+        unsigned long freq, val = VALUE;                                       \
+        struct gpufreq_policy *policy;                                         \
+                                                                               \
+        pr_debug("[%d] gpufreq: qos notify %lu (KHZ)\n", gpu, VALUE);          \
+                                                                               \
+        freq = __gpufreq_driver_get(gpu);                                      \
+        if(freq == (unsigned long)-EINVAL)                                     \
+            return NOTIFY_BAD;                                                 \
+        else if(gpufreq_##MINMAX(freq, val) == val)                            \
+            return NOTIFY_OK;                                                  \
+                                                                               \
+        policy = gpufreq_policy_get(gpu);                                      \
+        if(!policy)                                                            \
+            return NOTIFY_BAD;                                                 \
+                                                                               \
+        ret = __gpufreq_driver_target(policy, val, RELATION);                  \
+        gpufreq_policy_put(policy);                                            \
+        if(ret < 0)                                                            \
+            return NOTIFY_BAD;                                                 \
+                                                                               \
+        return NOTIFY_OK;                                                      \
+    }                                                                          \
+                                                                               \
+    static struct notifier_block gpufreq_##CORENAME##_##MINMAX##_notifier = {  \
+        .notifier_call = gpufreq_##CORENAME##_##MINMAX##_notify,               \
+    };
+
+#define DECLARE_META_GC_QOS(GPU, CORENAMELOW, CORENAMEUPP)      \
+{                                                               \
+    .gpu              = GPU,                                    \
+    .pm_qos_class_min = PM_QOS_GPUFREQ_##CORENAMEUPP##_MIN,     \
+    .pm_qos_req_min   = &gpufreq_qos_req_##CORENAMELOW##_min,   \
+    .notifier_min     = &gpufreq_##CORENAMELOW##_min_notifier,  \
+    .pm_qos_class_max = PM_QOS_GPUFREQ_##CORENAMEUPP##_MAX,     \
+    .pm_qos_req_max   = &gpufreq_qos_req_##CORENAMELOW##_max,   \
+    .notifier_max     = &gpufreq_##CORENAMELOW##_max_notifier,  \
+}
+
+#define DECLARE_META_GC_QOS_3D      DECLARE_META_GC_QOS(0, 3d, 3D)
+#define DECLARE_META_GC_QOS_2D      DECLARE_META_GC_QOS(1, 2d, 2D)
+#define DECLARE_META_GC_QOS_SH      DECLARE_META_GC_QOS(2, sh, SH)
+
+#endif
 /*********************************************************************
  *                            other interface                        *
  *********************************************************************/

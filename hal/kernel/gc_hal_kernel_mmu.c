@@ -27,11 +27,7 @@ gceMMU_TYPE;
 
 #define gcdMMU_TABLE_DUMP       0
 
-#if gcdPROCESS_ADDRESS_SPACE
 #define gcdUSE_MMU_EXCEPTION    1
-#else
-#define gcdUSE_MMU_EXCEPTION    0
-#endif
 
 /*
     gcdMMU_CLEAR_VALUE
@@ -1577,7 +1573,7 @@ gckMMU_AllocatePages(
     acquired = gcvTRUE;
 
     /* Allocate page table for current MMU. */
-    for (i = 0; i < mirrorPageTable->reference; i++)
+    for (i = 0; i < (gctINT)mirrorPageTable->reference; i++)
     {
         if (Mmu == mirrorPageTable->mmus[i])
         {
@@ -1587,7 +1583,7 @@ gckMMU_AllocatePages(
     }
 
     /* Allocate page table for other MMUs. */
-    for (i = 0; i < mirrorPageTable->reference; i++)
+    for (i = 0; i < (gctINT)mirrorPageTable->reference; i++)
     {
         mmu = mirrorPageTable->mmus[i];
 
@@ -1641,7 +1637,7 @@ gckMMU_FreePages(
 
     offset = (gctUINT32)PageTable - (gctUINT32)Mmu->pageTableLogical;
 
-    for (i = 0; i < mirrorPageTable->reference; i++)
+    for (i = 0; i < (gctINT)mirrorPageTable->reference; i++)
     {
         mmu = mirrorPageTable->mmus[i];
 
@@ -1795,7 +1791,7 @@ gckMMU_SetPage(
     }
 
 #if gcdMIRROR_PAGETABLE
-    for (i = 0; i < mirrorPageTable->reference; i++)
+    for (i = 0; i < (gctINT)mirrorPageTable->reference; i++)
     {
         mmu = mirrorPageTable->mmus[i];
 
@@ -2120,7 +2116,7 @@ gckMMU_Flush(
     }
 #elif gcdMIRROR_PAGETABLE
     gctINT i;
-    for (i = 0; i < mirrorPageTable->reference; i++)
+    for (i = 0; i < (gctINT)mirrorPageTable->reference; i++)
     {
         hardware = mirrorPageTable->hardwares[i];
 

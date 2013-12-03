@@ -161,11 +161,6 @@ struct _gcoCMDBUF
     gctUINT32                   lastLoadStateCount;
 #endif
 
-#if gcdSTREAM_OUT_BUFFER
-    /* Synchronization signal. */
-    gctSIGNAL                   sync;
-#endif
-
     /* Completion signal. */
     gctSIGNAL                   signal;
 

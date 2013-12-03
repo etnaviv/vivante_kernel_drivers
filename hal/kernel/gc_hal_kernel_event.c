@@ -473,13 +473,15 @@ gckEVENT_Construct(
                               gcmCOUNTOF(eventObj->queues)));
 
 #if gcdSMP
+    gcmkONERROR(gckOS_AtomConstruct(os, &eventObj->pending));
+
 #if gcdMULTI_GPU
     for (i = 0; i < gcdMULTI_GPU; i++)
     {
         gcmkONERROR(gckOS_AtomConstruct(os, &eventObj->pending3D[i]));
     }
 #endif
-    gcmkONERROR(gckOS_AtomConstruct(os, &eventObj->pending));
+
 #endif
 
     gcmkVERIFY_OK(gckOS_CreateTimer(os,
@@ -527,6 +529,11 @@ OnError:
         }
 
 #if gcdSMP
+        if (eventObj->pending != gcvNULL)
+        {
+            gcmkVERIFY_OK(gckOS_AtomDestroy(os, eventObj->pending));
+        }
+
 #if gcdMULTI_GPU
         for (i = 0; i < gcdMULTI_GPU; i++)
         {
@@ -536,10 +543,6 @@ OnError:
             }
         }
 #endif
-        if (eventObj->pending != gcvNULL)
-        {
-            gcmkVERIFY_OK(gckOS_AtomDestroy(os, eventObj->pending));
-        }
 #endif
         gcmkVERIFY_OK(gcmkOS_SAFE_FREE(os, eventObj));
     }
@@ -571,11 +574,6 @@ gckEVENT_Destroy(
 {
     gcsEVENT_PTR record;
     gcsEVENT_QUEUE_PTR queue;
-#if gcdSMP
-#if gcdMULTI_GPU
-    gctINT i = 0;
-#endif
-#endif
 
     gcmkHEADER_ARG("Event=0x%x", Event);
 
@@ -647,13 +645,17 @@ gckEVENT_Destroy(
     gcmkVERIFY_OK(gckOS_AtomDestroy(Event->os, Event->freeAtom));
 
 #if gcdSMP
+    gcmkVERIFY_OK(gckOS_AtomDestroy(Event->os, Event->pending));
+
 #if gcdMULTI_GPU
-    for (i = 0; i < gcdMULTI_GPU; i++)
     {
-        gcmkVERIFY_OK(gckOS_AtomDestroy(Event->os, Event->pending3D[i]));
+        gctINT i;
+        for (i = 0; i < gcdMULTI_GPU; i++)
+        {
+            gcmkVERIFY_OK(gckOS_AtomDestroy(Event->os, Event->pending3D[i]));
+        }
     }
 #endif
-    gcmkVERIFY_OK(gckOS_AtomDestroy(Event->os, Event->pending));
 #endif
 
     /* Mark the gckEVENT object as unknown. */
@@ -959,9 +961,7 @@ gckEVENT_AddList(
     gctBOOL acquired = gcvFALSE;
     gcsEVENT_PTR record = gcvNULL;
     gcsEVENT_QUEUE_PTR queue;
-#if gcdVIRTUAL_COMMAND_BUFFER
     gckVIRTUAL_COMMAND_BUFFER_PTR buffer;
-#endif
     gckKERNEL kernel = Event->kernel;
 
     gcmkHEADER_ARG("Event=0x%x Interface=0x%x",
@@ -1095,19 +1095,19 @@ gckEVENT_AddList(
                         (gctSIZE_T) Interface->u.FreeContiguousMemory.bytes,
                         gcmUINT64_TO_PTR(Interface->u.FreeContiguousMemory.logical)));
         break;
-#if gcdVIRTUAL_COMMAND_BUFFER
+
     case gcvHAL_FREE_VIRTUAL_COMMAND_BUFFER:
         buffer = (gckVIRTUAL_COMMAND_BUFFER_PTR)gcmNAME_TO_PTR(Interface->u.FreeVirtualCommandBuffer.physical);
         if (buffer->userLogical)
         {
-            gcmkONERROR(gckOS_UnmapUserLogical(
+            gcmkONERROR(gckOS_UnlockPages(
                             Event->os,
                             buffer->physical,
                             (gctSIZE_T) Interface->u.FreeVirtualCommandBuffer.bytes,
                             gcmUINT64_TO_PTR(Interface->u.FreeVirtualCommandBuffer.logical)));
         }
         break;
-#endif
+
     default:
         break;
     }
@@ -1947,7 +1947,7 @@ gckEVENT_Interrupt(
     )
 {
 #if gcdMULTI_GPU
-#if defined(WIN32) || defined(__APPLE__)
+#if defined(WIN32)
     gctUINT32 i;
 #endif
 #endif
@@ -2018,7 +2018,7 @@ gckEVENT_Interrupt(
     }
 #else
 #if gcdMULTI_GPU
-#if defined(WIN32) || defined(__APPLE__)
+#if defined(WIN32)
     if (Event->kernel->core == gcvCORE_MAJOR)
     {
         for (i = 0; i < gcdMULTI_GPU; i++)
@@ -2077,6 +2077,7 @@ gckEVENT_Notify(
     gckKERNEL kernel = Event->kernel;
 #if gcdMULTI_GPU
     gceCORE core = Event->kernel->core;
+    gctUINT32 busy;
 #endif
 #if !gcdSMP
     gctBOOL suspended = gcvFALSE;
@@ -2112,6 +2113,16 @@ gckEVENT_Notify(
             }
         }
     );
+
+#if gcdMULTI_GPU
+    /* Set busy flag. */
+    gckOS_AtomicExchange(Event->os, &Event->busy, 1, &busy);
+    if (busy)
+    {
+        /* Another thread is already busy - abort. */
+        goto OnSuccess;
+    }
+#endif
 
     for (;;)
     {
@@ -2750,7 +2761,6 @@ gckEVENT_Notify(
                 }
                 break;
 
-#if gcdVIRTUAL_COMMAND_BUFFER
              case gcvHAL_FREE_VIRTUAL_COMMAND_BUFFER:
                  gcmkVERIFY_OK(
                      gckKERNEL_DestroyVirtualCommandBuffer(Event->kernel,
@@ -2760,7 +2770,6 @@ gckEVENT_Notify(
                          ));
                  gcmRELEASE_NAME(record->info.u.FreeVirtualCommandBuffer.physical);
                  break;
-#endif
 
 #if gcdANDROID_NATIVE_FENCE_SYNC
             case gcvHAL_SYNC_POINT:
@@ -2816,11 +2825,19 @@ gckEVENT_Notify(
                        "Handled interrupt 0x%x", mask);
     }
 
+#if gcdMULTI_GPU
+    /* Clear busy flag. */
+    gckOS_AtomicExchange(Event->os, &Event->busy, 0, gcvNULL);
+#endif
+
     if (IDs == 0 && Event->kernel->bTryIdleGPUEnable)
     {
         gcmkONERROR(_TryToIdleGPU(Event));
     }
 
+#if gcdMULTI_GPU
+OnSuccess:
+#endif
     /* Success. */
     gcmkFOOTER_NO();
     return gcvSTATUS_OK;
@@ -3047,7 +3064,7 @@ gckEVENT_Stop(
         Event->os,
         ProcessID,
         gcvNULL,
-        Handle,
+        (gctUINT32)Handle,
         Logical,
         *waitSize
         ));

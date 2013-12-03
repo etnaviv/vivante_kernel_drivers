@@ -18,9 +18,9 @@
 
 #define gcvVERSION_MINOR        0
 
-#define gcvVERSION_PATCH        6
+#define gcvVERSION_PATCH        7
 
-#define gcvVERSION_BUILD     9958
+#define gcvVERSION_BUILD     11493
 
 #define gcvVERSION_DATE      __DATE__
 

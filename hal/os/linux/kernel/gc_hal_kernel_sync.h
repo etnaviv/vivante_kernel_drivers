@@ -16,10 +16,11 @@
 
 #include <linux/types.h>
 
-#include <linux/sync.h>
-
 #include <gc_hal.h>
 #include <gc_hal_base.h>
+
+#if gcdANDROID_NATIVE_FENCE_SYNC
+#include <linux/sync.h>
 
 struct viv_sync_timeline
 {
@@ -59,5 +60,7 @@ viv_sync_pt_create(
     struct viv_sync_timeline * Obj,
     gctSYNC_POINT SyncPoint
     );
+
+#endif
 
 #endif /* __gc_hal_kernel_sync_h_ */

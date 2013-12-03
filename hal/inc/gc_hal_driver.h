@@ -85,6 +85,9 @@ typedef enum _gceHAL_COMMAND_CODES
 
     gcvHAL_READ_ALL_PROFILE_REGISTERS,
     gcvHAL_PROFILE_REGISTERS_2D,
+#if VIVANTE_PROFILER_PERDRAW
+    gcvHAL_READ_PROFILER_REGISTER_SETTING,
+#endif
 
     /* Power management. */
     gcvHAL_SET_POWER_MANAGEMENT_STATE,
@@ -540,7 +543,13 @@ typedef struct _gcsHAL_INTERFACE
         struct _gcsHAL_EVENT_COMMIT
         {
             /* Event queue in gcsQUEUE. */
-            IN gctUINT64             queue;
+            IN gctUINT64            queue;
+
+#if gcdMULTI_GPU
+            IN gceCORE_3D_ID        coreId;
+
+            IN gceMULTI_GPU_MODE    gpuMode;
+#endif
         }
         Event;
 
@@ -558,6 +567,12 @@ typedef struct _gcsHAL_INTERFACE
 
             /* Event queue in gcsQUEUE. */
             IN gctUINT64            queue;
+
+#if gcdMULTI_GPU
+            IN gceCORE_3D_ID        coreId;
+
+            IN gceMULTI_GPU_MODE    gpuMode;
+#endif
         }
         Commit;
 
@@ -742,9 +757,6 @@ typedef struct _gcsHAL_INTERFACE
         {
             /* Enable profiling */
             OUT gctBOOL             enable;
-
-            /* The profile file name */
-            OUT gctCHAR             fileName[gcdMAX_PROFILE_FILE_NAME];
         }
         GetProfileSetting;
 
@@ -753,11 +765,18 @@ typedef struct _gcsHAL_INTERFACE
         {
             /* Enable profiling */
             IN gctBOOL              enable;
-
-            /* The profile file name */
-            IN gctCHAR              fileName[gcdMAX_PROFILE_FILE_NAME];
         }
         SetProfileSetting;
+
+#if VIVANTE_PROFILER_PERDRAW
+        /* gcvHAL_READ_PROFILER_REGISTER_SETTING */
+        struct _gcsHAL_READ_PROFILER_REGISTER_SETTING
+         {
+            /*Should Clear Register*/
+            IN gctBOOL               bclear;
+         }
+        SetProfilerRegisterClear;
+#endif
 
         /* gcvHAL_READ_ALL_PROFILE_REGISTERS */
         struct _gcsHAL_READ_ALL_PROFILE_REGISTERS
@@ -907,7 +926,7 @@ typedef struct _gcsHAL_INTERFACE
             OUT gceHARDWARE_TYPE        types[gcdCHIP_COUNT];
 #if gcdMULTI_GPU
             /* 3D core count. */
-            OUT gctUINT32               coreCount;
+            OUT gctUINT32               gpuCoreCount;
 #endif
         }
         ChipInfo;
@@ -971,7 +990,7 @@ typedef struct _gcsHAL_INTERFACE
         struct _gcsHAL_QUERY_COMMAND_BUFFER
         {
             /* Command buffer attributes. */
-            OUT gcsCOMMAND_BUFFER_INFO  information;
+            OUT gcsCOMMAND_BUFFER_INFO    information;
         }
         QueryCommandBuffer;
 

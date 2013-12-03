@@ -34,6 +34,7 @@ typedef struct gcsATOM *                gcsATOM_PTR;
 
 #ifndef VIVANTE_NO_3D
 typedef struct _gco3D *                 gco3D;
+typedef struct _gcoCL *                 gcoCL;
 #endif
 
 typedef struct _gcoSURF *               gcoSURF;
@@ -127,8 +128,11 @@ typedef struct _gcsPLS
 
     /* PorcessID of the constrcutor process */
     gctUINT32                   processID;
+
     /* ThreadID of the constrcutor process. */
     gctSIZE_T                   threadID;
+    /* Flag for calling module destructor. */
+    gctBOOL                     exiting;
 
     gctBOOL                     bBasemarkGUI;
     gctBOOL                     bGLBenchmark;
@@ -144,6 +148,10 @@ typedef struct _gcsPLS
 
     /* Game patch for F18CarrierLanding to force it choose suitable EGL config. */
     gctBOOL                     bF18;
+
+#if defined(ANDROID)
+    gctBOOL                     bKFS;
+#endif
 
     gctPLS_DESTRUCTOR           destructor;
 }
@@ -326,6 +334,16 @@ typedef enum _gcePATCH_ID
     gcvPATCH_QUADRANT,
     gcvPATCH_GPUBENCH,
     gcvPATCH_DUOKAN,
+    gcvPATCH_GLOFTSXHM,
+    gcvPATCH_XRUNNER,
+    gcvPATCH_BUSPARKING3D,
+    gcvPATCH_SIEGECRAFT,
+    gcvPATCH_PREMIUM,
+    gcvPATCH_RACEILLEGAL,
+    gcvPATCH_MEGARUN,
+    gcvPATCH_BMGUI,
+    gcvPATCH_NENAMARK2,
+    gcvPATCH_FISHNOODLE,
 
     gcvPATCH_COUNT
 } gcePATCH_ID;
@@ -452,6 +470,18 @@ gcoHAL_Get2DEngine(
     OUT gco2D * Engine
     );
 
+gceSTATUS
+gcoHAL_GetSpecialHintData(
+    IN gcoHAL Hal,
+    OUT gctINT * Hint
+    );
+
+gceSTATUS
+gcoHAL_GetHardware(
+    IN gcoHAL Hal,
+    OUT gcoHARDWARE* Hw
+    );
+
 #ifndef VIVANTE_NO_3D
 /*
 ** Deprecated(Don't use it), keep it here for external library(libgcu.so)
@@ -480,11 +510,6 @@ gcoHAL_SetBltNP2Texture(
     gctBOOL enable
     );
 
-gctBOOL
-gcoOS_IsNeededSupportNP2Texture(
-    IN gctCHAR* ProcName
-    );
-
 gceSTATUS
 gcoHAL_NameVideoMemory(
     IN gctUINT32 Handle,
@@ -505,6 +530,19 @@ gcoHAL_ReleaseVideoMemory(
 /* Verify whether the specified feature is available in hardware. */
 gceSTATUS
 gcoHAL_IsFeatureAvailable(
+    IN gcoHAL Hal,
+    IN gceFEATURE Feature
+    );
+
+/* Verify whether the specified sw workaround is needed in hardware. */
+gceSTATUS
+gcoHAL_IsSwwaNeeded(
+    IN gcoHAL Hal,
+    IN gceSWWA Swwa
+    );
+
+gceSTATUS
+gcoHAL_IsFeatureAvailable1(
     IN gcoHAL Hal,
     IN gceFEATURE Feature
     );
@@ -722,6 +760,12 @@ gceSTATUS
 gcoHAL_QueryChipCount(
     IN gcoHAL Hal,
     OUT gctINT32 * Count
+    );
+
+gceSTATUS
+gcoHAL_Query3DCoreCount(
+    IN gcoHAL       Hal,
+    OUT gctINT32   *Count
     );
 
 gceSTATUS
@@ -1687,7 +1731,7 @@ gcoOS_QueryProfileTickRate(
 #   define gcmPROFILE_QUERY(start, ticks)   do { } while (gcvFALSE)
 #   define gcmPROFILE_ONLY(x)               do { } while (gcvFALSE)
 #   define gcmPROFILE_ELSE(x)               x
-#   define gcmPROFILE_DECLARE_ONLY(x)       typedef x
+#   define gcmPROFILE_DECLARE_ONLY(x)
 #   define gcmPROFILE_DECLARE_ELSE(x)       x
 #endif
 
@@ -2049,6 +2093,14 @@ gcoSURF_MapUserSurface(
     IN gctUINT32 Physical
     );
 
+/* set the rect of the surface */
+gceSTATUS
+gcoSURF_SetRect(
+    IN gcoSURF Surface,
+    IN gctUINT width,
+    IN gctUINT height
+    );
+
 /* Query vid mem node info. */
 gceSTATUS
 gcoSURF_QueryVidMemNode(
@@ -2120,16 +2172,17 @@ gcoSURF_IsTileStatusSupported(
     IN gcoSURF Surface
     );
 
-/* Process tile status for the specified surface. */
-gceSTATUS
-gcoSURF_SetTileStatus(
-    IN gcoSURF Surface
-    );
-
-/* Enable tile status for the specified surface. */
+/* Enable tile status for the specified surface on zero slot. */
 gceSTATUS
 gcoSURF_EnableTileStatus(
     IN gcoSURF Surface
+    );
+
+/* Enable tile status for the specified surface on specified slot. */
+gceSTATUS
+gcoSURF_EnableTileStatusEx(
+    IN gcoSURF Surface,
+    IN gctUINT RtIndex
     );
 
 /* Disable tile status for the specified surface. */
@@ -2177,6 +2230,15 @@ gcoSURF_GetAlignment(
     OUT gctUINT * YAlignment
     );
 
+gceSTATUS
+gcoSURF_AlignResolveRect(
+    IN gcoSURF Surf,
+    IN gcsPOINT_PTR RectOrigin,
+    IN gcsPOINT_PTR RectSize,
+    OUT gcsPOINT_PTR AlignedOrigin,
+    OUT gcsPOINT_PTR AlignedSize
+    );
+
 /* Get surface type and format. */
 gceSTATUS
 gcoSURF_GetFormat(
@@ -2184,6 +2246,14 @@ gcoSURF_GetFormat(
     OUT OPTIONAL gceSURF_TYPE * Type,
     OUT OPTIONAL gceSURF_FORMAT * Format
     );
+
+/* Get surface information */
+gceSTATUS
+gcoSURF_GetFormatInfo(
+    IN gcoSURF Surface,
+    OUT gcsSURF_FORMAT_INFO_PTR * formatInfo
+    );
+
 /* Get Surface pack format */
 gceSTATUS
 gcoSURF_GetPackedFormat(
@@ -2351,6 +2421,20 @@ gcoSURF_NODE_Cache(
     IN gctPOINTER Logical,
     IN gctSIZE_T Bytes,
     IN gceCACHEOPERATION Operation
+    );
+
+/* Lock and unlock surface node */
+gceSTATUS
+gcoSURF_LockNode(
+    IN gcsSURF_NODE_PTR Node,
+    OUT gctUINT32 * Address,
+    OUT gctPOINTER * Memory
+    );
+
+gceSTATUS
+gcoSURF_UnLockNode(
+    IN gcsSURF_NODE_PTR Node,
+    IN gceSURF_TYPE Type
     );
 
 /* Perform CPU cache operation on surface node */
@@ -2548,6 +2632,22 @@ gcsRECT_RelativeRotation(
 gceSTATUS
 
 gcsRECT_Rotate(
+
+    IN OUT gcsRECT_PTR Rect,
+
+    IN gceSURF_ROTATION Rotation,
+
+    IN gceSURF_ROTATION toRotation,
+
+    IN gctINT32 SurfaceWidth,
+
+    IN gctINT32 SurfaceHeight
+
+    );
+
+gceSTATUS
+
+gcsRECT_Rotate_dRect(
 
     IN OUT gcsRECT_PTR Rect,
 
@@ -2837,6 +2937,8 @@ gcoOS_DebugTrace(
 #define gcvZONE_UTILITY         (1 << 20)
 #define gcvZONE_PARAMETERS      (1 << 21)
 #define gcvZONE_BUFOBJ          (1 << 22)
+#define gcvZONE_SHADER          (1 << 23)
+#define gcvZONE_STREAM_OUT      (1 << 24)
 
 /* API definitions. */
 #define gcvZONE_API_HAL         (1 << 28)

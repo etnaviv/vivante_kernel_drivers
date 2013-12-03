@@ -41,13 +41,14 @@ gctINT gckDEBUGFS_Terminate(void);
  **
  *******************************************************************************/
 
-gctINT gckDEBUGFS_CreateNode(
-             IN gctINT SizeInKB,
-                        IN gctCONST_STRING  ParentName ,
-                        IN gctCONST_STRING  NodeName,
-                        OUT gcsDEBUGFS_Node  **Node
-                        );
-
+gctINT
+gckDEBUGFS_CreateNode(
+    IN gctPOINTER Device,
+    IN gctINT SizeInKB,
+    IN gctCONST_STRING ParentName,
+    IN gctCONST_STRING NodeName,
+    OUT gcsDEBUGFS_Node **Node
+    );
 
 void gckDEBUGFS_FreeNode(
             IN gcsDEBUGFS_Node  * Node

@@ -31,44 +31,21 @@
 #include "gc_hal_kernel_sync.h"
 #endif
 
+#include "gc_hal_kernel_plat.h"
+
 #define _GC_OBJ_ZONE    gcvZONE_OS
-
-/*####################################################
-           GC power function declaration
-  ####################################################*/
-#if MRVL_2D3D_POWER_SEPARATED && (MRVL_PLATFORM_TTD2)
-extern void gc3d_pwr(unsigned int);
-    #define GC3D_PWR    gc3d_pwr
-#elif MRVL_2D3D_POWER_SEPARATED && (MRVL_PLATFORM_ADIR)
-
-    #if gcdMULTI_GPU > 1
-        extern void gc3d_pwr(unsigned int);
-            #define GC3D_PWR    gc3d_pwr
-    #else
-        extern void gc3d1_pwr(unsigned int);
-            #define GC3D_PWR    gc3d1_pwr
-    #endif
-
-#else
-extern void gc_pwr(int);
-    #define GC3D_PWR    gc_pwr
-#endif
-
-#if MRVL_2D3D_POWER_SEPARATED
-#  if MRVL_PLATFORM_TTD2 || MRVL_PLATFORM_ADIR
-extern void gc2d_pwr(unsigned int);
-#  else
-extern void gc2d_pwr(int);
-#  endif
-    #define GC2D_PWR    gc2d_pwr
-#else
-    #define GC2D_PWR    gc_pwr
-#endif
-/*####################################################*/
 
 #if MRVL_DFC_PROTECT_REG_ACCESS
 extern void get_gc3d_reg_lock(unsigned int lock, unsigned long *flags);
 extern void get_gc2d_reg_lock(unsigned int lock, unsigned long *flags);
+#endif
+
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0))
+#define GC_CLK_ENABLE       clk_prepare_enable
+#define GC_CLK_DISABLE      clk_disable_unprepare
+#else
+#define GC_CLK_ENABLE       clk_enable
+#define GC_CLK_DISABLE      clk_disable
 #endif
 
 /*******************************************************************************
@@ -173,6 +150,7 @@ typedef struct _gcsINTEGER_DB
 {
     struct idr                  idr;
     spinlock_t                  lock;
+    gctINT                      curr;
 }
 gcsINTEGER_DB;
 
@@ -859,6 +837,29 @@ _AllocateIntegerId(
     )
 {
     int result;
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3,9,0))
+    gctINT next;
+#endif
+
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,9,0))
+
+    idr_preload(GFP_KERNEL | gcdNOWARN);
+
+    spin_lock(&Database->lock);
+
+    /* Try to get a id greater than 0. */
+    result = idr_alloc(&Database->idr, KernelPointer, 1, 0, GFP_NOWAIT);
+
+    spin_unlock(&Database->lock);
+
+    idr_preload_end();
+
+    if(result < 0)
+        return gcvSTATUS_OUT_OF_RESOURCES;
+
+    *Id = result;
+
+#else
 
 again:
     if (idr_pre_get(&Database->idr, GFP_KERNEL | gcdNOWARN) == 0)
@@ -868,8 +869,15 @@ again:
 
     spin_lock(&Database->lock);
 
+    next = (Database->curr + 1 <= 0) ? 1 : Database->curr + 1;
+
     /* Try to get a id greater than 0. */
-    result = idr_get_new_above(&Database->idr, KernelPointer, 1, Id);
+    result = idr_get_new_above(&Database->idr, KernelPointer, next, Id);
+
+    if (!result)
+    {
+        Database->curr = *Id;
+    }
 
     spin_unlock(&Database->lock);
 
@@ -882,6 +890,7 @@ again:
     {
         return gcvSTATUS_OUT_OF_RESOURCES;
     }
+#endif
 
     return gcvSTATUS_OK;
 }
@@ -1338,9 +1347,6 @@ _CreateKernelVirtualMapping(
     /* ioremap() can't work on system memory since 2.6.38. */
     addr = vmap(pages, numPages, 0, gcmkNONPAGED_MEMROY_PROT(PAGE_KERNEL));
 
-    /* Trigger a page fault. */
-    memset(addr, 0, numPages * PAGE_SIZE);
-
     if (free)
     {
         kfree(pages);
@@ -1364,6 +1370,7 @@ _DestoryKernelVirtualMapping(
 gceSTATUS
 gckOS_CreateKernelVirtualMapping(
     IN gctPHYS_ADDR Physical,
+    IN gctSIZE_T Bytes,
     OUT gctSIZE_T * PageCount,
     OUT gctPOINTER * Logical
     )
@@ -1376,7 +1383,8 @@ gckOS_CreateKernelVirtualMapping(
 
 gceSTATUS
 gckOS_DestroyKernelVirtualMapping(
-    IN gctPOINTER Logical
+    IN gctPOINTER Logical,
+    IN gctSIZE_T Bytes
     )
 {
     _DestoryKernelVirtualMapping((gctSTRING)Logical);
@@ -2077,6 +2085,9 @@ gckOS_AllocateNonPagedMemory(
     mdl->kaddr      = vaddr;
     mdl->u.contiguousPages = page;
 
+    /* Trigger a page fault. */
+    memset(addr, 0, numPages * PAGE_SIZE);
+
 #if !defined(CONFIG_PPC)
     /* Cache invalidate. */
     dma_sync_single_for_device(
@@ -2549,11 +2560,25 @@ gckOS_DirectReadRegister(
     OUT gctUINT32 * Data
     )
 {
+#if MRVL_DFC_PROTECT_REG_ACCESS
+    unsigned long flags;
+#endif
     gcmkHEADER_ARG("Os=0x%X, Address=0x%X", Os, Address);
 
     /* Verify the arguments. */
     gcmkVERIFY_OBJECT(Os, gcvOBJ_OS);
     gcmkVERIFY_ARGUMENT(Data != gcvNULL);
+
+#if MRVL_DFC_PROTECT_REG_ACCESS
+    if (Core == gcvCORE_MAJOR)
+    {
+        get_gc3d_reg_lock(gcvTRUE, &flags);
+    }
+    else if (Core == gcvCORE_2D)
+    {
+        get_gc2d_reg_lock(gcvTRUE, &flags);
+    }
+#endif
 
     /* read register directly */
 #if gcdMULTI_GPU
@@ -2566,6 +2591,17 @@ gckOS_DirectReadRegister(
     {
         *Data = readl((gctUINT8 *)Os->device->registerBases[Core] + Address);
     }
+
+#if MRVL_DFC_PROTECT_REG_ACCESS
+    if (Core == gcvCORE_MAJOR)
+    {
+        get_gc3d_reg_lock(gcvFALSE, &flags);
+    }
+    else if (Core == gcvCORE_2D)
+    {
+        get_gc2d_reg_lock(gcvFALSE, &flags);
+    }
+#endif
 
     /* Success. */
     gcmkFOOTER_ARG("*Data=0x%08x", *Data);
@@ -2582,6 +2618,12 @@ gckOS_ReadRegisterByCoreId(
     OUT gctUINT32 * Data
     )
 {
+    gckKERNEL       kernel;
+    gctINT32        clockStateValue = gcvFALSE;
+#if MRVL_DFC_PROTECT_REG_ACCESS
+    unsigned long   flags;
+#endif
+
     gcmkHEADER_ARG("Os=0x%X Core=%d CoreId=%d Address=0x%X",
                    Os, Core, CoreId, Address);
 
@@ -2589,7 +2631,80 @@ gckOS_ReadRegisterByCoreId(
     gcmkVERIFY_OBJECT(Os, gcvOBJ_OS);
     gcmkVERIFY_ARGUMENT(Data != gcvNULL);
 
+    if (Core != gcvCORE_MAJOR)
+    {
+        *Data = 0;
+        gcmkFOOTER_ARG("*Data=0x%08x", *Data);
+        return gcvSTATUS_INVALID_ARGUMENT;
+    }
+
+    kernel = Os->device->kernels[Core];
+
+    down_read(&Os->rwsem_clk_pwr);
+
+    if(kernel && kernel->hardware)
+    {
+        /* make sure both external and internal clock are ON. */
+        gckOS_AtomGet(Os, kernel->hardware->clockState, &clockStateValue);
+
+        if ((Os->clockDepth != 0) && (clockStateValue == gcvTRUE))
+        {
+#if MRVL_DFC_PROTECT_REG_ACCESS
+            get_gc3d_reg_lock(gcvTRUE, &flags);
+#endif
+            *Data = readl((gctUINT8 *)Os->device->registerBase3D[CoreId] + Address);
+
+#if MRVL_DFC_PROTECT_REG_ACCESS
+            get_gc3d_reg_lock(gcvFALSE, &flags);
+#endif
+        }
+        else
+        {
+            *Data = 0;
+            gcmkTRACE_ZONE(gcvLEVEL_WARNING, gcvZONE_OS, "GPU%d[%d]_REG[%#x] (%d, %d) reading failure!",
+                Core, CoreId, Address, Os->clockDepth, clockStateValue);
+        }
+    }
+    else
+    {
+       *Data = readl((gctUINT8 *)Os->device->registerBase3D[CoreId] + Address);
+    }
+
+    up_read(&Os->rwsem_clk_pwr);
+
+    /* Success. */
+    gcmkFOOTER_ARG("*Data=0x%08x", *Data);
+    return gcvSTATUS_OK;
+}
+
+gceSTATUS
+gckOS_DirectReadRegisterByCoreId(
+    IN gckOS Os,
+    IN gceCORE Core,
+    IN gctUINT32 CoreId,
+    IN gctUINT32 Address,
+    OUT gctUINT32 * Data
+    )
+{
+#if MRVL_DFC_PROTECT_REG_ACCESS
+    unsigned long   flags;
+#endif
+    gcmkHEADER_ARG("Os=0x%X Core=%d CoreId=%d Address=0x%X",
+                   Os, Core, CoreId, Address);
+
+    /* Verify the arguments. */
+    gcmkVERIFY_OBJECT(Os, gcvOBJ_OS);
+    gcmkVERIFY_ARGUMENT(Data != gcvNULL);
+
+#if MRVL_DFC_PROTECT_REG_ACCESS
+    get_gc3d_reg_lock(gcvTRUE, &flags);
+#endif
+
     *Data = readl((gctUINT8 *)Os->device->registerBase3D[CoreId] + Address);
+
+#if MRVL_DFC_PROTECT_REG_ACCESS
+    get_gc3d_reg_lock(gcvFALSE, &flags);
+#endif
 
     /* Success. */
     gcmkFOOTER_ARG("*Data=0x%08x", *Data);
@@ -3876,16 +3991,21 @@ gckOS_AtomicExchange(
     OUT gctUINT32_PTR OldValue
     )
 {
+    gctUINT32 oldValue = 0;
     gcmkHEADER_ARG("Os=0x%X Target=0x%X NewValue=%u", Os, Target, NewValue);
 
     /* Verify the arguments. */
     gcmkVERIFY_OBJECT(Os, gcvOBJ_OS);
 
     /* Exchange the pair of 32-bit values. */
-    *OldValue = (gctUINT32) atomic_xchg((atomic_t *) Target, (int) NewValue);
+    oldValue = (gctUINT32) atomic_xchg((atomic_t *) Target, (int) NewValue);
+    if (OldValue)
+    {
+        *OldValue = oldValue;
+    }
 
     /* Success. */
-    gcmkFOOTER_ARG("*OldValue=%u", *OldValue);
+    gcmkFOOTER_ARG("*OldValue=%u", oldValue);
     return gcvSTATUS_OK;
 }
 
@@ -3921,16 +4041,21 @@ gckOS_AtomicExchangePtr(
     OUT gctPOINTER * OldValue
     )
 {
+    gctPOINTER oldValue = gcvNULL;
     gcmkHEADER_ARG("Os=0x%X Target=0x%X NewValue=0x%X", Os, Target, NewValue);
 
     /* Verify the arguments. */
     gcmkVERIFY_OBJECT(Os, gcvOBJ_OS);
 
     /* Exchange the pair of pointers. */
-    *OldValue = (gctPOINTER)(gctUINTPTR_T) atomic_xchg((atomic_t *) Target, (int)(gctUINTPTR_T) NewValue);
+    oldValue = (gctPOINTER)(gctUINTPTR_T) atomic_xchg((atomic_t *) Target, (int)(gctUINTPTR_T) NewValue);
+    if (OldValue)
+    {
+        *OldValue = oldValue;
+    }
 
     /* Success. */
-    gcmkFOOTER_ARG("*OldValue=0x%X", *OldValue);
+    gcmkFOOTER_ARG("*OldValue=0x%X", oldValue);
     return gcvSTATUS_OK;
 }
 
@@ -4971,13 +5096,13 @@ gckOS_LockPages(
         }
 
         mdlMap->vma->vm_flags |= gcdVM_FLAGS;
-#if !gcdPAGED_MEMORY_CACHEABLE
+
         if (Cacheable == gcvFALSE)
         {
             /* Make this mapping non-cached. */
             mdlMap->vma->vm_page_prot = gcmkPAGED_MEMROY_PROT(mdlMap->vma->vm_page_prot);
         }
-#endif
+
         addr = mdl->addr;
 
         /* Now map all the vmalloc pages to this user address. */
@@ -5338,6 +5463,177 @@ gckOS_UnlockPages(
     gcmkFOOTER_NO();
     return gcvSTATUS_OK;
 }
+
+/*******************************************************************************
+**
+**  gckOS_AllocateVidmemFromMemblock
+**
+**  @return the base physical address of video memory that was allocated by
+**          using memblock from linux kernel
+**
+*/
+#if MRVL_USE_GPU_RESERVE_MEM
+gceSTATUS
+gckOS_AllocateVidmemFromMemblock(
+    IN gckOS Os,
+    IN gctSIZE_T Bytes,
+    IN gctPHYS_ADDR Base,
+    OUT gctPHYS_ADDR * Physical
+    )
+{
+    gctINT          numPages;
+    PLINUX_MDL      mdl     = gcvNULL;
+    gctSTRING       addr    = gcvNULL;
+    gceSTATUS       status  = gcvSTATUS_OK;
+    gctBOOL         locked  = gcvFALSE;
+
+    gcmkHEADER_ARG("Os=0x%X Bytes=%d Base=0x%p", Os, Bytes, Base);
+
+    /* Verify the arguments. */
+    gcmkVERIFY_OBJECT(Os, gcvOBJ_OS);
+    gcmkVERIFY_ARGUMENT(Physical != gcvNULL);
+
+    gcmkTRACE_ZONE(gcvLEVEL_INFO, gcvZONE_OS, "in %s", __func__);
+
+    /* Get total number of pages.. */
+    numPages = GetPageCount(Bytes, 0);
+
+    /* Allocate mdl+vector structure */
+    mdl = _CreateMdl();
+    if (mdl == gcvNULL)
+    {
+        gcmkONERROR(gcvSTATUS_OUT_OF_MEMORY);
+    }
+
+    mdl->pagedMem = 0;
+    mdl->numPages = numPages;
+
+    /* Fetch physical from GPU_PLATFORM_DATA directly. */
+    mdl->dmaHandle  = (dma_addr_t)Base;
+    addr            = phys_to_virt(mdl->dmaHandle);
+
+    if (addr == gcvNULL)
+    {
+        gcmkONERROR(gcvSTATUS_OUT_OF_MEMORY);
+    }
+
+    MEMORY_LOCK(Os);
+    locked = gcvTRUE;
+
+    mdl->kaddr = addr;
+    mdl->addr = gcvNULL;
+    mdl->wastSize  = 0;
+    /* Return allocated memory. */
+    *Physical = (gctPHYS_ADDR) mdl;
+
+    /*
+     * Add this to a global list.
+     * Will be used by get physical address
+     * and mapuser pointer functions.
+     */
+
+    if (!Os->mdlHead)
+    {
+        /* Initialize the queue. */
+        Os->mdlHead = Os->mdlTail = mdl;
+    }
+    else
+    {
+        /* Add to the tail. */
+        mdl->prev = Os->mdlTail;
+        Os->mdlTail->next = mdl;
+        Os->mdlTail = mdl;
+    }
+
+    MEMORY_UNLOCK(Os);
+    locked = gcvFALSE;
+
+    gcmkTRACE_ZONE(gcvLEVEL_INFO,
+                gcvZONE_OS,
+                "%s: Bytes->0x%x, Mdl->%p, Logical->0x%x dmaHandle->0x%x",
+                __func__,
+                (gctUINT32)Bytes,
+                mdl,
+                (gctUINT32)mdl->addr,
+                mdl->dmaHandle);
+
+    return gcvSTATUS_OK;
+
+OnError:
+    gcmkFOOTER();
+    if(locked)
+    {
+        MEMORY_UNLOCK(Os);
+    }
+
+    /* Destroy the mdl if necessary*/
+    if(mdl)
+    {
+        gcmkVERIFY_OK(_DestroyMdl(mdl));
+        mdl = gcvNULL;
+    }
+
+    return status;
+}
+
+/*******************************************************************************
+**
+**  gckOS_FreeVidmemFromMemblock
+**
+**  remove all nodes that was allocated from the reserved video memory.
+**
+*/
+gceSTATUS
+gckOS_FreeVidmemFromMemblock(
+    IN gckOS Os,
+    IN gctPHYS_ADDR Physical
+    )
+{
+    PLINUX_MDL      mdl     = gcvNULL;
+    gceSTATUS       status  = gcvSTATUS_OK;
+
+    gcmkHEADER_ARG("Os=0x%X Physical=0x%x", Os, Physical);
+
+    /* Verify the arguments. */
+    gcmkVERIFY_OBJECT(Os, gcvOBJ_OS);
+    gcmkVERIFY_ARGUMENT(Physical != gcvNULL);
+
+    gcmkTRACE_ZONE(gcvLEVEL_INFO, gcvZONE_OS, "in %s", __func__);
+
+    MEMORY_LOCK(Os);
+
+    mdl = (PLINUX_MDL)Physical;
+
+    /* Remove the node from global list.. */
+    if (mdl == Os->mdlHead)
+    {
+        if ((Os->mdlHead = mdl->next) == gcvNULL)
+        {
+            Os->mdlTail = gcvNULL;
+        }
+    }
+    else
+    {
+        mdl->prev->next = mdl->next;
+        if (mdl == Os->mdlTail)
+        {
+            Os->mdlTail = mdl->prev;
+        }
+        else
+        {
+            mdl->next->prev = mdl->prev;
+        }
+    }
+
+    MEMORY_UNLOCK(Os);
+
+    gcmkVERIFY_OK(_DestroyMdl(mdl));
+    mdl = gcvNULL;
+
+    gcmkFOOTER();
+    return status;
+}
+#endif
 
 
 /*******************************************************************************
@@ -7018,6 +7314,84 @@ gckOS_ZeroMemory(
 ********************************* Cache Control ********************************
 *******************************************************************************/
 
+# if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0))
+static gceSTATUS
+_HandleCache(
+    IN gckOS Os,
+    IN gctUINT32 ProcessID,
+    IN gctPHYS_ADDR Handle,
+    IN gctUINT32 Physical,
+    IN gctPOINTER Logical,
+    IN gctSIZE_T Bytes,
+    IN enum dma_data_direction Dir
+    )
+{
+    gceSTATUS status;
+    gctUINT32 i, pageNum;
+    unsigned long paddr;
+    gctPOINTER vaddr;
+
+    gcmkHEADER_ARG("Os=0x%X ProcessID=%d Handle=0x%X Logical=0x%X Bytes=%lu",
+                   Os, ProcessID, Handle, Logical, Bytes);
+
+    if (Physical != gcvINVALID_ADDRESS)
+    {
+        /* Non paged memory or gcvPOOL_USER surface */
+        paddr = (unsigned long) Physical;
+        dma_sync_single_for_device(
+                  gcvNULL,
+                  (dma_addr_t)paddr,
+                  Bytes,
+                  Dir);
+    }
+    else if ((Handle == gcvNULL)
+    || (Handle != gcvNULL && ((PLINUX_MDL)Handle)->contiguous)
+    )
+    {
+        /* Video Memory or contiguous virtual memory */
+        gcmkONERROR(gckOS_GetPhysicalAddress(Os, Logical, (gctUINT32*)&paddr));
+        dma_sync_single_for_device(
+                  gcvNULL,
+                  (dma_addr_t)paddr,
+                  Bytes,
+                  Dir);
+    }
+    else
+    {
+        /* Non contiguous virtual memory */
+        vaddr = (gctPOINTER)gcmALIGN_BASE((gctUINTPTR_T)Logical, PAGE_SIZE);
+        pageNum = GetPageCount(Bytes, 0);
+
+        for (i = 0; i < pageNum; i += 1)
+        {
+            gcmkONERROR(_ConvertLogical2Physical(
+                Os,
+                vaddr + PAGE_SIZE * i,
+                ProcessID,
+                (PLINUX_MDL)Handle,
+                (gctUINT32*)&paddr
+                ));
+
+            dma_sync_single_for_device(
+                      gcvNULL,
+                      (dma_addr_t)paddr,
+                      PAGE_SIZE,
+                      Dir);
+        }
+    }
+
+    mb();
+
+    /* Success. */
+    gcmkFOOTER_NO();
+    return gcvSTATUS_OK;
+
+OnError:
+    return status;
+}
+
+# else
+
 #if !gcdCACHE_FUNCTION_UNIMPLEMENTED && defined(CONFIG_OUTER_CACHE)
 static inline gceSTATUS
 outer_func(
@@ -7140,6 +7514,8 @@ OnError:
 #endif
 #endif
 
+# endif
+
 /*******************************************************************************
 **  gckOS_CacheClean
 **
@@ -7187,6 +7563,11 @@ gckOS_CacheClean(
 
 #if !gcdCACHE_FUNCTION_UNIMPLEMENTED
 #ifdef CONFIG_ARM
+# if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0))
+
+    _HandleCache(Os, ProcessID, Handle, Physical, Logical, Bytes, DMA_TO_DEVICE);
+
+# else
 
     /* Inner cache. */
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,35)
@@ -7203,6 +7584,8 @@ gckOS_CacheClean(
     outer_clean_range((unsigned long) Handle, (unsigned long) Handle + Bytes);
 #endif
 #endif
+
+# endif
 
 #elif defined(CONFIG_MIPS)
 
@@ -7271,6 +7654,12 @@ gckOS_CacheInvalidate(
 #if !gcdCACHE_FUNCTION_UNIMPLEMENTED
 #ifdef CONFIG_ARM
 
+# if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0))
+
+    _HandleCache(Os, ProcessID, Handle, Physical, Logical, Bytes, DMA_FROM_DEVICE);
+
+# else
+
     /* Inner cache. */
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,35)
     dmac_map_area(Logical, Bytes, DMA_FROM_DEVICE);
@@ -7286,6 +7675,8 @@ gckOS_CacheInvalidate(
     outer_inv_range((unsigned long) Handle, (unsigned long) Handle + Bytes);
 #endif
 #endif
+
+# endif
 
 #elif defined(CONFIG_MIPS)
     dma_cache_inv((unsigned long) Logical, Bytes);
@@ -7349,6 +7740,12 @@ gckOS_CacheFlush(
 
 #if !gcdCACHE_FUNCTION_UNIMPLEMENTED
 #ifdef CONFIG_ARM
+# if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0))
+
+    _HandleCache(Os, ProcessID, Handle, Physical, Logical, Bytes, DMA_BIDIRECTIONAL);
+
+# else
+
     /* Inner cache. */
     dmac_flush_range(Logical, Logical + Bytes);
 
@@ -7360,6 +7757,8 @@ gckOS_CacheFlush(
     outer_flush_range((unsigned long) Handle, (unsigned long) Handle + Bytes);
 #endif
 #endif
+
+# endif
 
 #elif defined(CONFIG_MIPS)
     dma_cache_wback_inv((unsigned long) Logical, Bytes);
@@ -7501,9 +7900,6 @@ gckOS_Broadcast(
 
     case gcvBROADCAST_GPU_STUCK:
         gcmkTRACE_N(gcvLEVEL_ERROR, 0, "gcvBROADCAST_GPU_STUCK\n");
-#if !gcdENABLE_RECOVERY
-        gcmkONERROR(gckHARDWARE_DumpGPUState(Hardware));
-#endif
         gcmkONERROR(gckKERNEL_Recovery(Hardware->kernel));
         break;
 
@@ -7925,366 +8321,6 @@ gckOS_SetGPUPower(
     gcmkHEADER_ARG("Os=0x%X Core=%d Clock=%d Power=%d", Os, Core, Clock, Power);
 
     /* TODO: Put your code here. */
-
-    gcmkFOOTER_NO();
-    return gcvSTATUS_OK;
-}
-
-gceSTATUS inline
-_ToEnablePower(
-    IN gckOS Os,
-    IN gceCORE Core,
-    OUT gctBOOL * EnablePwr
-    )
-{
-    gctBOOL enablePwr = gcvFALSE;
-
-#if MRVL_2D3D_POWER_SEPARATED
-    gckHARDWARE hardware = Os->device->kernels[Core]->hardware;
-
-    switch(hardware->refExtPower)
-    {
-    case 0:
-        enablePwr = gcvTRUE;
-        /* fall through */
-    default:
-        hardware->refExtPower++;
-        if(Os->device->powerDebug)
-        {
-            gcmkPRINT("[%d]%s: ref_pwr %d, enable_pwr %d", Core, __func__,
-                      hardware->refExtPower, enablePwr);
-        }
-    }
-
-    if(hardware->refExtPower > 1)
-    {
-        hardware->refExtPower--;
-        gcmkPRINT("WARNING: too much enable for GPU %d power!", Core);
-    }
-#else
-    switch(Os->powerDepth)
-    {
-    case 0:
-        enablePwr = gcvTRUE;
-        /* fall through */
-    default:
-        Os->powerDepth++;
-        if(Os->device->powerDebug)
-        {
-            gcmkPRINT("[%d]%s: depth %d, enable_pwr %d", Core, __func__,
-                      Os->powerDepth, enablePwr);
-        }
-    }
-
-    if(Os->powerDepth > MRVL_MAX_POWER_DEPTH)
-    {
-        Os->powerDepth--;
-        gcmkPRINT("WARNING: too much enable for GPU power!");
-    }
-#endif
-
-    *EnablePwr = enablePwr;
-
-    return gcvSTATUS_OK;
-}
-
-gceSTATUS inline
-_ToDisablePower(
-    IN gckOS Os,
-    IN gceCORE Core,
-    OUT gctBOOL * DisablePwr
-    )
-{
-    gctBOOL disablePwr = gcvFALSE;
-
-#if MRVL_2D3D_POWER_SEPARATED
-    gckHARDWARE hardware = Os->device->kernels[Core]->hardware;
-
-    switch(hardware->refExtPower)
-    {
-    case 0:
-        gcmkPRINT("WARNING: too much disable for GPU %d power!", Core);
-        break;
-    case 1:
-        disablePwr = gcvTRUE;
-        /* fall through */
-    default:
-        hardware->refExtPower--;
-        if(Os->device->powerDebug)
-        {
-            gcmkPRINT("[%d]%s: ref_pwr %d, disable_pwr %d", Core, __func__,
-                      hardware->refExtPower, disablePwr);
-        }
-    }
-#else
-    switch(Os->powerDepth)
-    {
-    case 0:
-        gcmkPRINT("WARNING: too much disable for GPU power!");
-        break;
-    case 1:
-        disablePwr = gcvTRUE;
-        /* fall through */
-    default:
-        Os->powerDepth--;
-        if(Os->device->powerDebug)
-        {
-            gcmkPRINT("[%d]%s: depth %d, disable_pwr %d", Core, __func__,
-                      Os->powerDepth, disablePwr);
-        }
-    }
-#endif
-
-    *DisablePwr = disablePwr;
-
-    return gcvSTATUS_OK;
-}
-
-gceSTATUS inline
-_ToEnableClock(
-    IN gckOS Os,
-    IN gceCORE Core,
-    OUT gctBOOL * EnableClk
-    )
-{
-    gctBOOL enableClk = gcvFALSE;
-
-#if MRVL_2D3D_CLOCK_SEPARATED
-    gckHARDWARE hardware = Os->device->kernels[Core]->hardware;
-
-    switch(hardware->refExtClock)
-    {
-    case 0:
-        enableClk = gcvTRUE;
-        /* fall through */
-    default:
-        hardware->refExtClock++;
-        if(Os->device->powerDebug)
-        {
-            gcmkPRINT("[%d]%s: ref_clk %d, enable_clk %d", Core, __func__,
-                      hardware->refExtClock, enableClk);
-        }
-    }
-
-    if(hardware->refExtClock > 1)
-    {
-        hardware->refExtClock--;
-        gcmkPRINT("WARNING: too much enable for GPU %d clock!", Core);
-    }
-#else
-    /* 2D&3D clocks are combined */
-    switch(Os->clockDepth)
-    {
-    case 0:
-        enableClk = gcvTRUE;
-        /* fall through */
-    default:
-        Os->clockDepth++;
-        if(Os->device->powerDebug)
-        {
-            gcmkPRINT("[%d]%s: depth %d, enable_clk %d", Core, __func__,
-                      Os->clockDepth, enableClk);
-        }
-    }
-
-    if(Os->clockDepth > MRVL_MAX_CLOCK_DEPTH)
-    {
-        Os->clockDepth--;
-        gcmkPRINT("WARNING: too much enable for GPU clock!");
-    }
-#endif
-
-    *EnableClk = enableClk;
-
-    return gcvSTATUS_OK;
-}
-
-gceSTATUS inline
-_ToDisableClock(
-    IN gckOS Os,
-    IN gceCORE Core,
-    OUT gctBOOL * DisableClk
-    )
-{
-    gctBOOL disableClk = gcvFALSE;
-
-#if MRVL_2D3D_CLOCK_SEPARATED
-    gckHARDWARE hardware = Os->device->kernels[Core]->hardware;
-
-    switch(hardware->refExtClock)
-    {
-    case 0:
-        gcmkPRINT("WARNING: too much disable for GPU %d clock!", Core);
-        break;
-    case 1:
-        disableClk = gcvTRUE;
-        /* fall through */
-    default:
-        hardware->refExtClock--;
-        if(Os->device->powerDebug)
-        {
-            gcmkPRINT("[%d]%s: ref_clk %d, disable_clk %d", Core, __func__,
-                      hardware->refExtClock, disableClk);
-        }
-    }
-#else
-    /* 2D&3D clocks are combined */
-    switch(Os->clockDepth)
-    {
-    case 0:
-        gcmkPRINT("WARNING: too much disable for GPU clock!");
-        break;
-    case 1:
-        disableClk = gcvTRUE;
-        /* fall through */
-    default:
-        Os->clockDepth--;
-        if(Os->device->powerDebug)
-        {
-            gcmkPRINT("[%d]%s: depth %d, disable_clk %d", Core, __func__,
-                      Os->clockDepth, disableClk);
-        }
-    }
-#endif
-
-    *DisableClk = disableClk;
-
-    return gcvSTATUS_OK;
-}
-
-gceSTATUS
-gckOS_SetGPUPowerOnMRVL(
-    IN gckOS Os,
-    IN gckHARDWARE Hardware,
-    IN gctBOOL EnableClk,
-    IN gctBOOL EnablePwr
-    )
-{
-    gctBOOL enableClk = gcvFALSE;
-    gctBOOL enablePwr = gcvFALSE;
-    gcmkHEADER_ARG("Os=0x%X Hardware=0x%X EnableClk=%d EnablePwr=%d", Os, Hardware, EnableClk, EnablePwr);
-
-    gcmkVERIFY_OBJECT(Os, gcvOBJ_OS);
-    gcmkVERIFY_OBJECT(Hardware, gcvOBJ_HARDWARE);
-
-    down_write(&Os->rwsem_clk_pwr);
-
-    if(EnableClk)
-    {
-        _ToEnableClock(Os, Hardware->core, &enableClk);
-    }
-
-    if(EnablePwr)
-    {
-        _ToEnablePower(Os, Hardware->core, &enablePwr);
-    }
-
-
-    if(enableClk || enablePwr)
-    {
-        if(Os->device->powerDebug)
-        {
-            gcmkPRINT("%s(%#X, %#X, %s, %d, %d) ##### %s [Clk:%d][%d][Pwr:%d][%d] #####", __func__,
-                        Os, Hardware, Hardware->core?"2D":"3D", EnableClk, EnablePwr,
-                        (enablePwr == gcvTRUE) ? "power on" : "clock on",
-                        enableClk, Os->clockDepth, enablePwr, Os->powerDepth);
-        }
-
-#if !MRVL_CONFIG_POWER_CLOCK_SEPARATED
-        if(enablePwr == gcvTRUE)
-#endif
-        {
-            gctUINT32 nextRate = 0;
-            if(Os->device->powerDebug)
-            {
-                gcmkPRINT("%s(%#X, %#X, %s, %d, %d) nextRate:%d", __func__,
-                            Os, Hardware, Hardware->core?"2D":"3D", EnableClk, EnablePwr, nextRate);
-            }
-
-#if MRVL_CONFIG_POWER_CLOCK_SEPARATED
-            gckOS_GpuPowerEnable(Os, Hardware->core, enableClk, enablePwr, nextRate*1000*1000);
-#else
-            gckOS_GpuPowerEnable(Os, Hardware->core, gcvTRUE, gcvTRUE, nextRate*1000*1000);
-#endif
-
-            if(Os->device->powerDebug)
-            {
-                gcmkPRINT("gckOS_GpuPowerEnable done.");
-            }
-        }
-    }
-
-    up_write(&Os->rwsem_clk_pwr);
-
-    gcmkFOOTER_NO();
-    return gcvSTATUS_OK;
-}
-
-gceSTATUS
-gckOS_SetGPUPowerOffMRVL(
-    IN gckOS Os,
-    IN gckHARDWARE Hardware,
-    IN gctBOOL DisableClk,
-    IN gctBOOL DisablePwr
-    )
-{
-    gctBOOL disableClk = gcvFALSE;
-    gctBOOL disablePwr = gcvFALSE;
-    gcmkHEADER_ARG("Os=0x%X Hardware=0x%X DisableClk=%d DisablePwr=%d", Os, Hardware, DisableClk, DisablePwr);
-
-    gcmkVERIFY_OBJECT(Os, gcvOBJ_OS);
-    gcmkVERIFY_OBJECT(Hardware, gcvOBJ_HARDWARE);
-
-    down_write(&Os->rwsem_clk_pwr);
-
-    if (DisableClk)
-    {
-        _ToDisableClock(Os, Hardware->core, &disableClk);
-    }
-
-    if (DisablePwr)
-    {
-        _ToDisablePower(Os, Hardware->core, &disablePwr);
-    }
-
-    if (disableClk || disablePwr)
-    {
-        if(Os->device->powerDebug)
-        {
-            gcmkPRINT("%s(%#X, %#X, %s, %d, %d) @@@@@ %s [Clk:%d][%d][Pwr:%d][%d] @@@@@", __func__,
-                       Os, Hardware, Hardware->core?"2D":"3D", DisableClk, DisablePwr,
-                       (Os->clockDepth == 0 && Os->powerDepth == 0) ? "power off" : "suspend",
-                       disableClk, Os->clockDepth, disablePwr, Os->powerDepth);
-        }
-
-#if !MRVL_CONFIG_POWER_CLOCK_SEPARATED
-        /* both clock and power of 2D/3D is off, then call kernel function to power off.
-            since in current kernel implementation, clock and power is not separated, we
-            only need to cover power domain.
-        */
-        if (Os->clockDepth == 0 && Os->powerDepth == 0)
-#endif
-        {
-            if(Os->device->powerDebug)
-            {
-                gcmkPRINT("%s(%#X, %#X, %s, %d, %d) <== gckOS_GpuPowerDisable ==>", __func__,
-                           Os, Hardware, Hardware->core?"2D":"3D", DisableClk, DisablePwr);
-            }
-
-#if MRVL_CONFIG_POWER_CLOCK_SEPARATED
-            gckOS_GpuPowerDisable(Os, Hardware->core, disableClk, disablePwr);
-#else
-            gckOS_GpuPowerDisable(Os, Hardware->core, gcvTRUE, gcvTRUE);
-#endif
-
-            if(Os->device->powerDebug)
-            {
-                gcmkPRINT("gckOS_GpuPowerDisable done.");
-            }
-        }
-    }
-
-    up_write(&Os->rwsem_clk_pwr);
 
     gcmkFOOTER_NO();
     return gcvSTATUS_OK;
@@ -9651,6 +9687,223 @@ gckOS_VerifyThread(
 /******************************************************************************\
 **************************** Power Management **********************************
 \******************************************************************************/
+# if MRVL_ENABLE_COMMON_PWRCLK_FRAMEWORK /* == 1 */
+
+gceSTATUS
+gckOS_GetIfaceMapping(
+    IN gckOS Os,
+    IN gceCORE Core,
+    OUT gctPOINTER *Iface
+    )
+{
+    struct gc_iface *iface;
+
+    gcmkHEADER_ARG("Os=0x%X Core=%d", Os, Core);
+
+    iface = gpu_get_iface_mapping(Core);
+    if(iface == gcvNULL)
+        return gcvSTATUS_NOT_SUPPORTED;
+
+    *Iface = (gctPOINTER) iface;
+
+    gcmkFOOTER_NO();
+    return gcvSTATUS_OK;
+}
+
+gceSTATUS
+gckOS_QueryClkRate(
+    IN gckOS Os,
+    IN gceCORE Core,
+    OUT gctUINT32_PTR Rate
+    )
+{
+    gceSTATUS status;
+    unsigned long rate;
+    struct gc_iface *iface;
+
+    gcmkONERROR(gckOS_GetIfaceMapping(Os, Core, (gctPOINTER *)&iface));
+
+    gpu_clk_getrate(iface, &rate);
+    *Rate = rate;
+    return gcvSTATUS_OK;
+
+OnError:
+    return status;
+}
+
+gceSTATUS
+gckOS_SetClkRate(
+    IN gckOS Os,
+    IN gceCORE Core,
+    IN gctUINT32 Rate
+    )
+{
+    gceSTATUS status;
+    struct gc_iface *iface;
+
+    gcmkONERROR(gckOS_GetIfaceMapping(Os, Core, (gctPOINTER *)&iface));
+
+    gpu_clk_setrate(iface, (unsigned long)Rate);
+    return gcvSTATUS_OK;
+
+OnError:
+    return status;
+}
+
+gceSTATUS
+gckOS_SetGPUPowerOnBeforeInit(
+    IN gceCORE Core,
+    IN gctBOOL EnableClk,
+    IN gctBOOL EnablePwr
+)
+{
+    gceSTATUS status;
+    struct gc_iface *iface;
+    int ret = 0;
+    gcmkHEADER_ARG("Core=%d EnableClk=%d EnablePwr=%d", Core, EnableClk, EnablePwr);
+
+    gcmkONERROR(gckOS_GetIfaceMapping(NULL, Core, (gctPOINTER *)&iface));
+
+    ret = gpu_clk_init(iface);
+    if(ret == -1)
+        gcmkONERROR(gcvSTATUS_NOT_FOUND);
+
+    if(EnablePwr)
+    {
+        gpu_pwr_enable(iface);
+    }
+
+    if(EnableClk)
+    {
+        gpu_clk_enable(iface);
+    }
+
+OnError:
+    gcmkFOOTER_NO();
+    return gcvSTATUS_OK;
+}
+
+gceSTATUS
+gckOS_SetGPUPowerOnMRVL(
+    IN gckOS Os,
+    IN gceCORE Core,
+    IN gctBOOL EnableClk,
+    IN gctBOOL EnablePwr
+    )
+{
+    gceSTATUS status;
+    struct gc_iface *iface;
+    gcmkHEADER_ARG("Os=0x%X Core=%d EnableClk=%d EnablePwr=%d", Os, Core, EnableClk, EnablePwr);
+
+    gcmkVERIFY_OBJECT(Os, gcvOBJ_OS);
+    gcmkONERROR(gckOS_GetIfaceMapping(Os, Core, (gctPOINTER *)&iface));
+
+    down_write(&Os->rwsem_clk_pwr);
+
+#if MRVL_DFC_PROTECT_CLK_OPERATION
+    gckOS_AcquireClockMutex(Os, Core);
+#endif
+
+    if(EnablePwr)
+    {
+        gpu_pwr_enable_prepare(iface);
+        gpu_pwr_enable(iface);
+        gpu_pwr_enable_unprepare(iface);
+    }
+
+    if(EnableClk)
+    {
+        gpu_clk_enable(iface);
+    }
+
+#if MRVL_DFC_PROTECT_CLK_OPERATION
+    gckOS_ReleaseClockMutex(Os, Core);
+#endif
+
+    up_write(&Os->rwsem_clk_pwr);
+
+OnError:
+    gcmkFOOTER_NO();
+    return gcvSTATUS_OK;
+}
+
+gceSTATUS
+gckOS_SetGPUPowerOffMRVL(
+    IN gckOS Os,
+    IN gceCORE Core,
+    IN gctBOOL DisableClk,
+    IN gctBOOL DisablePwr
+    )
+{
+    gceSTATUS status;
+    struct gc_iface *iface;
+    gcmkHEADER_ARG("Os=0x%X Core=%d DisableClk=%d DisablePwr=%d", Os, Core, DisableClk, DisablePwr);
+
+    gcmkVERIFY_OBJECT(Os, gcvOBJ_OS);
+    gcmkONERROR(gckOS_GetIfaceMapping(Os, Core, (gctPOINTER *)&iface));
+
+    down_write(&Os->rwsem_clk_pwr);
+
+#if MRVL_DFC_PROTECT_CLK_OPERATION
+    gckOS_AcquireClockMutex(Os, Core);
+#endif
+
+    if (DisableClk)
+    {
+        gpu_clk_disable(iface);
+    }
+
+    if (DisablePwr)
+    {
+        gpu_pwr_disable_prepare(iface);
+        gpu_pwr_disable(iface);
+        gpu_pwr_disable_unprepare(iface);
+    }
+
+#if MRVL_DFC_PROTECT_CLK_OPERATION
+    gckOS_ReleaseClockMutex(Os, Core);
+#endif
+
+    up_write(&Os->rwsem_clk_pwr);
+
+OnError:
+    gcmkFOOTER_NO();
+    return gcvSTATUS_OK;
+}
+
+# else /* MRVL_ENABLE_COMMON_PWRCLK_FRAMEWORK == 0 */
+
+/*###### Power Declaration ##############################*/
+#if MRVL_2D3D_POWER_SEPARATED && (MRVL_PLATFORM_TTD2)
+extern void gc3d_pwr(unsigned int);
+    #define GC3D_PWR    gc3d_pwr
+#elif MRVL_2D3D_POWER_SEPARATED && (MRVL_PLATFORM_ADIR)
+
+    #if gcdMULTI_GPU > 1
+        extern void gc3d_pwr(unsigned int);
+            #define GC3D_PWR    gc3d_pwr
+    #else
+        extern void gc3d1_pwr(unsigned int);
+            #define GC3D_PWR    gc3d1_pwr
+    #endif
+
+#else
+extern void gc_pwr(int);
+    #define GC3D_PWR    gc_pwr
+#endif
+
+#if MRVL_2D3D_POWER_SEPARATED
+#  if MRVL_PLATFORM_TTD2 || MRVL_PLATFORM_ADIR
+extern void gc2d_pwr(unsigned int);
+#  else
+extern void gc2d_pwr(int);
+#  endif
+    #define GC2D_PWR    gc2d_pwr
+#else
+    #define GC2D_PWR    gc_pwr
+#endif
+
+/*###### Clock Declaration ##############################*/
 #if MRVL_2D3D_CLOCK_SEPARATED
 /* if enable 3d clock */
 #   if MRVL_PLATFORM_TTD2
@@ -9690,6 +9943,7 @@ gckOS_VerifyThread(
 #else
     #define GC3D_CLK_NAME   "GCCLK"
 #endif
+/*###### END of Declaration #############################*/
 
 static gceSTATUS
 _GetGcClock(
@@ -9945,7 +10199,7 @@ OnError:
     return status;
 }
 
-gceSTATUS
+static gceSTATUS
 _EnableGpuPower(
     IN gceCORE Core,
     IN gctBOOL enable
@@ -10050,7 +10304,7 @@ gckOS_GpuPowerEnable(
         {
             struct clk * clkAXI = gcvNULL;
             gcmkONERROR(_GetAxiClock(Core, &clkAXI));
-            clk_enable(clkAXI);
+            GC_CLK_ENABLE(clkAXI);
         }
 #endif
         /* 2. enable gc clock */
@@ -10071,7 +10325,7 @@ gckOS_GpuPowerEnable(
         }
 #endif
 
-        clk_enable(clkGC);
+        GC_CLK_ENABLE(clkGC);
 
         if(Frequency != 0)
         {
@@ -10097,7 +10351,7 @@ gckOS_GpuPowerEnable(
             }
 #endif
 
-            clk_enable(clkGC);
+            GC_CLK_ENABLE(clkGC);
 
             if(Frequency != 0)
             {
@@ -10153,7 +10407,7 @@ gckOS_GpuPowerDisable(
         if(gcvCORE_MAJOR == Core)
         {
             gcmkONERROR(_GetGcClock(Core, gcvTRUE, &clkGC)); /* Shader clock. */
-            clk_disable(clkGC);
+            GC_CLK_DISABLE(clkGC);
         }
 #endif
         gcmkONERROR(_GetGcClock(Core,
@@ -10161,14 +10415,14 @@ gckOS_GpuPowerDisable(
                                 gcvFALSE,
 #endif
                                 &clkGC));
-        clk_disable(clkGC);
+        GC_CLK_DISABLE(clkGC);
 
 #if MRVL_CONFIG_AXICLK_CONTROL
         /* 3. disable axi bus clock */
         {
             struct clk * clkAXI = gcvNULL;
             gcmkONERROR(_GetAxiClock(Core, &clkAXI));
-            clk_disable(clkAXI);
+            GC_CLK_DISABLE(clkAXI);
         }
 #endif
 
@@ -10227,6 +10481,329 @@ OnError:
 
     return status;
 }
+
+static gceSTATUS inline
+_ToEnablePower(
+    IN gckOS Os,
+    IN gceCORE Core,
+    OUT gctBOOL * EnablePwr
+    )
+{
+    gctBOOL enablePwr = gcvFALSE;
+
+#if MRVL_2D3D_POWER_SEPARATED
+    gckHARDWARE hardware = Os->device->kernels[Core]->hardware;
+
+    switch(hardware->refExtPower)
+    {
+    case 0:
+        enablePwr = gcvTRUE;
+        /* fall through */
+    default:
+        hardware->refExtPower++;
+        if(Os->device->powerDebug)
+        {
+            gcmkPRINT("[%d]%s: ref_pwr %d, enable_pwr %d", Core, __func__,
+                      hardware->refExtPower, enablePwr);
+        }
+    }
+
+    if(hardware->refExtPower > 1)
+    {
+        hardware->refExtPower--;
+        gcmkPRINT("WARNING: too much enable for GPU %d power!", Core);
+    }
+#else
+    switch(Os->powerDepth)
+    {
+    case 0:
+        enablePwr = gcvTRUE;
+        /* fall through */
+    default:
+        Os->powerDepth++;
+        if(Os->device->powerDebug)
+        {
+            gcmkPRINT("[%d]%s: depth %d, enable_pwr %d", Core, __func__,
+                      Os->powerDepth, enablePwr);
+        }
+    }
+
+    if(Os->powerDepth > MRVL_MAX_POWER_DEPTH)
+    {
+        Os->powerDepth--;
+        gcmkPRINT("WARNING: too much enable for GPU power!");
+    }
+#endif
+
+    *EnablePwr = enablePwr;
+
+    return gcvSTATUS_OK;
+}
+
+static gceSTATUS inline
+_ToDisablePower(
+    IN gckOS Os,
+    IN gceCORE Core,
+    OUT gctBOOL * DisablePwr
+    )
+{
+    gctBOOL disablePwr = gcvFALSE;
+
+#if MRVL_2D3D_POWER_SEPARATED
+    gckHARDWARE hardware = Os->device->kernels[Core]->hardware;
+
+    switch(hardware->refExtPower)
+    {
+    case 0:
+        gcmkPRINT("WARNING: too much disable for GPU %d power!", Core);
+        break;
+    case 1:
+        disablePwr = gcvTRUE;
+        /* fall through */
+    default:
+        hardware->refExtPower--;
+        if(Os->device->powerDebug)
+        {
+            gcmkPRINT("[%d]%s: ref_pwr %d, disable_pwr %d", Core, __func__,
+                      hardware->refExtPower, disablePwr);
+        }
+    }
+#else
+    switch(Os->powerDepth)
+    {
+    case 0:
+        gcmkPRINT("WARNING: too much disable for GPU power!");
+        break;
+    case 1:
+        disablePwr = gcvTRUE;
+        /* fall through */
+    default:
+        Os->powerDepth--;
+        if(Os->device->powerDebug)
+        {
+            gcmkPRINT("[%d]%s: depth %d, disable_pwr %d", Core, __func__,
+                      Os->powerDepth, disablePwr);
+        }
+    }
+#endif
+
+    *DisablePwr = disablePwr;
+
+    return gcvSTATUS_OK;
+}
+
+static gceSTATUS inline
+_ToEnableClock(
+    IN gckOS Os,
+    IN gceCORE Core,
+    OUT gctBOOL * EnableClk
+    )
+{
+    gctBOOL enableClk = gcvFALSE;
+
+#if MRVL_2D3D_CLOCK_SEPARATED
+    gckHARDWARE hardware = Os->device->kernels[Core]->hardware;
+
+    switch(hardware->refExtClock)
+    {
+    case 0:
+        enableClk = gcvTRUE;
+        /* fall through */
+    default:
+        hardware->refExtClock++;
+        if(Os->device->powerDebug)
+        {
+            gcmkPRINT("[%d]%s: ref_clk %d, enable_clk %d", Core, __func__,
+                      hardware->refExtClock, enableClk);
+        }
+    }
+
+    if(hardware->refExtClock > 1)
+    {
+        hardware->refExtClock--;
+        gcmkPRINT("WARNING: too much enable for GPU %d clock!", Core);
+    }
+#else
+    /* 2D&3D clocks are combined */
+    switch(Os->clockDepth)
+    {
+    case 0:
+        enableClk = gcvTRUE;
+        /* fall through */
+    default:
+        Os->clockDepth++;
+        if(Os->device->powerDebug)
+        {
+            gcmkPRINT("[%d]%s: depth %d, enable_clk %d", Core, __func__,
+                      Os->clockDepth, enableClk);
+        }
+    }
+
+    if(Os->clockDepth > MRVL_MAX_CLOCK_DEPTH)
+    {
+        Os->clockDepth--;
+        gcmkPRINT("WARNING: too much enable for GPU clock!");
+    }
+#endif
+
+    *EnableClk = enableClk;
+
+    return gcvSTATUS_OK;
+}
+
+static gceSTATUS inline
+_ToDisableClock(
+    IN gckOS Os,
+    IN gceCORE Core,
+    OUT gctBOOL * DisableClk
+    )
+{
+    gctBOOL disableClk = gcvFALSE;
+
+#if MRVL_2D3D_CLOCK_SEPARATED
+    gckHARDWARE hardware = Os->device->kernels[Core]->hardware;
+
+    switch(hardware->refExtClock)
+    {
+    case 0:
+        gcmkPRINT("WARNING: too much disable for GPU %d clock!", Core);
+        break;
+    case 1:
+        disableClk = gcvTRUE;
+        /* fall through */
+    default:
+        hardware->refExtClock--;
+        if(Os->device->powerDebug)
+        {
+            gcmkPRINT("[%d]%s: ref_clk %d, disable_clk %d", Core, __func__,
+                      hardware->refExtClock, disableClk);
+        }
+    }
+#else
+    /* 2D&3D clocks are combined */
+    switch(Os->clockDepth)
+    {
+    case 0:
+        gcmkPRINT("WARNING: too much disable for GPU clock!");
+        break;
+    case 1:
+        disableClk = gcvTRUE;
+        /* fall through */
+    default:
+        Os->clockDepth--;
+        if(Os->device->powerDebug)
+        {
+            gcmkPRINT("[%d]%s: depth %d, disable_clk %d", Core, __func__,
+                      Os->clockDepth, disableClk);
+        }
+    }
+#endif
+
+    *DisableClk = disableClk;
+
+    return gcvSTATUS_OK;
+}
+
+gceSTATUS
+gckOS_SetGPUPowerOnMRVL(
+    IN gckOS Os,
+    IN gceCORE Core,
+    IN gctBOOL EnableClk,
+    IN gctBOOL EnablePwr
+    )
+{
+    gctBOOL enableClk = gcvFALSE;
+    gctBOOL enablePwr = gcvFALSE;
+    gcmkHEADER_ARG("Os=0x%X Core=%d EnableClk=%d EnablePwr=%d", Os, Core, EnableClk, EnablePwr);
+
+    gcmkVERIFY_OBJECT(Os, gcvOBJ_OS);
+
+    down_write(&Os->rwsem_clk_pwr);
+
+    if(EnableClk)
+    {
+        _ToEnableClock(Os, Core, &enableClk);
+    }
+
+    if(EnablePwr)
+    {
+        _ToEnablePower(Os, Core, &enablePwr);
+    }
+
+
+    if(enableClk || enablePwr)
+    {
+#if !MRVL_CONFIG_POWER_CLOCK_SEPARATED
+        if(enablePwr == gcvTRUE)
+#endif
+        {
+            gctUINT32 nextRate = 0;
+
+#if MRVL_CONFIG_POWER_CLOCK_SEPARATED
+            gckOS_GpuPowerEnable(Os, Core, enableClk, enablePwr, nextRate*1000*1000);
+#else
+            gckOS_GpuPowerEnable(Os, Core, gcvTRUE, gcvTRUE, nextRate*1000*1000);
+#endif
+        }
+    }
+
+    up_write(&Os->rwsem_clk_pwr);
+
+    gcmkFOOTER_NO();
+    return gcvSTATUS_OK;
+}
+
+gceSTATUS
+gckOS_SetGPUPowerOffMRVL(
+    IN gckOS Os,
+    IN gceCORE Core,
+    IN gctBOOL DisableClk,
+    IN gctBOOL DisablePwr
+    )
+{
+    gctBOOL disableClk = gcvFALSE;
+    gctBOOL disablePwr = gcvFALSE;
+    gcmkHEADER_ARG("Os=0x%X Core=%d DisableClk=%d DisablePwr=%d", Os, Core, DisableClk, DisablePwr);
+
+    gcmkVERIFY_OBJECT(Os, gcvOBJ_OS);
+
+    down_write(&Os->rwsem_clk_pwr);
+
+    if (DisableClk)
+    {
+        _ToDisableClock(Os, Core, &disableClk);
+    }
+
+    if (DisablePwr)
+    {
+        _ToDisablePower(Os, Core, &disablePwr);
+    }
+
+    if (disableClk || disablePwr)
+    {
+#if !MRVL_CONFIG_POWER_CLOCK_SEPARATED
+        /* both clock and power of 2D/3D is off, then call kernel function to power off.
+            since in current kernel implementation, clock and power is not separated, we
+            only need to cover power domain.
+        */
+        if (Os->clockDepth == 0 && Os->powerDepth == 0)
+#endif
+        {
+#if MRVL_CONFIG_POWER_CLOCK_SEPARATED
+            gckOS_GpuPowerDisable(Os, Core, disableClk, disablePwr);
+#else
+            gckOS_GpuPowerDisable(Os, Core, gcvTRUE, gcvTRUE);
+#endif
+        }
+    }
+
+    up_write(&Os->rwsem_clk_pwr);
+
+    gcmkFOOTER_NO();
+    return gcvSTATUS_OK;
+}
+
+# endif /* MRVL_ENABLE_COMMON_PWRCLK_FRAMEWORK */
 
 static gceSTATUS
 _IdleProfile(
@@ -10591,6 +11168,18 @@ gckOS_GPUFreqNotifierCallChain(
 /******************************************************************************\
 ******************************** Flush Cache **********************************
 \******************************************************************************/
+# if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0))
+gceSTATUS gckOS_FlushCache(
+    IN gctSIZE_T start,
+    IN gctSIZE_T length,
+    IN gctINT direction
+    )
+{
+    return gcvSTATUS_OK;
+}
+
+# else
+
 #define BMM_HAS_PTE_PAGE
 static gctSIZE_T uva_to_pa(struct mm_struct *mm, gctSIZE_T addr)
 {
@@ -10729,6 +11318,7 @@ gceSTATUS gckOS_FlushCache(
 
     return gcvSTATUS_OK;
 }
+# endif
 
 /******************************************************************************\
 ******************************** Software Timer ********************************

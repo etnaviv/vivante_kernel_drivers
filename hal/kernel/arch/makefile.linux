@@ -43,9 +43,6 @@ else
 CFLAGS += $(INCLUDE)
 endif
 
-ifeq ($(QNX), 1)
-CFLAGS += -fPIC
-endif
 
 ################################################################################
 # Describe object files.

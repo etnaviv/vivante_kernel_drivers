@@ -34,6 +34,10 @@ GPUFREQ_DIR     := $(OS_KERNEL_DIR)/gpufreq
 EXTRA_CFLAGS += -Werror
 EXTRA_CFLAGS += -fno-pic
 
+ifneq ($(USE_MULTI_GPU), )
+    EXTRA_CFLAGS += -DgcdMULTI_GPU=$(USE_MULTI_GPU)
+endif
+
 OBJS := $(OS_KERNEL_DIR)/gc_hal_kernel_device.o \
         $(OS_KERNEL_DIR)/gc_hal_kernel_driver.o \
         $(OS_KERNEL_DIR)/gc_hal_kernel_linux.o \
@@ -42,6 +46,14 @@ OBJS := $(OS_KERNEL_DIR)/gc_hal_kernel_device.o \
         $(OS_KERNEL_DIR)/gc_hal_kernel_sysfs.o \
         $(OS_KERNEL_DIR)/gc_hal_kernel_sysfs_test.o \
         $(OS_KERNEL_DIR)/gc_hal_kernel_debugfs.o
+
+OBJS += $(OS_KERNEL_DIR)/gc_hal_kernel_plat.o \
+        $(OS_KERNEL_DIR)/gc_hal_kernel_plat_common.o \
+        $(OS_KERNEL_DIR)/gc_hal_kernel_plat_adir.o \
+        $(OS_KERNEL_DIR)/gc_hal_kernel_plat_eden.o \
+        $(OS_KERNEL_DIR)/gc_hal_kernel_plat_helan.o \
+        $(OS_KERNEL_DIR)/gc_hal_kernel_plat_helan2.o \
+        $(OS_KERNEL_DIR)/gc_hal_kernel_plat_helanlte.o
 
 ifeq ($(USE_GPU_FREQ), 1)
 
@@ -149,8 +161,10 @@ endif
 
 ifeq ($(USE_PROFILER), 1)
 EXTRA_CFLAGS += -DVIVANTE_PROFILER=1
+EXTRA_CFLAGS += -DVIVANTE_PROFILER_CONTEXT=1
 else
 EXTRA_CFLAGS += -DVIVANTE_PROFILER=0
+EXTRA_CFLAGS += -DVIVANTE_PROFILER_CONTEXT=0
 endif
 
 ifeq ($(ANDROID), 1)
