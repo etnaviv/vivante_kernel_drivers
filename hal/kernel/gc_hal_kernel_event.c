@@ -793,7 +793,7 @@ gckEVENT_GetEvent(
         /* Increment the wait timer. */
         timer += 1;
 
-        if (timer == gcdGPU_TIMEOUT)
+        if (timer == Event->kernel->timeOut)
         {
             /* Try to call any outstanding events. */
 #if gcdMULTI_GPU
@@ -811,7 +811,7 @@ gckEVENT_GetEvent(
                                               gcvTRUE));
 #endif
         }
-        else if (timer > gcdGPU_TIMEOUT)
+        else if (timer > Event->kernel->timeOut)
         {
             gcmkTRACE_N(
                 gcvLEVEL_ERROR,
@@ -1616,6 +1616,7 @@ gckEVENT_Submit(
                                           Event->queues[id].source,
                                           &bytes));
 
+
             /* Reserve space in the command queue. */
             gcmkONERROR(gckCOMMAND_Reserve(command,
                                            bytes,
@@ -2078,6 +2079,7 @@ gckEVENT_Notify(
 #if gcdMULTI_GPU
     gceCORE core = Event->kernel->core;
     gctUINT32 busy;
+    gctUINT32 oldValue;
 #endif
 #if !gcdSMP
     gctBOOL suspended = gcvFALSE;
@@ -2189,7 +2191,8 @@ gckEVENT_Notify(
 
         if (pending & 0x80000000)
         {
-            gcmkTRACE_ZONE(gcvLEVEL_ERROR, gcvZONE_EVENT, "AXI BUS ERROR");
+            gcmkPRINT("AXI BUS ERROR");
+            gckHARDWARE_DumpMMUException(Event->kernel->hardware);
             pending &= 0x7FFFFFFF;
 
             mask  = 1 << 31;
@@ -2827,7 +2830,7 @@ gckEVENT_Notify(
 
 #if gcdMULTI_GPU
     /* Clear busy flag. */
-    gckOS_AtomicExchange(Event->os, &Event->busy, 0, gcvNULL);
+    gckOS_AtomicExchange(Event->os, &Event->busy, 0, &oldValue);
 #endif
 
     if (IDs == 0 && Event->kernel->bTryIdleGPUEnable)

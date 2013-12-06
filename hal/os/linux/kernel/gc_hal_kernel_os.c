@@ -229,6 +229,9 @@ struct _gckOS
 
     /* workqueue for os timer. */
     struct workqueue_struct *   workqueue;
+
+    /* Allocate extra page to avoid cache overflow */
+    struct page* paddingPage;
 };
 
 typedef struct _gcsSIGNAL * gcsSIGNAL_PTR;
@@ -277,6 +280,7 @@ typedef struct _gcsPageInfo
 {
     struct page **pages;
     gctUINT32_PTR pageTable;
+    gctUINT32   extraPage;
 #if gcdPROCESS_ADDRESS_SPACE
     gctUINT32 address;
     gckMMU mmu;
@@ -389,6 +393,7 @@ _CreateMdlMap(
     mdlMap->pid     = ProcessID;
     mdlMap->vmaAddr = gcvNULL;
     mdlMap->vma     = gcvNULL;
+    mdlMap->count   = 0;
 
     mdlMap->next    = Mdl->maps;
     Mdl->maps       = mdlMap;
@@ -1152,6 +1157,17 @@ gckOS_Construct(
         gcmkONERROR(gcvSTATUS_OUT_OF_MEMORY);
     }
 
+    os->paddingPage = alloc_page(GFP_KERNEL | __GFP_HIGHMEM | gcdNOWARN);
+    if (os->paddingPage == gcvNULL)
+    {
+        /* Out of memory. */
+        gcmkONERROR(gcvSTATUS_OUT_OF_MEMORY);
+    }
+    else
+    {
+        SetPageReserved(os->paddingPage);
+    }
+
     /* Return pointer to the gckOS object. */
     *Os = os;
 
@@ -1237,6 +1253,13 @@ gckOS_Destroy(
 
     /* Verify the arguments. */
     gcmkVERIFY_OBJECT(Os, gcvOBJ_OS);
+
+    if (Os->paddingPage != gcvNULL)
+    {
+        ClearPageReserved(Os->paddingPage);
+        __free_page(Os->paddingPage);
+        Os->paddingPage = gcvNULL;
+    }
 
 #if gcdUSE_NON_PAGED_MEMORY_CACHE
     _FreeAllNonPagedMemoryCache(Os);
@@ -5172,14 +5195,8 @@ gckOS_LockPages(
 
         up_write(&current->mm->mmap_sem);
     }
-    else
-    {
-        /* mdlMap->vmaAddr != gcvNULL means current process has already locked this node. */
-        MEMORY_UNLOCK(Os);
 
-        gcmkFOOTER_ARG("*status=%d, mdlMap->vmaAddr=%x", gcvSTATUS_MEMORY_LOCKED, mdlMap->vmaAddr);
-        return gcvSTATUS_MEMORY_LOCKED;
-    }
+    mdlMap->count++;
 
     /* Convert pointer to MDL. */
     *Logical = mdlMap->vmaAddr;
@@ -5450,8 +5467,11 @@ gckOS_UnlockPages(
     {
         if ((mdlMap->vmaAddr != gcvNULL) && (_GetProcessID() == mdlMap->pid))
         {
-            _UnmapUserLogical(mdlMap->pid, mdlMap->vmaAddr, mdl->numPages * PAGE_SIZE);
-            mdlMap->vmaAddr = gcvNULL;
+            if (--mdlMap->count == 0)
+            {
+                _UnmapUserLogical(mdlMap->pid, mdlMap->vmaAddr, mdl->numPages * PAGE_SIZE);
+                mdlMap->vmaAddr = gcvNULL;
+            }
         }
 
         mdlMap = mdlMap->next;
@@ -6516,12 +6536,17 @@ OnError:
 
     do
     {
+        gctSIZE_T extraPage;
+
         memory = (gctUINTPTR_T) Memory;
 
         /* Get the number of required pages. */
         end = (memory + Size + PAGE_SIZE - 1) >> PAGE_SHIFT;
         start = memory >> PAGE_SHIFT;
         pageCount = end - start;
+
+        /* Allocate extra 64 bytes to avoid cache overflow */
+        extraPage = (((memory + gcmALIGN(Size + 64, 64) + PAGE_SIZE - 1) >> PAGE_SHIFT) > end) ? 1 : 0;
 
         gcmkTRACE_ZONE(
             gcvLEVEL_INFO, gcvZONE_OS,
@@ -6548,8 +6573,10 @@ OnError:
             break;
         }
 
+        info->extraPage = 0;
+
         /* Allocate the array of page addresses. */
-        pages = (struct page **)kmalloc(pageCount * sizeof(struct page *), GFP_KERNEL | gcdNOWARN);
+        pages = (struct page **)kmalloc((pageCount + extraPage) * sizeof(struct page *), GFP_KERNEL | gcdNOWARN);
 
         if (pages == gcvNULL)
         {
@@ -6712,6 +6739,12 @@ OnError:
 #if gcdPROCESS_ADDRESS_SPACE
         gcmkONERROR(gckKERNEL_GetProcessMMU(Os->device->kernels[Core], &mmu));
 #endif
+
+        if (extraPage)
+        {
+            pages[pageCount++] = Os->paddingPage;
+            info->extraPage = 1;
+        }
 
 #if gcdENABLE_VG
         if (Core == gcvCORE_VG)
@@ -7017,6 +7050,11 @@ OnError:
 
         gcmkASSERT(info->pageTable != gcvNULL);
 
+        if (info->extraPage)
+        {
+            pageCount += 1;
+        }
+
 #if gcdENABLE_VG
         if (Core == gcvCORE_VG)
         {
@@ -7042,6 +7080,12 @@ OnError:
                                           pageCount * (PAGE_SIZE/4096)
                                           ));
 #endif
+        }
+
+        if (info->extraPage)
+        {
+            pageCount -= 1;
+            info->extraPage = 0;
         }
 
         /* Release the page cache. */
@@ -7429,12 +7473,6 @@ outer_func(
 **      gckOS Os
 **          Pointer to gckOS object.
 **
-**      gctUINT32 ProcessID
-**          Process ID Logical belongs.
-**
-**      gctPHYS_ADDR Handle
-**          Physical address handle.  If gcvNULL it is video memory.
-**
 **      gctPOINTER Physical
 **          Physical address to flush.
 **
@@ -7450,8 +7488,6 @@ outer_func(
 static gceSTATUS
 _HandleOuterCache(
     IN gckOS Os,
-    IN gctUINT32 ProcessID,
-    IN gctPHYS_ADDR Handle,
     IN gctUINT32 Physical,
     IN gctPOINTER Logical,
     IN gctSIZE_T Bytes,
@@ -7463,21 +7499,13 @@ _HandleOuterCache(
     unsigned long paddr;
     gctPOINTER vaddr;
 
-    gcmkHEADER_ARG("Os=0x%X ProcessID=%d Handle=0x%X Logical=0x%X Bytes=%lu",
-                   Os, ProcessID, Handle, Logical, Bytes);
+    gcmkHEADER_ARG("Os=0x%X Logical=0x%X Bytes=%lu",
+                   Os, Logical, Bytes);
 
     if (Physical != gcvINVALID_ADDRESS)
     {
         /* Non paged memory or gcvPOOL_USER surface */
         paddr = (unsigned long) Physical;
-        gcmkONERROR(outer_func(Type, paddr, paddr + Bytes));
-    }
-    else if ((Handle == gcvNULL)
-    || (Handle != gcvNULL && ((PLINUX_MDL)Handle)->contiguous)
-    )
-    {
-        /* Video Memory or contiguous virtual memory */
-        gcmkONERROR(gckOS_GetPhysicalAddress(Os, Logical, (gctUINT32*)&paddr));
         gcmkONERROR(outer_func(Type, paddr, paddr + Bytes));
     }
     else
@@ -7488,11 +7516,8 @@ _HandleOuterCache(
 
         for (i = 0; i < pageNum; i += 1)
         {
-            gcmkONERROR(_ConvertLogical2Physical(
-                Os,
+            gcmkONERROR(_QueryProcessPageTable(
                 vaddr + PAGE_SIZE * i,
-                ProcessID,
-                (PLINUX_MDL)Handle,
                 (gctUINT32*)&paddr
                 ));
 
@@ -7579,7 +7604,7 @@ gckOS_CacheClean(
 #if defined(CONFIG_OUTER_CACHE)
     /* Outer cache. */
 #if gcdENABLE_OUTER_CACHE_PATCH
-    _HandleOuterCache(Os, ProcessID, Handle, Physical, Logical, Bytes, gcvCACHE_CLEAN);
+    _HandleOuterCache(Os, Physical, Logical, Bytes, gcvCACHE_CLEAN);
 #else
     outer_clean_range((unsigned long) Handle, (unsigned long) Handle + Bytes);
 #endif
@@ -7670,7 +7695,7 @@ gckOS_CacheInvalidate(
 #if defined(CONFIG_OUTER_CACHE)
     /* Outer cache. */
 #if gcdENABLE_OUTER_CACHE_PATCH
-    _HandleOuterCache(Os, ProcessID, Handle, Physical, Logical, Bytes, gcvCACHE_INVALIDATE);
+    _HandleOuterCache(Os, Physical, Logical, Bytes, gcvCACHE_INVALIDATE);
 #else
     outer_inv_range((unsigned long) Handle, (unsigned long) Handle + Bytes);
 #endif
@@ -7752,7 +7777,7 @@ gckOS_CacheFlush(
 #if defined(CONFIG_OUTER_CACHE)
     /* Outer cache. */
 #if gcdENABLE_OUTER_CACHE_PATCH
-    _HandleOuterCache(Os, ProcessID, Handle, Physical, Logical, Bytes, gcvCACHE_FLUSH);
+    _HandleOuterCache(Os, Physical, Logical, Bytes, gcvCACHE_FLUSH);
 #else
     outer_flush_range((unsigned long) Handle, (unsigned long) Handle + Bytes);
 #endif
@@ -11475,12 +11500,21 @@ gckOS_StartTimer(
 
     timer = (gcsOSTIMER_PTR)Timer;
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,7,0)
+    mod_delayed_work(Os->workqueue, &timer->work, msecs_to_jiffies(Delay));
+#else
     if (unlikely(delayed_work_pending(&timer->work)))
     {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,23)
+        cancel_delayed_work_sync(&timer->work);
+#else
         cancel_delayed_work(&timer->work);
+        flush_workqueue(Os->workqueue);
+#endif
     }
 
     queue_delayed_work(Os->workqueue, &timer->work, msecs_to_jiffies(Delay));
+#endif
 
     gcmkFOOTER_NO();
     return gcvSTATUS_OK;

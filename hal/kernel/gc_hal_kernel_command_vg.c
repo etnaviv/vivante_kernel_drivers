@@ -1801,11 +1801,17 @@ _EventHandler_Block(
     IN gctBOOL ProcessAll
     )
 {
-    gceSTATUS status, last;
+    gceSTATUS status = gcvSTATUS_OK, last;
 
     gcmkHEADER_ARG("Kernel=0x%x TaskHeader=0x%x ProcessAll=0x%x", Kernel, TaskHeader, ProcessAll);
     /* Verify the arguments. */
     gcmkVERIFY_OBJECT(Kernel, gcvOBJ_KERNEL);
+
+    if (TaskHeader->task == gcvNULL)
+    {
+        gcmkFOOTER();
+        return gcvSTATUS_OK;
+    }
 
     do
     {

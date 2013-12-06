@@ -224,6 +224,9 @@ typedef struct _gcsHAL_QUERY_CHIP_IDENTITY
     /* Supported minor feature 4 fields. */
     gctUINT32                   chipMinorFeatures4;
 
+    /* Supported minor feature 5 fields. */
+    gctUINT32                   chipMinorFeatures5;
+
     /* Number of streams supported. */
     gctUINT32                   streamCount;
 
@@ -896,6 +899,9 @@ typedef struct _gcsHAL_INTERFACE
             OUT gcuDATABASE_INFO        nonPaged;
             OUT gcuDATABASE_INFO        contiguous;
             OUT gcuDATABASE_INFO        gpuIdle;
+
+            /* Detail information about video memory. */
+            OUT gcuDATABASE_INFO        vidMemPool[3];
         }
         Database;
 

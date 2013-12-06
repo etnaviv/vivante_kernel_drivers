@@ -38,19 +38,19 @@ extern "C" {
 */
 
 #if defined(__GNUC__)
-#   define gcdHAS_ELLIPSES      1       /* GCC always has it. */
+#   define gcdHAS_ELLIPSIS      1       /* GCC always has it. */
 #elif defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 199901L)
-#   define gcdHAS_ELLIPSES      1       /* C99 has it. */
+#   define gcdHAS_ELLIPSIS      1       /* C99 has it. */
 #elif defined(_MSC_VER) && (_MSC_VER >= 1500)
-#   define gcdHAS_ELLIPSES      1       /* MSVC 2007+ has it. */
+#   define gcdHAS_ELLIPSIS      1       /* MSVC 2007+ has it. */
 #elif defined(UNDER_CE)
 #if UNDER_CE >= 600
-#       define gcdHAS_ELLIPSES  1
+#       define gcdHAS_ELLIPSIS  1
 #   else
-#       define gcdHAS_ELLIPSES  0
+#       define gcdHAS_ELLIPSIS  0
 #   endif
 #else
-#   error "gcdHAS_ELLIPSES: Platform could not be determined"
+#   error "gcdHAS_ELLIPSIS: Platform could not be determined"
 #endif
 
 /******************************************************************************\
@@ -955,6 +955,15 @@ gceSTATUS;
         PsConstMax   = 64; \
     } \
     else if (NumConstants == 320) \
+    { \
+        UnifiedConst = gcvFALSE; \
+        VsConstBase  = 0x1400; \
+        PsConstBase  = 0x1C00; \
+        VsConstMax   = 256; \
+        PsConstMax   = 64; \
+    } \
+    /* All GC1000 series chips can only support 64 uniforms for ps on non-unified const mode. */ \
+    else if (NumConstants > 256 && ChipModel == gcv1000) \
     { \
         UnifiedConst = gcvFALSE; \
         VsConstBase  = 0x1400; \

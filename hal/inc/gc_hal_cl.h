@@ -79,6 +79,7 @@ typedef struct _gcoCL_DEVICE_INFO
     gctBOOL             compilerAvail;
     gctUINT64           execCapability;         /* cl_device_exec_capabilities */
     gctBOOL             atomicSupport;
+    gctBOOL             psCL;
 } gcoCL_DEVICE_INFO;
 
 typedef gcoCL_DEVICE_INFO *  gcoCL_DEVICE_INFO_PTR;
@@ -510,6 +511,8 @@ gcoCL_Flush(
     IN gctBOOL      Stall
     );
 
+gceSTATUS
+gcoCL_FlushHWCache();
 /*******************************************************************************
 **
 **  gcoCL_CreateSignal

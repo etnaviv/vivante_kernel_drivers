@@ -576,7 +576,7 @@ static int vidmem_show(struct seq_file *file, void *unused)
 
     for (i = 1; i < gcvSURF_NUM_TYPES; i++)
     {
-        counter = &database->vidMemDetail[i];
+        counter = &database->vidMemType[i];
 
         seq_printf(file, "%10s",surfaceTypes[i]);
     }
@@ -589,7 +589,7 @@ static int vidmem_show(struct seq_file *file, void *unused)
 
     for (i = 1; i < gcvSURF_NUM_TYPES; i++)
     {
-        counter = &database->vidMemDetail[i];
+        counter = &database->vidMemType[i];
 
         seq_printf(file,"%10lld", counter->bytes);
     }
@@ -602,7 +602,7 @@ static int vidmem_show(struct seq_file *file, void *unused)
 
     for (i = 1; i < gcvSURF_NUM_TYPES; i++)
     {
-        counter = &database->vidMemDetail[i];
+        counter = &database->vidMemType[i];
 
         seq_printf(file,"%10lld", counter->maxBytes);
     }
@@ -615,7 +615,7 @@ static int vidmem_show(struct seq_file *file, void *unused)
 
     for (i = 1; i < gcvSURF_NUM_TYPES; i++)
     {
-        counter = &database->vidMemDetail[i];
+        counter = &database->vidMemType[i];
 
         seq_printf(file,"%10lld", counter->totalBytes);
     }

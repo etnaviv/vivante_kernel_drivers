@@ -2411,10 +2411,10 @@ gckOS_SetDebugZones(
 
 void
 gckOS_Verify(
-    IN gceSTATUS Status
+    IN gceSTATUS status
     )
 {
-    _lastError = Status;
+    _lastError = status;
 }
 
 /*******************************************************************************
@@ -2575,3 +2575,188 @@ gckOS_DebugStatus2Name(
         return "nil";
     }
 }
+
+/*******************************************************************************
+***** Binary Trace *************************************************************
+*******************************************************************************/
+
+/*******************************************************************************
+**  _VerifyMessage
+**
+**  Verify a binary trace message, decode it to human readable string and print
+**  it.
+**
+**  ARGUMENTS:
+**
+**      gctCONST_STRING Buffer
+**          Pointer to buffer to store.
+**
+**      gctSIZE_T Bytes
+**          Buffer length.
+*/
+void
+_VerifyMessage(
+    IN gctCONST_STRING Buffer,
+    IN gctSIZE_T Bytes
+    )
+{
+    char arguments[150] = {0};
+    char format[100] = {0};
+
+    gctSTRING function;
+    gctPOINTER args;
+    gctUINT32 numArguments;
+    int i = 0;
+    gctUINT32 functionBytes;
+
+    gcsBINARY_TRACE_MESSAGE_PTR message = (gcsBINARY_TRACE_MESSAGE_PTR)Buffer;
+
+    /* Check signature. */
+    if (message->signature != 0x7FFFFFFF)
+    {
+        gcmkPRINT("Signature error");
+        return;
+    }
+
+    /* Get function name. */
+    function = (gctSTRING)&message->payload;
+    functionBytes = strlen(function) + 1;
+
+    /* Get arguments number. */
+    numArguments = message->numArguments;
+
+    /* Get arguments . */
+    args = function + functionBytes;
+
+    /* Prepare format string. */
+    while (numArguments--)
+    {
+        format[i++] = '%';
+        format[i++] = 'x';
+        format[i++] = ' ';
+    }
+
+    format[i] = '\0';
+
+    if (numArguments)
+    {
+        gcmkVSPRINTF(arguments, 150, format, *(gctARGUMENTS *) &args);
+    }
+
+    gcmkPRINT("[%d](%d): %s(%d) %s",
+             message->pid,
+             message->tid,
+             function,
+             message->line,
+             arguments);
+}
+
+
+/*******************************************************************************
+**  gckOS_WriteToRingBuffer
+**
+**  Store a buffer to ring buffer.
+**
+**  ARGUMENTS:
+**
+**      gctCONST_STRING Buffer
+**          Pointer to buffer to store.
+**
+**      gctSIZE_T Bytes
+**          Buffer length.
+*/
+void
+gckOS_WriteToRingBuffer(
+    IN gctCONST_STRING Buffer,
+    IN gctSIZE_T Bytes
+    )
+{
+
+}
+
+/*******************************************************************************
+**  gckOS_BinaryTrace
+**
+**  Output a binary trace message.
+**
+**  ARGUMENTS:
+**
+**      gctCONST_STRING Function
+**          Pointer to function name.
+**
+**      gctINT Line
+**          Line number.
+**
+**      gctCONST_STRING Text OPTIONAL
+**          Optional pointer to a descriptive text.
+**
+**      ...
+**          Optional arguments to the descriptive text.
+*/
+void
+gckOS_BinaryTrace(
+    IN gctCONST_STRING Function,
+    IN gctINT Line,
+    IN gctCONST_STRING Text OPTIONAL,
+    ...
+    )
+{
+    static gctUINT32 messageSignature = 0x7FFFFFFF;
+    char buffer[gcdBINARY_TRACE_MESSAGE_SIZE];
+    gctUINT32 numArguments = 0;
+    gctUINT32 functionBytes;
+    gctUINT32 i = 0;
+    gctSTRING payload;
+    gcsBINARY_TRACE_MESSAGE_PTR message = (gcsBINARY_TRACE_MESSAGE_PTR)buffer;
+
+    /* Calculate arguments number. */
+    if (Text)
+    {
+        while (Text[i] != '\0')
+        {
+            if (Text[i] == '%')
+            {
+                numArguments++;
+            }
+            i++;
+        }
+    }
+
+    message->signature    = messageSignature;
+    message->pid          = gcmkGETPROCESSID();
+    message->tid          = gcmkGETTHREADID();
+    message->line         = Line;
+    message->numArguments = numArguments;
+
+    payload = (gctSTRING)&message->payload;
+
+    /* Function name. */
+    functionBytes = gcmkSTRLEN(Function) + 1;
+    gcmkMEMCPY(payload, Function, functionBytes);
+
+    /* Advance to next payload. */
+    payload += functionBytes;
+
+    /* Arguments value. */
+    if (numArguments)
+    {
+        gctARGUMENTS p;
+        gcmkARGUMENTS_START(p, Text);
+
+        for (i = 0; i < numArguments; ++i)
+        {
+            gctPOINTER value = gcmkARGUMENTS_ARG(p, gctPOINTER);
+            gcmkMEMCPY(payload, &value, gcmSIZEOF(gctPOINTER));
+            payload += gcmSIZEOF(gctPOINTER);
+        }
+
+        gcmkARGUMENTS_END(p);
+    }
+
+    gcmkASSERT(payload - buffer <= gcdBINARY_TRACE_MESSAGE_SIZE);
+
+
+    /* Send buffer to ring buffer. */
+    gckOS_WriteToRingBuffer(buffer, payload - buffer);
+}
+

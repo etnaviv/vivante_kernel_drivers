@@ -2356,13 +2356,13 @@ gckHARDWARE_QueryChipIdentity(
     OUT gcsHAL_QUERY_CHIP_IDENTITY_PTR Identity
     );
 
-/* Query the shader support. */
+/* Query the shader uniforms support. */
 gceSTATUS
 gckHARDWARE_QueryShaderCaps(
     IN gckHARDWARE Hardware,
     OUT gctUINT * VertexUniforms,
     OUT gctUINT * FragmentUniforms,
-    OUT gctUINT * Varyings
+    OUT gctBOOL * UnifiedUnforms
     );
 
 /* Split a harwdare specific address into API stuff. */
@@ -2753,14 +2753,11 @@ gckEVENT_Submit(
     IN gctBOOL Wait,
     IN gctBOOL FromPower
     );
-
-/* Commit an event queue. */
 gceSTATUS
 gckEVENT_Commit(
     IN gckEVENT Event,
     IN gcsQUEUE_PTR Queue
     );
-
 /* Schedule a composition event. */
 gceSTATUS
 gckEVENT_Compose(
@@ -2845,7 +2842,6 @@ gckCOMMAND_Commit(
     IN gcsQUEUE_PTR EventQueue,
     IN gctUINT32 ProcessID
     );
-
 /* Reserve space in the command buffer. */
 gceSTATUS
 gckCOMMAND_Reserve(
@@ -2868,7 +2864,6 @@ gckCOMMAND_Stall(
     IN gckCOMMAND Command,
     IN gctBOOL FromPower
     );
-
 /* Attach user process. */
 gceSTATUS
 gckCOMMAND_Attach(

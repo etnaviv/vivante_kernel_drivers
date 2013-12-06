@@ -412,6 +412,7 @@ gckOS_DumpParam(
 #if ENABLE_GPU_CLOCK_BY_DRIVER
     printk("  coreClock         = %lu\n",     coreClock);
 #endif
+    printk("  gpuProfiler       = %d\n",      gpuProfiler);
 }
 
 int drv_open(
@@ -741,7 +742,7 @@ long drv_ioctl(
     }
     else
     {
-        if (iface.hardwareType < 0 || iface.hardwareType > 7)
+        if (iface.hardwareType > 7)
         {
             gcmkTRACE_ZONE(
                 gcvLEVEL_ERROR, gcvZONE_DRIVER,
@@ -1407,6 +1408,11 @@ static int gpu_suspend(struct platform_device *dev, pm_message_t state)
 
     device = platform_get_drvdata(dev);
 
+    if (!device)
+    {
+        return -1;
+    }
+
     for (i = 0; i < gcdMAX_GPU_COUNT; i++)
     {
         if (device->kernels[i] != gcvNULL)
@@ -1458,6 +1464,11 @@ static int gpu_resume(struct platform_device *dev)
     gceCHIPPOWERSTATE   statesStored;
 
     device = platform_get_drvdata(dev);
+
+    if (!device)
+    {
+        return -1;
+    }
 
     for (i = 0; i < gcdMAX_GPU_COUNT; i++)
     {

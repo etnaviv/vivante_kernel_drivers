@@ -143,6 +143,7 @@ typedef enum _gceFEATURE
     gcvFEATURE_PRIMITIVE_RESTART,
     gcvFEATURE_TEXTURE_LINEAR,
     gcvFEATURE_TEXTURE_YUV_ASSEMBLER,
+    gcvFEATURE_LINEAR_RENDER_TARGET,
     gcvFEATURE_SHADER_HAS_ATOMIC,
     gcvFEATURE_SHADER_HAS_INSTRUCTION_CACHE,
     gcvFEATURE_SHADER_ENHANCEMENTS2,
@@ -192,6 +193,11 @@ typedef enum _gceFEATURE
     gcvFEATURE_MRT_TILE_STATUS_BUFFER,
     gcvFEATURE_COMPRESSION_V1,
     gcvFEATURE_V1_COMPRESSION_Z16_DECOMPRESS_FIX,
+    gcvFEATURE_RTT,
+    gcvFEATURE_GENERICS,
+    gcvFEATURE_2D_ONE_PASS_FILTER,
+    gcvFEATURE_2D_POST_FLIP,
+    gcvFEATURE_2D_PIXEL_ALIGNMENT,
 
     /* Insert features above this comment only. */
     gcvFEATURE_COUNT                /* Not a feature. */
@@ -270,6 +276,9 @@ typedef enum _gceSURF_TYPE
     gcvSURF_CREATE_AS_TEXTURE  = 0x4000,  /* create it as a texture */
 
     gcvSURF_TEXTURE_LINEAR               = gcvSURF_TEXTURE
+                                         | gcvSURF_LINEAR,
+
+    gcvSURF_RENDER_TARGET_LINEAR         = gcvSURF_RENDER_TARGET
                                          | gcvSURF_LINEAR,
 
     gcvSURF_RENDER_TARGET_NO_TILE_STATUS = gcvSURF_RENDER_TARGET
@@ -513,6 +522,9 @@ typedef enum _gceSURF_FORMAT
     gcvSURF_RG16,
     gcvSURF_R8_SNORM,
     gcvSURF_G8R8_SNORM,
+
+    gcvSURF_R8_1_X8R8G8B8,
+    gcvSURF_G8R8_1_X8R8G8B8,
 
     /* Floating point formats. */
     gcvSURF_R16F                = 1200,
@@ -917,6 +929,8 @@ typedef enum _gce2D_STATE
     gcv2D_STATE_EN_GAMMA,
     gcv2D_STATE_DE_GAMMA,
     gcv2D_STATE_MULTI_SRC_BLIT_UNIFIED_DST_RECT,
+    gcv2D_STATE_PROFILE_ENABLE,
+    gcv2D_STATE_XRGB_ENABLE,
 
     gcv2D_STATE_ARRAY_EN_GAMMA                   = 0x10001,
     gcv2D_STATE_ARRAY_DE_GAMMA,

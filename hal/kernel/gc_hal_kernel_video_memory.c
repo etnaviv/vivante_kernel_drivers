@@ -2454,6 +2454,7 @@ gckVIDMEM_NODE_Allocate(
     IN gckKERNEL Kernel,
     IN gcuVIDMEM_NODE_PTR VideoNode,
     IN gceSURF_TYPE Type,
+    IN gcePOOL Pool,
     IN gctUINT32 * Handle
     )
 {
@@ -2473,6 +2474,7 @@ gckVIDMEM_NODE_Allocate(
     node->node = VideoNode;
     node->name = 0;
     node->type = Type;
+    node->pool = Pool;
 #if gcdPROCESS_ADDRESS_SPACE
     node->mapHead =
     node->mapTail = gcvNULL;

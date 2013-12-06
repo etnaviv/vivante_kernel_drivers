@@ -13,7 +13,6 @@
 #if MRVL_CONFIG_ENABLE_GPUFREQ
 #include <linux/kernel.h>
 #include <linux/atomic.h>
-#include <linux/version.h>
 
 #define DEF_SAMPLING_DOWN_FACTOR            (1)
 #define MAX_SAMPLING_DOWN_FACTOR            (100000)

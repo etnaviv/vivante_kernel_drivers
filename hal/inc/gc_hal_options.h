@@ -212,6 +212,15 @@
 #endif
 
 /*
+    gcdDUMP_2D
+
+        When set to non-zero, it will dump the 2D command and surface.
+*/
+#ifndef gcdDUMP_2D
+#   define gcdDUMP_2D                           0
+#endif
+
+/*
     gcdDUMP_FRAME_TGA
 
     When set to a value other than 0, a dump of the frame specified by the value,
@@ -826,6 +835,7 @@
 #endif
 
 
+
 /*
     gcdDVFS
 
@@ -1007,7 +1017,7 @@
         Force generate mipmap for texture.
 */
 #ifndef gcdFORCE_MIPMAP
-#   define gcdFORCE_MIPMAP                      1
+#   define gcdFORCE_MIPMAP                      0
 #endif
 
 /*
@@ -1017,6 +1027,16 @@
 */
 #ifndef gcdFORCE_BILINEAR
 #   define gcdFORCE_BILINEAR                    1
+#endif
+
+/*
+    gcdBINARY_TRACE
+
+        When non-zero, binary trace will be generated.
+*/
+#ifndef gcdBINARY_TRACE
+#   define gcdBINARY_TRACE                       0
+#   define gcdBINARY_TRACE_TO_FILE               0
 #endif
 
 #endif /* __gc_hal_options_h_ */

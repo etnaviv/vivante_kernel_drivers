@@ -35,6 +35,9 @@ typedef va_list gctARGUMENTS;
 #define gcmkARGUMENTS_END(Arguments) \
     va_end(Arguments)
 
+#define gcmkARGUMENTS_ARG(Arguments, Type) \
+    va_arg(Arguments, Type)
+
 #define gcmkDECLARE_LOCK(__spinLock__) \
     static DEFINE_SPINLOCK(__spinLock__);
 
@@ -83,6 +86,12 @@ typedef va_list gctARGUMENTS;
 
 #define gcmkSTRCAT(Destination, Size, String) \
     strncat(Destination, String, Size)
+
+#define gcmkMEMCPY(Destination, Source, Size) \
+    memcpy(Destination, Source, Size)
+
+#define gcmkSTRLEN(String) \
+    strlen(String)
 
 /* If not zero, forces data alignment in the variable argument list
    by its individual size. */

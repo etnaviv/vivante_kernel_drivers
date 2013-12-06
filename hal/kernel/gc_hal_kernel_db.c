@@ -715,9 +715,9 @@ gckKERNEL_CreateProcessDB(
 
     for (i = 0; i < gcvSURF_NUM_TYPES; i++)
     {
-        database->vidMemDetail[i].bytes = 0;
-        database->vidMemDetail[i].maxBytes = 0;
-        database->vidMemDetail[i].totalBytes = 0;
+        database->vidMemType[i].bytes = 0;
+        database->vidMemType[i].maxBytes = 0;
+        database->vidMemType[i].totalBytes = 0;
     }
 
     gcmkASSERT(database->handleDatabase == gcvNULL);
@@ -835,7 +835,8 @@ gckKERNEL_AddProcessDB(
     gcsDATABASE_PTR database;
     gcsDATABASE_RECORD_PTR record = gcvNULL;
     gcsDATABASE_COUNTERS * count;
-    gctUINT32 subType;
+    gctUINT32 vidMemType;
+    gcePOOL vidMemPool;
 
     gcmkHEADER_ARG("Kernel=0x%x ProcessID=%d Type=%d Pointer=0x%x "
                    "Physical=0x%x Size=%lu",
@@ -844,7 +845,9 @@ gckKERNEL_AddProcessDB(
     /* Verify the arguments. */
     gcmkVERIFY_OBJECT(Kernel, gcvOBJ_KERNEL);
 
-    subType = (Type & gcdDATABASE_SUBTYPE_MASK) >> gcdDATABASE_SUBTYPE_SHIFT;
+    /* Decode type. */
+    vidMemType = (Type & gcdDB_VIDEO_MEMORY_TYPE_MASK) >> gcdDB_VIDEO_MEMORY_TYPE_SHIFT;
+    vidMemPool = (Type & gcdDB_VIDEO_MEMORY_POOL_MASK) >> gcdDB_VIDEO_MEMORY_POOL_SHIFT;
 
     Type &= gcdDATABASE_TYPE_MASK;
 
@@ -987,7 +990,18 @@ gckKERNEL_AddProcessDB(
 
     if (Type == gcvDB_VIDEO_MEMORY)
     {
-        count = &database->vidMemDetail[subType];
+        count = &database->vidMemType[vidMemType];
+
+        /* Adjust counters. */
+        count->totalBytes += Size;
+        count->bytes      += Size;
+
+        if (count->bytes > count->maxBytes)
+        {
+            count->maxBytes = count->bytes;
+        }
+
+        count = &database->vidMemPool[vidMemPool];
 
         /* Adjust counters. */
         count->totalBytes += Size;
@@ -1050,7 +1064,8 @@ gckKERNEL_RemoveProcessDB(
     gceSTATUS status;
     gcsDATABASE_PTR database;
     gctSIZE_T bytes = 0;
-    gctUINT32 subType;
+    gctUINT32 vidMemType;
+    gcePOOL vidMempool;
 
     gcmkHEADER_ARG("Kernel=0x%x ProcessID=%d Type=%d Pointer=0x%x",
                    Kernel, ProcessID, Type, Pointer);
@@ -1059,7 +1074,9 @@ gckKERNEL_RemoveProcessDB(
     gcmkVERIFY_OBJECT(Kernel, gcvOBJ_KERNEL);
     gcmkVERIFY_ARGUMENT(Pointer != gcvNULL);
 
-    subType = (Type & gcdDATABASE_SUBTYPE_MASK) >> gcdDATABASE_SUBTYPE_SHIFT;
+    /* Decode type. */
+    vidMemType = (Type & gcdDB_VIDEO_MEMORY_TYPE_MASK) >> gcdDB_VIDEO_MEMORY_TYPE_SHIFT;
+    vidMempool = (Type & gcdDB_VIDEO_MEMORY_POOL_MASK) >> gcdDB_VIDEO_MEMORY_POOL_SHIFT;
 
     Type &= gcdDATABASE_TYPE_MASK;
 
@@ -1077,7 +1094,8 @@ gckKERNEL_RemoveProcessDB(
     {
     case gcvDB_VIDEO_MEMORY:
         database->vidMem.bytes -= bytes;
-        database->vidMemDetail[subType].bytes -= bytes;
+        database->vidMemType[vidMemType].bytes -= bytes;
+        database->vidMemPool[vidMempool].bytes -= bytes;
         break;
 
     case gcvDB_NON_PAGED:
@@ -1722,7 +1740,7 @@ gckKERNEL_DestroyProcessDB(
     gceSTATUS status;
     gcsDATABASE_PTR database;
     gcsDATABASE_RECORD_PTR record, next;
-    gctBOOL asynchronous;
+    gctBOOL asynchronous = gcvTRUE;
     gckVIDMEM_NODE nodeObject;
     gctPHYS_ADDR physical;
     gckKERNEL kernel = Kernel;
@@ -2045,6 +2063,7 @@ gckKERNEL_QueryProcessDB(
 {
     gceSTATUS status;
     gcsDATABASE_PTR database;
+    gcePOOL vidMemPool;
 
     gcmkHEADER_ARG("Kernel=0x%x ProcessID=%d Type=%d Info=0x%x",
                    Kernel, ProcessID, Type, Info);
@@ -2052,6 +2071,11 @@ gckKERNEL_QueryProcessDB(
     /* Verify the arguments. */
     gcmkVERIFY_OBJECT(Kernel, gcvOBJ_KERNEL);
     gcmkVERIFY_ARGUMENT(Info != gcvNULL);
+
+    /* Deocde pool. */
+    vidMemPool = (Type & gcdDB_VIDEO_MEMORY_POOL_MASK) >> gcdDB_VIDEO_MEMORY_POOL_SHIFT;
+
+    Type &= gcdDATABASE_TYPE_MASK;
 
     /* Find the database. */
     gcmkONERROR(
@@ -2061,9 +2085,18 @@ gckKERNEL_QueryProcessDB(
     switch (Type)
     {
     case gcvDB_VIDEO_MEMORY:
-        gckOS_MemCopy(&Info->counters,
-                                  &database->vidMem,
-                                  gcmSIZEOF(database->vidMem));
+        if (vidMemPool != gcvPOOL_UNKNOWN)
+        {
+            gckOS_MemCopy(&Info->counters,
+                          &database->vidMemPool[vidMemPool],
+                          gcmSIZEOF(database->vidMemPool[vidMemPool]));
+        }
+        else
+        {
+            gckOS_MemCopy(&Info->counters,
+                          &database->vidMem,
+                          gcmSIZEOF(database->vidMem));
+        }
         break;
 
     case gcvDB_NON_PAGED:
@@ -2740,7 +2773,7 @@ gckKERNEL_DumpVidMemUsage(
 
     for (i = 0; i < gcvSURF_NUM_TYPES; i++)
     {
-        counter = &database->vidMemDetail[i];
+        counter = &database->vidMemType[i];
 
         _DumpCounter(counter, surfaceTypes[i]);
     }

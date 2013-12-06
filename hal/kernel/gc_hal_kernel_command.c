@@ -865,7 +865,7 @@ gckCOMMAND_Start(
 {
     gceSTATUS status;
     gckHARDWARE hardware;
-    gctUINT32 waitOffset;
+    gctUINT32 waitOffset = 0;
     gctSIZE_T waitLinkBytes;
 
     gcmkHEADER_ARG("Command=0x%x", Command);
@@ -2213,7 +2213,6 @@ gckCOMMAND_Commit(
 
     /* Submit events. */
     status = gckEVENT_Submit(Command->kernel->eventObj, gcvTRUE, gcvFALSE);
-
     if (status == gcvSTATUS_INTERRUPTED)
     {
         gcmkTRACE(

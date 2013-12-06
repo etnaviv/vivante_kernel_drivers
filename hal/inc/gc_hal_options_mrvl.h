@@ -106,7 +106,7 @@
 #if defined(ANDROID)
 #define MRVL_ENABLE_GC_POWER_CLOCK              1
 #else
-#define MRVL_ENABLE_GC_POWER_CLOCK              1
+#define MRVL_ENABLE_GC_POWER_CLOCK              0
 #endif
 
 /*
@@ -145,7 +145,7 @@
 #define MRVL_CONFIG_POWER_CLOCK_SEPARATED       0
 #endif
 
-#if (!VIVANTE_PROFILER) && \
+#if (defined ANDROID) && (!VIVANTE_PROFILER) && \
     (MRVL_PLATFORM_PXA1L88 || MRVL_PLATFORM_TTD2)
 #define MRVL_POLICY_CLKOFF_WHEN_IDLE            1
 #else
@@ -284,7 +284,11 @@
         -- Protect register access when DFC to workaround Eden Z1 GC DFC issue
 */
 #if MRVL_CONFIG_ENABLE_GPUFREQ && (MRVL_PLATFORM_TTD2)
-#define MRVL_DFC_PROTECT_REG_ACCESS             0
+    #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0))
+        #define MRVL_DFC_PROTECT_REG_ACCESS     0
+    #else
+        #define MRVL_DFC_PROTECT_REG_ACCESS     1
+    #endif
 #else
 #define MRVL_DFC_PROTECT_REG_ACCESS             0
 #endif
@@ -329,14 +333,6 @@
     for cl_khr_gl_sharing
 */
 #define MRVL_CL_KHR_GL_SHARING                  1
-
-/*
-* Disable FLUSH_VST_CACHE, it will cause system hang after merge 5.0.4
-*/
-#ifndef MRVL_DISABLE_FLUSH_VST_CACHE
-#define MRVL_DISABLE_FLUSH_VST_CACHE            0
-#endif
-
 
 /*
     MRVL_MMU_FLATMAP_2G_ADDRESS
@@ -397,7 +393,7 @@
 /* @Ziyi: If any change happened between these 2 comments please contact zyxu@marvell.com, Thanks. */
 /* #################### [START ==DO NOT CHANGE THIS MARCRO== START] #################### */
 
-#define _GC_VERSION_STRING_                     "GC version eden-jb42-alpha5-r1"
+#define _GC_VERSION_STRING_                     "GC version eden-kk44-bringup"
 
 /* Do not align u/v stride to 16 */
 #define VIVANTE_ALIGN_UVSTRIDE                  0

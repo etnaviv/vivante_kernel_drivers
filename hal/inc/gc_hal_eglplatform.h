@@ -37,8 +37,8 @@ typedef struct __BITFIELDINFO{
 
 #elif defined(LINUX) && defined(EGL_API_DFB) && !defined(__APPLE__)
 #include <directfb.h>
-typedef IDirectFB * HALNativeDisplayType;
-typedef IDirectFBWindow *  HALNativeWindowType;
+typedef struct _DFBDisplay * HALNativeDisplayType;
+typedef struct _DFBWindow *  HALNativeWindowType;
 typedef struct _DFBPixmap *  HALNativePixmapType;
 
 #elif defined(LINUX) && defined(EGL_API_FB) && !defined(__APPLE__)

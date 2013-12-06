@@ -1232,6 +1232,8 @@ gckMMU_Destroy(
     )
 {
 #if gcdSHARED_PAGETABLE
+    gckOS os = Mmu->os;
+
     sharedPageTable->reference--;
 
     if (sharedPageTable->reference == 0)
@@ -1241,7 +1243,7 @@ gckMMU_Destroy(
             gcmkVERIFY_OK(_Destroy(Mmu));
         }
 
-        gcmkVERIFY_OK(gcmkOS_SAFE_FREE(Mmu->os, sharedPageTable));
+        gcmkVERIFY_OK(gcmkOS_SAFE_FREE(os, sharedPageTable));
     }
 
     return gcvSTATUS_OK;

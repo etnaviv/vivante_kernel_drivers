@@ -297,6 +297,14 @@ _FlushPipe(
     IN gcePIPE_SELECT Pipe
     )
 {
+    gctBOOL fcFlushStall;
+    gctSIZE_T flushSlots;
+
+    fcFlushStall
+        = gckHARDWARE_IsFeatureAvailable(Context->hardware, gcvFEATURE_FC_FLUSH_STALL);
+
+    flushSlots = fcFlushStall ? 8 : 6;
+
     if (Context->buffer != gcvNULL)
     {
         gctUINT32_PTR buffer;
@@ -317,6 +325,17 @@ _FlushPipe(
 		| ((((gctUINT32)(0)) & ~(((gctUINT32)(((gctUINT32) ((((1 ? 1:1) - (0 ? 1:1) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 1:1) - (0 ? 1:1) + 1))))))) << (0 ? 1:1))) | (((gctUINT32)(0x1 & ((gctUINT32) ((((1 ? 1:1) - (0 ? 1:1) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 1:1) - (0 ? 1:1) + 1))))))) << (0 ? 1:1)))
 		| ((((gctUINT32)(0)) & ~(((gctUINT32)(((gctUINT32) ((((1 ? 2:2) - (0 ? 2:2) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 2:2) - (0 ? 2:2) + 1))))))) << (0 ? 2:2))) | (((gctUINT32)(0x1 & ((gctUINT32) ((((1 ? 2:2) - (0 ? 2:2) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 2:2) - (0 ? 2:2) + 1))))))) << (0 ? 2:2)));
 	
+        if (fcFlushStall)
+        {
+            *buffer++
+	= ((((gctUINT32)(0)) & ~(((gctUINT32)(((gctUINT32) ((((1 ? 31:27) - (0 ? 31:27) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 31:27) - (0 ? 31:27) + 1))))))) << (0 ? 31:27))) | (((gctUINT32)(0x01 & ((gctUINT32) ((((1 ? 31:27) - (0 ? 31:27) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 31:27) - (0 ? 31:27) + 1))))))) << (0 ? 31:27)))
+		| ((((gctUINT32)(0)) & ~(((gctUINT32)(((gctUINT32) ((((1 ? 15:0) - (0 ? 15:0) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 15:0) - (0 ? 15:0) + 1))))))) << (0 ? 15:0))) | (((gctUINT32)((gctUINT32)(0x0594)&((gctUINT32) ((((1 ? 15:0) - (0 ? 15:0) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 15:0) - (0 ? 15:0) + 1))))))) << (0 ? 15:0)))
+		| ((((gctUINT32)(0)) & ~(((gctUINT32)(((gctUINT32) ((((1 ? 25:16) - (0 ? 25:16) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 25:16) - (0 ? 25:16) + 1))))))) << (0 ? 25:16))) | (((gctUINT32)((gctUINT32)(1)&((gctUINT32) ((((1 ? 25:16) - (0 ? 25:16) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 25:16) - (0 ? 25:16) + 1))))))) << (0 ? 25:16)));
+	
+            *buffer++
+	= ((((gctUINT32)(0)) & ~(((gctUINT32)(((gctUINT32) ((((1 ? 0:0) - (0 ? 0:0) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 0:0) - (0 ? 0:0) + 1))))))) << (0 ? 0:0))) | (((gctUINT32)(0x1 & ((gctUINT32) ((((1 ? 0:0) - (0 ? 0:0) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 0:0) - (0 ? 0:0) + 1))))))) << (0 ? 0:0)));
+	        }
+
         /* Semaphore from FE to PE. */
         *buffer++
 	= ((((gctUINT32)(0)) & ~(((gctUINT32)(((gctUINT32) ((((1 ? 31:27) - (0 ? 31:27) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 31:27) - (0 ? 31:27) + 1))))))) << (0 ? 31:27))) | (((gctUINT32)(0x01 & ((gctUINT32) ((((1 ? 31:27) - (0 ? 31:27) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 31:27) - (0 ? 31:27) + 1))))))) << (0 ? 31:27)))
@@ -336,8 +355,8 @@ _FlushPipe(
 		| ((((gctUINT32)(0)) & ~(((gctUINT32)(((gctUINT32) ((((1 ? 12:8) - (0 ? 12:8) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 12:8) - (0 ? 12:8) + 1))))))) << (0 ? 12:8))) | (((gctUINT32)(0x07 & ((gctUINT32) ((((1 ? 12:8) - (0 ? 12:8) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 12:8) - (0 ? 12:8) + 1))))))) << (0 ? 12:8)));
 	    }
 
-    /* Flushing 3D pipe takes 6 slots. */
-    return 6;
+    /* Number of slots taken by flushing pipe. */
+    return flushSlots;
 }
 
 #if !defined(VIVANTE_NO_3D)
@@ -573,6 +592,7 @@ _InitializeContextBuffer(
     gctBOOL halti0, halti1, halti2;
     gctUINT i;
     gctUINT vertexUniforms, fragmentUniforms;
+    gctBOOL unifiedUnforms;
     gctUINT fe2vsCount;
 
 #endif
@@ -603,7 +623,7 @@ _InitializeContextBuffer(
 	
     /* Query shader support. */
     gcmkVERIFY_OK(gckHARDWARE_QueryShaderCaps(
-        Context->hardware, &vertexUniforms, &fragmentUniforms, gcvNULL));
+        Context->hardware, &vertexUniforms, &fragmentUniforms, &unifiedUnforms));
 
     /* Store the 3D entry index. */
     Context->entryOffset3D = index * gcmSIZEOF(gctUINT32);
@@ -682,8 +702,12 @@ _InitializeContextBuffer(
 	    }
 
     index += _CLOSE_RANGE();
+
+    if (! unifiedUnforms)
+    {
 	index += _State( Context, index,0x05000 >> 2,0x00000000,vertexUniforms * 4,gcvFALSE,gcvFALSE);
-	
+	    }
+
     /* Primitive Assembly states. */
 	index += _State( Context, index,0x00A00 >> 2,0x00000000,1,gcvTRUE,gcvFALSE);
 		index += _State( Context, index,0x00A04 >> 2,0x00000000,1,gcvTRUE,gcvFALSE);
@@ -746,8 +770,12 @@ _InitializeContextBuffer(
 	    }
 
     index += _CLOSE_RANGE();
+
+    if (! unifiedUnforms)
+    {
 	index += _State( Context, index,0x07000 >> 2,0x00000000,fragmentUniforms * 4,gcvFALSE,gcvFALSE);
-	
+	    }
+
     /* Texture states. */
 	index += _State( Context, index,0x02000 >> 2,0x00000000,12,gcvFALSE,gcvFALSE);
 		index += _State( Context, index,0x02040 >> 2,0x00000000,12,gcvFALSE,gcvFALSE);
@@ -910,10 +938,8 @@ _InitializeContextBuffer(
         /* New Shader instruction memory. */
 	index += _State( Context, index,0x0085C >> 2,0x00000000,1,gcvFALSE,gcvFALSE);
 		index += _State( Context, index,0x0101C >> 2,0x00000100,1,gcvFALSE,gcvFALSE);
-	
-	index += _State( Context, index,0x00860 >> 2,0x00000000,1,gcvFALSE,gcvFALSE);
-	
-        index += _CLOSE_RANGE();
+		index += _State( Context, index,0x00860 >> 2,0x00000000,1,gcvFALSE,gcvFALSE);
+	        index += _CLOSE_RANGE();
 
         /* VX instruction memory. */
         for (i = 0;
@@ -927,6 +953,23 @@ _InitializeContextBuffer(
 
 	_StateMirror ( Context, 0x08000 >> 2,Context->hardware->identity.instructionCount << 2,0x0C000 >> 2);
 	    }
+
+    if (unifiedUnforms)
+    {
+	index += _State( Context, index,0x01024 >> 2,0x00000100,1,gcvFALSE,gcvFALSE);
+		index += _State( Context, index,0x00864 >> 2,0x00000000,1,gcvFALSE,gcvFALSE);
+	        index += _CLOSE_RANGE();
+
+        for (i = 0;
+             i < Context->hardware->identity.numConstants << 2;
+             i += 256 << 2
+             )
+        {
+	index += _State( Context, index,(0x30000 >> 2) + i,0x00000000,256 << 2,gcvFALSE,gcvFALSE);
+	            index += _CLOSE_RANGE();
+        }
+        index += _CLOSE_RANGE();
+    }
 
     /* Store the index of the "XD" entry. */
     Context->entryOffsetXDFrom3D = index * gcmSIZEOF(gctUINT32);
@@ -957,9 +1000,6 @@ _InitializeContextBuffer(
 		index += _State( Context, index,0x01580 >> 2,0x00000000,3,gcvFALSE,gcvFALSE);
 		index += _State( Context, index,0x014B8 >> 2,0x00000000,1,gcvFALSE,gcvFALSE);
 	
-
-
-
     /* Composition states. */
 	index += _State( Context, index,0x03008 >> 2,0x00000000,1,gcvFALSE,gcvFALSE);
 	
@@ -976,11 +1016,12 @@ _InitializeContextBuffer(
 	
 	index += _State( Context, index,((0x01480 >> 2) + (0<<3)),0x00000000,Context->hardware->identity.pixelPipes,gcvFALSE,gcvTRUE);
 	
-        for (i = 0; i < 3; i++)
-        {
-	index += _State( Context, index,((0x01500 >> 2) + (i<<3)),0x00000000,Context->hardware->identity.pixelPipes,gcvFALSE,gcvTRUE);
-	        }
     }
+
+    for (i = 0; i < 3; i++)
+    {
+	index += _State( Context, index,((0x01500 >> 2) + (i<<3)),0x00000000,Context->hardware->identity.pixelPipes,gcvFALSE,gcvTRUE);
+	    }
 
     if (halti2)
     {

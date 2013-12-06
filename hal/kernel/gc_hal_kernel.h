@@ -153,8 +153,11 @@ typedef enum _gceDATABASE_TYPE
 gceDATABASE_TYPE;
 
 #define gcdDATABASE_TYPE_MASK           0x000000FF
-#define gcdDATABASE_SUBTYPE_MASK        0x0000FF00
-#define gcdDATABASE_SUBTYPE_SHIFT       8
+#define gcdDB_VIDEO_MEMORY_TYPE_MASK    0x0000FF00
+#define gcdDB_VIDEO_MEMORY_TYPE_SHIFT   8
+
+#define gcdDB_VIDEO_MEMORY_POOL_MASK    0x00FF0000
+#define gcdDB_VIDEO_MEMORY_POOL_SHIFT   16
 
 typedef struct _gcsDATABASE_RECORD *    gcsDATABASE_RECORD_PTR;
 typedef struct _gcsDATABASE_RECORD
@@ -192,7 +195,9 @@ typedef struct _gcsDATABASE
     gcsDATABASE_COUNTERS                mapUserMemory;
     gcsDATABASE_COUNTERS                mapMemory;
 
-    gcsDATABASE_COUNTERS                vidMemDetail[gcvSURF_NUM_TYPES];
+    gcsDATABASE_COUNTERS                vidMemType[gcvSURF_NUM_TYPES];
+    /* Counter for each video memory pool. */
+    gcsDATABASE_COUNTERS                vidMemPool[gcvPOOL_NUMBER_OF_POOLS];
     gctPOINTER                          counterMutex;
 
     /* Idle time management. */
@@ -983,7 +988,11 @@ typedef struct _gcsVIDMEM_NODE
     gctPOINTER                  mapMutex;
 #endif
 
+    /* Surface Type. */
     gceSURF_TYPE                type;
+
+    /* Pool from which node is allocated. */
+    gcePOOL                     pool;
 }
 gcsVIDMEM_NODE;
 
@@ -1020,6 +1029,7 @@ gckVIDMEM_NODE_Allocate(
     IN gckKERNEL Kernel,
     IN gcuVIDMEM_NODE_PTR VideoNode,
     IN gceSURF_TYPE Type,
+    IN gcePOOL Pool,
     IN gctUINT32 * Handle
     );
 

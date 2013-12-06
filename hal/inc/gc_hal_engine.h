@@ -119,6 +119,11 @@ gceSTATUS gcoHAL_QueryPixelPipesInfo(
 
 /*----------------------------------------------------------------------------*/
 /*--------------------------------- gcoSURF 3D --------------------------------*/
+typedef enum _gceBLIT_FLAG
+{
+    gcvBLIT_FLAG_SKIP_DEPTH_WRITE   = 0x1,
+    gcvBLIT_FLAG_SKIP_STENCIL_WRITE = 0x2,
+} gceBLIT_FLAG;
 
 typedef struct _gcsSURF_BLIT_ARGS
 {
@@ -132,6 +137,7 @@ typedef struct _gcsSURF_BLIT_ARGS
     gctBOOL     yReverse;
     gctBOOL     scissorTest;
     gcsRECT     scissor;
+    gctUINT     flags;
 } gcsSURF_BLIT_ARGS;
 
 
@@ -289,6 +295,15 @@ gcoSURF_ResolveRect(
     );
 
 gceSTATUS
+gcoSURF_GetResolveAlignment(
+    IN gcoSURF Surface,
+    OUT gctUINT *originX,
+    OUT gctUINT *originY,
+    OUT gctUINT *sizeX,
+    OUT gctUINT *sizeY
+    );
+
+gceSTATUS
 gcoSURF_IsHWResolveable(
     IN gcoSURF SrcSurface,
     IN gcoSURF DestSurface,
@@ -323,6 +338,11 @@ gcoSURF_GetFence(
 
 gceSTATUS
 gcoBUFOBJ_GetFence(
+    IN gcoBUFOBJ bufObj
+    );
+
+gceSTATUS
+gcoBUFOBJ_WaitFence(
     IN gcoBUFOBJ bufObj
     );
 gceSTATUS
@@ -527,6 +547,13 @@ gceSTATUS
 gco3D_SetAPI(
     IN gco3D Engine,
     IN gceAPI ApiType
+    );
+
+/* Get 3D API type. */
+gceSTATUS
+gco3D_GetAPI(
+    IN gco3D Engine,
+    OUT gceAPI * ApiType
     );
 
 /* Set render target. */
@@ -1279,16 +1306,40 @@ gco3D_PrimitiveRestart(
 #if gcdSTREAM_OUT_BUFFER
 
 gceSTATUS
-gco3D_BeginStreamOut(
-    IN gco3D Engine);
+gco3D_QueryStreamOut(
+    IN gco3D Engine,
+    IN gctUINT32 OriginalIndexAddress,
+    IN gctUINT32 OriginalIndexOffset,
+    IN gctUINT32 OriginalIndexCount,
+    OUT gctBOOL_PTR Found
+    );
+
+gceSTATUS
+gco3D_StartStreamOut(
+    IN gco3D Engine,
+    IN gctINT StreamOutStatus,
+    IN gctUINT32 IndexAddress,
+    IN gctUINT32 IndexOffset,
+    IN gctUINT32 IndexCount
+    );
+
+gceSTATUS
+gco3D_StopStreamOut(
+    IN gco3D Engine
+    );
+
+gceSTATUS
+gco3D_ReplayStreamOut(
+    IN gco3D Engine,
+    IN gctUINT32 IndexAddress,
+    IN gctUINT32 IndexOffset,
+    IN gctUINT32 IndexCount
+    );
 
 gceSTATUS
 gco3D_EndStreamOut(
-    IN gco3D Engine);
-
-gceSTATUS
-gco3D_AdvanceStreamOut(
-    IN gco3D Engine);
+    IN gco3D Engine
+    );
 
 #endif
 
@@ -1743,7 +1794,8 @@ gcoTEXTURE_RenderIntoMipMap(
 gceSTATUS
 gcoTEXTURE_RenderIntoMipMap2(
     IN gcoTEXTURE Texture,
-    IN gctINT Level
+    IN gctINT Level,
+    IN gctBOOL Sync
     );
 
 gceSTATUS
@@ -2330,7 +2382,8 @@ gceSTATUS
 gcoBUFOBJ_IndexBind (
     IN gcoBUFOBJ Index,
     IN gceINDEX_TYPE Type,
-    IN gctUINT32 Offset
+    IN gctUINT32 Offset,
+    IN gctSIZE_T Count
     );
 
 /* Find min and max index for the index buffer */

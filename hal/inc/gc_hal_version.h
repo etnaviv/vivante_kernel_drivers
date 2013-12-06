@@ -18,12 +18,14 @@
 
 #define gcvVERSION_MINOR        0
 
-#define gcvVERSION_PATCH        7
+#define gcvVERSION_PATCH        8
 
-#define gcvVERSION_BUILD     11493
+#define gcvVERSION_BUILD     12623
 
 #define gcvVERSION_DATE      __DATE__
 
 #define gcvVERSION_TIME      __TIME__
+
+#define gcvVERSION_STRING    "5.0.8.12623"
 
 #endif /* __gc_hal_version_h_ */
