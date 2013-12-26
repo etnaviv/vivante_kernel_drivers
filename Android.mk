@@ -12,7 +12,7 @@ LOCAL_MODULE_PATH := $(PRODUCT_OUT)/root/lib/modules
 $(LOCAL_PATH)/$(LOCAL_SRC_FILES): build-galcore
 include $(BUILD_PREBUILT)
 
-build-galcore: uImage
+build-galcore: build-kernel
 	cd $(GALCORE_SRC_PATH) &&\
 	$(MAKE) -j$(MAKE_JOBS)
 	cp $(GALCORE_SRC_PATH)/hal/driver/galcore.ko $(PRODUCT_OUT)/root/lib/modules
