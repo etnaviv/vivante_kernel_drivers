@@ -494,7 +494,7 @@ _DirectPrint(
     gctARGUMENTS arguments;
 
     gcmkARGUMENTS_START(arguments, Message);
-    len = gcmkVSPRINTF(buffer, gcmSIZEOF(buffer), Message, arguments);
+    len = gcmkVSPRINTF(buffer, gcmSIZEOF(buffer), Message, &arguments);
     gcmkARGUMENTS_END(arguments);
 
     buffer[len] = '\0';
@@ -586,7 +586,7 @@ _PrintBuffer(
     IN gctINT Indent,
     IN gctPOINTER PrefixData,
     IN gctPOINTER Data,
-    IN gctUINT Address,
+    IN gctUINTPTR_T Address,
     IN gctUINT DataSize,
     IN gceDUMP_BUFFER Type,
     IN gctUINT32 DmaAddress
@@ -672,7 +672,7 @@ _PrintBuffer(
     {
         gcmkSPRINTF2(
             buffer + indent, gcmSIZEOF(buffer) - indent,
-            "@[kernel.command %08X %08X\n", Address, DataSize
+            "@[kernel.command %08lX %08X\n", Address, DataSize
             );
 
         gcmkOUTPUT_STRING(buffer);
@@ -1445,7 +1445,7 @@ _AppendBuffer(
     IN gctINT Indent,
     IN gctPOINTER PrefixData,
     IN gctPOINTER Data,
-    IN gctUINT Address,
+    IN gctUINTPTR_T Address,
     IN gctUINT DataSize,
     IN gceDUMP_BUFFER Type,
     IN gctUINT32 DmaAddress
@@ -1703,7 +1703,7 @@ _Print(
     IN gctUINT ArgumentSize,
     IN gctBOOL CopyMessage,
     IN gctCONST_STRING Message,
-    IN gctARGUMENTS Arguments
+    IN gctARGUMENTS * Arguments
     )
 {
     gcsBUFFERED_OUTPUT_PTR outputBuffer;
@@ -1751,14 +1751,14 @@ _Print(
     {
         gcdOUTPUTCOPY(
             outputBuffer, outputBuffer->indent,
-            Message, ArgumentSize, * (gctPOINTER *) &Arguments
+            Message, ArgumentSize, (gctPOINTER) Arguments
             );
     }
     else
     {
         gcdOUTPUTSTRING(
             outputBuffer, outputBuffer->indent,
-            Message, ArgumentSize, * (gctPOINTER *) &Arguments
+            Message, ArgumentSize, ((gctPOINTER) Arguments)
             );
     }
 
@@ -1786,7 +1786,7 @@ extern volatile unsigned g_nQnxInIsrs;
     { \
         gctARGUMENTS __arguments__; \
         gcmkARGUMENTS_START(__arguments__, Message); \
-        _Print(ArgumentSize, CopyMessage, Message, __arguments__); \
+        _Print(ArgumentSize, CopyMessage, Message, &__arguments__); \
         gcmkARGUMENTS_END(__arguments__); \
     } \
     atomic_sub(&g_nQnxInIsrs, 1); \
@@ -1798,7 +1798,7 @@ extern volatile unsigned g_nQnxInIsrs;
 { \
     gctARGUMENTS __arguments__; \
     gcmkARGUMENTS_START(__arguments__, Message); \
-    _Print(ArgumentSize, CopyMessage, Message, __arguments__); \
+    _Print(ArgumentSize, CopyMessage, Message, &__arguments__); \
     gcmkARGUMENTS_END(__arguments__); \
 }
 
@@ -1952,7 +1952,7 @@ gckOS_DumpBuffer(
     IN gctBOOL CopyMessage
     )
 {
-    gctUINT32 address;
+    gctUINTPTR_T address;
     gcsBUFFERED_OUTPUT_PTR outputBuffer;
     static gctBOOL userLocked;
     gctCHAR *buffer = (gctCHAR*)Buffer;
@@ -2640,7 +2640,7 @@ _VerifyMessage(
 
     if (numArguments)
     {
-        gcmkVSPRINTF(arguments, 150, format, *(gctARGUMENTS *) &args);
+        gcmkVSPRINTF(arguments, 150, format, (gctARGUMENTS *) &args);
     }
 
     gcmkPRINT("[%d](%d): %s(%d) %s",

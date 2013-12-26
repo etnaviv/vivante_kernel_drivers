@@ -103,7 +103,7 @@ _NewQueue(
         gckOS_GetPhysicalAddress(
             Command->os,
             Command->logical,
-            (gctUINT32 *) &Command->physical
+            (gctUINTPTR_T *) &Command->physical
             ));
 
     if (currentIndex != -1)
@@ -403,7 +403,7 @@ _DumpKernelCommandBuffer(
 )
 {
     gctINT i;
-    gctUINT32 physical;
+    gctUINTPTR_T physical;
     gctPOINTER entry;
 
     for (i = 0; i < gcdCOMMAND_QUEUES; i++)
@@ -1272,7 +1272,7 @@ gckCOMMAND_Commit(
     gcmkONERROR(gckOS_GetPhysicalAddress(
         Command->os,
         commandBufferLogical,
-        (gctUINT32_PTR)&commandBufferPhysical
+        (gctUINTPTR_T *)&commandBufferPhysical
         ));
 
     commandBufferSize

@@ -1403,7 +1403,7 @@ gckGALDEVICE_Construct(
 
     /* set up the contiguous memory */
     device->contiguousSize = ContiguousSize;
-    device->contiguousBase = (gctPOINTER)ContiguousBase;
+    device->contiguousBase = (gctPOINTER)(gctUINTPTR_T)ContiguousBase;
 
     if (ContiguousSize > 0)
     {

@@ -1230,7 +1230,7 @@ _NeedVirtualMapping(
 )
 {
     gceSTATUS status;
-    gctUINT32 phys;
+    gctUINTPTR_T phys;
     gctUINT32 end;
     gcePOOL pool;
     gctUINT32 offset;

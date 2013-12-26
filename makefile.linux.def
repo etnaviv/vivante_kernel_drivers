@@ -308,7 +308,7 @@ endif
 
 CFLAGS += -DgcdREGISTER_ACCESS_FROM_USER=1
 
-ifeq ($(gcdFPGA_BUILD), 1)
+ifeq ($(FPGA_BUILD), 1)
 CFLAGS += -DgcdFPGA_BUILD=1
 else
 CFLAGS += -DgcdFPGA_BUILD=0

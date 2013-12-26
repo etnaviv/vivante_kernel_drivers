@@ -3097,7 +3097,7 @@ gckHARDWARE_ConvertLogical(
     OUT gctUINT32 * Address
     )
 {
-    gctUINT32 address;
+    gctUINTPTR_T address;
     gceSTATUS status = gcvSTATUS_INVALID_ADDRESS;
     gctUINT32 baseAddress;
 
@@ -3620,7 +3620,7 @@ gckHARDWARE_FlushMMU(
     gctPOINTER pointer = gcvNULL;
     gctUINT32 flushSize;
     gctUINT32 count;
-    gctUINT32 physical;
+    gctUINTPTR_T physical;
 
     gcmkHEADER_ARG("Hardware=0x%x", Hardware);
 
@@ -3796,7 +3796,7 @@ gckHARDWARE_SetMMUv2(
 {
 #if 1 
     gceSTATUS status;
-    gctUINT32 config, address;
+    gctUINTPTR_T config, address;
     gckCOMMAND command;
     gctUINT32_PTR buffer;
     gctSIZE_T bufferSize;
@@ -6008,6 +6008,7 @@ gceSTATUS
 gckHARDWARE_QueryIdleEx(
     IN gckHARDWARE Hardware,
     OUT gctUINT32_PTR RegData,
+    OUT gctUINT32_PTR RegData3D1,
     OUT gctBOOL_PTR IsIdle
     )
 {
@@ -6025,6 +6026,7 @@ gckHARDWARE_QueryIdleEx(
     if (Hardware->chipPowerState == gcvPOWER_OFF)
     {
         *RegData = 0x0;
+        *RegData3D1 = 0x0;
         *IsIdle  = gcvTRUE;
     }
 
@@ -6032,6 +6034,7 @@ gckHARDWARE_QueryIdleEx(
     else if (Hardware->chipPowerState == gcvPOWER_SUSPEND)
     {
         *RegData = 0x7fffffff;
+        *RegData3D1 = 0x7fffffff;
         *IsIdle  = gcvTRUE;
     }
 
@@ -6060,7 +6063,12 @@ gckHARDWARE_QueryIdleEx(
 
             /* Test if address is inside the last WAIT/LINK sequence. */
             if ((address >= Hardware->lastWaitLink)
+#if gcdMULTI_GPU
+            &&  (address <= Hardware->lastWaitLink + 40)
+#else
             &&  (address <= Hardware->lastWaitLink + 16)
+
+#endif
             )
             {
                 /* FE is in last WAIT/LINK and the pipe is idle. */
@@ -6075,6 +6083,51 @@ gckHARDWARE_QueryIdleEx(
 
         /* update idle register value. */
         *RegData = idle;
+
+#if gcdMULTI_GPU > 1
+        if (Hardware->core == gcvCORE_MAJOR)
+        {
+            gcmkONERROR(
+                gckOS_ReadRegisterByCoreId(Hardware->os,
+                                           Hardware->core,
+                                           gcvCORE_3D_1_ID,
+                                           0x00004,
+                                           &idle));
+            /* Pipe must be idle. */
+            if((idle & 0x7FFFFFFE) != 0x7FFFFFFE)
+            {
+                /* Something is busy. */
+                *IsIdle = gcvFALSE;
+            }
+            else
+            {
+                /* Read the current FE address. */
+                gcmkONERROR(gckOS_ReadRegisterByCoreId(Hardware->os,
+                                                       Hardware->core,
+                                                       gcvCORE_3D_1_ID,
+                                                       0x00664,
+                                                       &address));
+
+                /* Test if address is inside the last WAIT/LINK sequence. */
+                if ((address >= Hardware->lastWaitLink)
+                &&  (address <= Hardware->lastWaitLink + 40)
+                )
+                {
+                    /* FE is in last WAIT/LINK and the pipe is idle. */
+                    /* *IsIdle = *IsIdle || gcvTRUE; */
+                }
+                else
+                {
+                    /* FE is not in WAIT/LINK yet. */
+                    *IsIdle = gcvFALSE;
+                }
+            }
+        }
+
+#endif
+        /* update idle register value. */
+        *RegData3D1= idle;
+
     }
 
     /* Success. */

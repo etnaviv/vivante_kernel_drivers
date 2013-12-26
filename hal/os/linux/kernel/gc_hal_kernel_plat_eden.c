@@ -19,6 +19,8 @@ extern void gc3d_pwr(PARAM_TYPE_PWR);
 extern void gc2d_pwr(PARAM_TYPE_PWR);
 #define GC2D_PWR    gc2d_pwr
 
+int eden_gpu_clk_setrate(struct gc_iface *iface, unsigned long rate_khz);
+
 /**
  * gc3d shader definition
  */
@@ -26,7 +28,7 @@ static struct gc_ops gc3dsh_ops = {
     .init       = gpu_lock_init_dft,
     .enableclk  = gpu_clk_enable_dft,
     .disableclk = gpu_clk_disable_dft,
-    .setclkrate = gpu_clk_setrate_dft,
+    .setclkrate = eden_gpu_clk_setrate,
     .getclkrate = gpu_clk_getrate_dft,
 };
 
@@ -60,7 +62,7 @@ static struct gc_ops gc3d_ops = {
     .init       = gpu_lock_init_dft,
     .enableclk  = gpu_clk_enable_dft,
     .disableclk = gpu_clk_disable_dft,
-    .setclkrate = gpu_clk_setrate_dft,
+    .setclkrate = eden_gpu_clk_setrate,
     .getclkrate = gpu_clk_getrate_dft,
     .pwrops     = __PLAT_APINAME(gc3d_pwr_ops),
 };
@@ -96,7 +98,7 @@ static struct gc_ops gc2d_ops = {
     .init       = gpu_lock_init_dft,
     .enableclk  = gpu_clk_enable_dft,
     .disableclk = gpu_clk_disable_dft,
-    .setclkrate = gpu_clk_setrate_dft,
+    .setclkrate = eden_gpu_clk_setrate,
     .getclkrate = gpu_clk_getrate_dft,
     .pwrops     = __PLAT_APINAME(gc2d_pwr_ops),
 };
@@ -113,5 +115,21 @@ struct gc_iface *gc_ifaces[] = {
     [gcvCORE_SH]    = &gc3dsh_iface,
     gcvNULL,
 };
+
+int eden_gpu_clk_setrate(struct gc_iface *iface, unsigned long rate_khz)
+{
+    int ret = 0;
+
+#if MRVL_DFC_JUMP_HI_INDIRECT
+    if(rate_khz > 312000)
+    {
+        gpu_clk_setrate_dft(iface, 312000);
+    }
+#endif
+
+    ret = gpu_clk_setrate_dft(iface, rate_khz);
+
+    return ret;
+}
 
 #endif

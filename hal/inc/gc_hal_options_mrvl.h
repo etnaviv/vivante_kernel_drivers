@@ -14,6 +14,10 @@
 #ifndef __gc_hal_options_mrvl_h_
 #define __gc_hal_options_mrvl_h_
 
+#if (defined ANRDOID || defined LINUX || defined X11)
+#include <linux/version.h>
+#endif
+
 /********************************************************************************\
 ************************* MRVL Macro Definition *************************************
 \********************************************************************************/
@@ -22,7 +26,6 @@
 
 /* Use pmem flag */
 #if (defined ANDROID || defined X11) && !defined(__QNXNTO__)
-#include <linux/version.h>
 #define MRVL_VIDEO_MEMORY_USE_PMEM              1
 #define MRVL_PMEM_MINOR_FLAG                    1
 
@@ -384,6 +387,11 @@
 #define MRVL_DISABLE_TEXTURE_YUV_ASSEMBLER 1
 #endif
 
+
+#define MRVL_OLD_FLUSHCACHE                   0
+
+#define MRVL_GC_FLUSHCACHE_PFN                1
+
 /*
 *  Definitions for vendor, renderer and version strings
 */
@@ -393,7 +401,7 @@
 /* @Ziyi: If any change happened between these 2 comments please contact zyxu@marvell.com, Thanks. */
 /* #################### [START ==DO NOT CHANGE THIS MARCRO== START] #################### */
 
-#define _GC_VERSION_STRING_                     "GC version eden-kk44-bringup"
+#define _GC_VERSION_STRING_                     "GC version eden-kk44-bringup-r2"
 
 /* Do not align u/v stride to 16 */
 #define VIVANTE_ALIGN_UVSTRIDE                  0
@@ -401,4 +409,9 @@
 /* Enable single layer RGB bypass in HWC-GCU */
 #define RGB_BYPASS                              0
 
+/*
+    Disable 2D block size setting
+        for adir get bad performance with this on.
+*/
+#define DISABLE_2D_BLOCK_SIZE_SETTING           1
 #endif /* __gc_hal_options_mrvl_h_*/

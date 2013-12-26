@@ -129,7 +129,7 @@ typedef struct _gcsUSER_MAPPING
     gcsUSER_MAPPING_PTR         next;
 
     /* Physical address of this mapping. */
-    gctUINT32                   physical;
+    gctUINTPTR_T                physical;
 
     /* Logical address of this mapping. */
     gctPOINTER                  logical;
@@ -985,7 +985,7 @@ _UnmapUserLogical(
 gceSTATUS
 _QueryProcessPageTable(
     IN gctPOINTER Logical,
-    OUT gctUINT32 * Address
+    OUT gctUINTPTR_T * Address
     )
 {
     spinlock_t *lock;
@@ -2949,7 +2949,7 @@ gceSTATUS
 gckOS_GetPhysicalAddress(
     IN gckOS Os,
     IN gctPOINTER Logical,
-    OUT gctUINT32 * Address
+    OUT gctUINTPTR_T * Address
     )
 {
     gceSTATUS status;
@@ -3075,7 +3075,7 @@ _ConvertLogical2Physical(
     IN gctPOINTER Logical,
     IN gctUINT32 ProcessID,
     IN PLINUX_MDL Mdl,
-    OUT gctUINT32_PTR Physical
+    OUT gctUINTPTR_T * Physical
     )
 {
     gctINT8_PTR base, vBase;
@@ -3096,7 +3096,7 @@ _ConvertLogical2Physical(
         if (Mdl->dmaHandle != 0)
         {
             /* The memory was from coherent area. */
-            *Physical = (gctUINT32) Mdl->dmaHandle + offset;
+            *Physical = (gctUINTPTR_T) Mdl->dmaHandle + offset;
         }
         else if (Mdl->pagedMem && !Mdl->contiguous)
         {
@@ -3105,7 +3105,7 @@ _ConvertLogical2Physical(
         }
         else
         {
-            *Physical = gcmPTR2INT(virt_to_phys(base)) + offset;
+            *Physical = (gctUINTPTR_T)(virt_to_phys(base)) + offset;
         }
 
         return gcvSTATUS_OK;
@@ -3119,7 +3119,7 @@ _ConvertLogical2Physical(
         )
         {
             *Physical = userMap->physical
-                      + (gctUINT32) ((gctINT8_PTR) Logical - userMap->start);
+                      + (gctUINTPTR_T) ((gctINT8_PTR) Logical - userMap->start);
 
             return gcvSTATUS_OK;
         }
@@ -3141,7 +3141,7 @@ _ConvertLogical2Physical(
             if (Mdl->dmaHandle != 0)
             {
                 /* The memory was from coherent area. */
-                *Physical = (gctUINT32) Mdl->dmaHandle + offset;
+                *Physical = (gctUINTPTR_T) Mdl->dmaHandle + offset;
             }
             else if (Mdl->pagedMem && !Mdl->contiguous)
             {
@@ -3149,7 +3149,7 @@ _ConvertLogical2Physical(
             }
             else
             {
-                *Physical = page_to_phys(Mdl->u.contiguousPages) + offset;
+                *Physical = (gctUINTPTR_T)page_to_phys(Mdl->u.contiguousPages) + offset;
             }
 
             return gcvSTATUS_OK;
@@ -3188,7 +3188,7 @@ gckOS_GetPhysicalAddressProcess(
     IN gckOS Os,
     IN gctPOINTER Logical,
     IN gctUINT32 ProcessID,
-    OUT gctUINT32 * Address
+    OUT gctUINTPTR_T * Address
     )
 {
     PLINUX_MDL mdl;
@@ -6728,7 +6728,6 @@ OnError:
             gctUINT32 data;
             get_user(data, (gctUINT32*)((memory & PAGE_MASK) + i * PAGE_SIZE));
 #endif
-
             /* Flush(clean) the data cache. */
             gcmkONERROR(gckOS_CacheFlush(Os, _GetProcessID(), gcvNULL,
                              page_to_phys(pages[i]),
@@ -7364,7 +7363,7 @@ _HandleCache(
     IN gckOS Os,
     IN gctUINT32 ProcessID,
     IN gctPHYS_ADDR Handle,
-    IN gctUINT32 Physical,
+    IN gctUINTPTR_T Physical,
     IN gctPOINTER Logical,
     IN gctSIZE_T Bytes,
     IN enum dma_data_direction Dir
@@ -7393,7 +7392,7 @@ _HandleCache(
     )
     {
         /* Video Memory or contiguous virtual memory */
-        gcmkONERROR(gckOS_GetPhysicalAddress(Os, Logical, (gctUINT32*)&paddr));
+        gcmkONERROR(gckOS_GetPhysicalAddress(Os, Logical, (gctUINTPTR_T*)&paddr));
         dma_sync_single_for_device(
                   gcvNULL,
                   (dma_addr_t)paddr,
@@ -7413,7 +7412,7 @@ _HandleCache(
                 vaddr + PAGE_SIZE * i,
                 ProcessID,
                 (PLINUX_MDL)Handle,
-                (gctUINT32*)&paddr
+                (gctUINTPTR_T*)&paddr
                 ));
 
             dma_sync_single_for_device(
@@ -7587,7 +7586,7 @@ gckOS_CacheClean(
     gcmkVERIFY_ARGUMENT(Bytes > 0);
 
 #if !gcdCACHE_FUNCTION_UNIMPLEMENTED
-#ifdef CONFIG_ARM
+#if (defined CONFIG_ARM) || (defined CONFIG_ARM64)
 # if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0))
 
     _HandleCache(Os, ProcessID, Handle, Physical, Logical, Bytes, DMA_TO_DEVICE);
@@ -7677,7 +7676,7 @@ gckOS_CacheInvalidate(
     gcmkVERIFY_ARGUMENT(Bytes > 0);
 
 #if !gcdCACHE_FUNCTION_UNIMPLEMENTED
-#ifdef CONFIG_ARM
+#if (defined CONFIG_ARM) || (defined CONFIG_ARM64)
 
 # if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0))
 
@@ -7750,7 +7749,7 @@ gckOS_CacheFlush(
     IN gckOS Os,
     IN gctUINT32 ProcessID,
     IN gctPHYS_ADDR Handle,
-    IN gctUINT32 Physical,
+    IN gctUINTPTR_T Physical,
     IN gctPOINTER Logical,
     IN gctSIZE_T Bytes
     )
@@ -7764,7 +7763,7 @@ gckOS_CacheFlush(
     gcmkVERIFY_ARGUMENT(Bytes > 0);
 
 #if !gcdCACHE_FUNCTION_UNIMPLEMENTED
-#ifdef CONFIG_ARM
+#if (defined CONFIG_ARM) || (defined CONFIG_ARM64)
 # if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0))
 
     _HandleCache(Os, ProcessID, Handle, Physical, Logical, Bytes, DMA_BIDIRECTIONAL);
@@ -9123,13 +9122,13 @@ gckOS_WaitSignal(
     {
         /* Convert wait to milliseconds. */
 #if gcdDETECT_TIMEOUT
-        gctINT timeout = (Wait == gcvINFINITE)
+        gctLONG timeout = (Wait == gcvINFINITE)
             ? gcdINFINITE_TIMEOUT * HZ / 1000
             : Wait * HZ / 1000;
 
         gctUINT complained = 0;
 #else
-        gctINT timeout = (Wait == gcvINFINITE)
+        gctLONG timeout = (Wait == gcvINFINITE)
             ? MAX_SCHEDULE_TIMEOUT
             : Wait * HZ / 1000;
 #endif
@@ -10054,7 +10053,7 @@ _GetGcClock(
 
         if (IS_ERR(tmp))
         {
-            gcmkPRINT("%4dL: clk get error: %d\n", __LINE__, PTR_ERR(tmp));
+            gcmkPRINT("%4dL: clk get error: %ld\n", __LINE__, PTR_ERR(tmp));
             return gcvSTATUS_GENERIC_IO;
         }
 
@@ -11092,8 +11091,9 @@ gckOS_QueryRegisterStats(
     }
     else
     {
-        gctUINT32 idle[gcdMAX_GPU_COUNT];
-        gctBOOL   isIdle[gcdMAX_GPU_COUNT];
+        gctUINT32 idle;
+        gctUINT32 idle3D1;
+        gctBOOL   isIdle;
 
         for (i = 0; i < gcdMAX_GPU_COUNT; i++)
         {
@@ -11101,9 +11101,12 @@ gckOS_QueryRegisterStats(
 
             if (kernel[i] != gcvNULL)
             {
-                gcmkVERIFY_OK(gckHARDWARE_QueryIdleEx(kernel[i]->hardware, &idle[i], &isIdle[i]));
-                gcmkPRINT("idle register: Core[%d][0x%02X][%s]\n",
-                           i, idle[i], (gcvTRUE == isIdle[i])?"idle":"busy");
+                gcmkVERIFY_OK(gckHARDWARE_QueryIdleEx(kernel[i]->hardware,
+                                                      &idle,
+                                                      &idle3D1,
+                                                      &isIdle));
+                gcmkPRINT("idle register: Core[%d][0x%02X][0x%02X][%s]\n",
+                           i, idle, idle3D1, (gcvTRUE == isIdle)?"idle":"busy");
             }
         }
     }
@@ -11194,6 +11197,8 @@ gckOS_GPUFreqNotifierCallChain(
 ******************************** Flush Cache **********************************
 \******************************************************************************/
 # if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0))
+
+#if MRVL_OLD_FLUSHCACHE
 gceSTATUS gckOS_FlushCache(
     IN gctSIZE_T start,
     IN gctSIZE_T length,
@@ -11202,10 +11207,24 @@ gceSTATUS gckOS_FlushCache(
 {
     return gcvSTATUS_OK;
 }
+#else
+gceSTATUS
+gckOS_FlushCache(
+    IN gckOS Os,
+    IN gceCORE Core,
+    IN gctSIZE_T start,
+    IN gctSIZE_T length,
+    IN gctINT direction
+    )
+{
+    return gcvSTATUS_OK;
+}
+#endif
 
 # else
 
 #define BMM_HAS_PTE_PAGE
+#if MRVL_OLD_FLUSHCACHE
 static gctSIZE_T uva_to_pa(struct mm_struct *mm, gctSIZE_T addr)
 {
     gctSIZE_T ret = 0UL;
@@ -11343,6 +11362,226 @@ gceSTATUS gckOS_FlushCache(
 
     return gcvSTATUS_OK;
 }
+
+#else
+
+gceSTATUS gckOS_FlushCache(
+    IN gckOS Os,
+    IN gceCORE Core,
+    IN gctSIZE_T Memory,
+    IN gctSIZE_T length,
+    IN gctINT direction
+    )
+{
+    gctSIZE_T pageCount, i;
+    gctUINT32 physical = ~0U;
+    gctUINTPTR_T start, end, memory;
+    gctINT result = 0;
+    gceSTATUS status;
+    gctBOOL isLocked = gcvFALSE;
+    gctBOOL isStartChaDir = gcvFALSE;
+    gctBOOL isEndChaDir = gcvFALSE;
+
+    struct page **pages = gcvNULL;
+    unsigned long pfn;
+    gcmkHEADER_ARG("Memory=0x%x length=%d direction=0x%x ", Memory, length, direction);
+    do
+    {
+            memory = (gctUINTPTR_T) Memory;
+            /* Get the number of required pages. */
+            end = (memory + length + PAGE_SIZE - 1) >> PAGE_SHIFT;
+            start = memory >> PAGE_SHIFT;
+            pageCount = end - start;
+
+            /*If the start or end of address isn't page align, GC would get the align address,
+                    which would enlarge the scope of buffer, for the invalidate flush operation,
+                    it is risk for  needless flsuh buffer when do invalidate operation,
+                    it is safe for needless flush buffer  when do DMA_BIDIRECTIONAL flush,*/
+            isStartChaDir  = ((memory&(~PAGE_MASK)))&&(direction==DMA_FROM_DEVICE);
+            isEndChaDir    = ((memory+length)&(~PAGE_MASK))&&(direction==DMA_FROM_DEVICE);
+
+            /* Overflow. */
+            if ((memory + length) < memory)
+            {
+                gcmkFOOTER_ARG("status=%d", gcvSTATUS_INVALID_ARGUMENT);
+                return gcvSTATUS_INVALID_ARGUMENT;
+            }
+
+
+            /* Allocate the array of page addresses. */
+            pages = (struct page **)kmalloc(pageCount * sizeof(struct page *), GFP_KERNEL | __GFP_NOWARN);
+
+            if (pages == gcvNULL)
+            {
+                status = gcvSTATUS_OUT_OF_MEMORY;
+                break;
+            }
+
+            MEMORY_MAP_LOCK(Os);
+            isLocked = gcvTRUE;
+            {
+                /* Get the user pages. */
+                down_read(&current->mm->mmap_sem);
+                result = get_user_pages(current,
+                        current->mm,
+                        memory & PAGE_MASK,
+                        pageCount,
+                        1,
+                        0,
+                        pages,
+                        gcvNULL
+                        );
+                up_read(&current->mm->mmap_sem);
+
+                if (result <=0 || result < pageCount)
+                {
+                    struct vm_area_struct *vma;
+
+                    /* Free the page table. */
+                    if (pages != gcvNULL)
+                    {
+                        /* Release the pages if any. */
+                        if (result > 0)
+                        {
+                            for (i = 0; i < result; i++)
+                            {
+                                if (pages[i] == gcvNULL)
+                                {
+                                    break;
+                                }
+
+                                page_cache_release(pages[i]);
+                            }
+                        }
+
+                        gckOS_ZeroMemory(pages, pageCount * sizeof(struct page *));
+                    }
+
+                    vma = find_vma(current->mm, memory);
+
+                    if (vma && (vma->vm_flags & VM_PFNMAP) )
+                    {
+                        gctINT ret;
+                        start = memory & PAGE_MASK;
+                        ret = follow_pfn(vma, start, &pfn);
+                        if(ret)
+                        {
+                            gcmkONERROR(gcvSTATUS_OUT_OF_RESOURCES);
+                        }
+
+                        pages[0] = pfn_to_page(pfn);
+                        get_page(pages[0]);
+                        physical = (pfn << PAGE_SHIFT) | (memory & ~PAGE_MASK);
+
+                        if (((Os->device->kernels[Core]->hardware->mmuVersion == 0)
+                            && !((physical - Os->device->baseAddress) & 0x80000000))
+                            || (Os->device->kernels[Core]->hardware->mmuVersion != 0) )
+                        {
+#if MRVL_GC_FLUSHCACHE_PFN
+                            ;
+#else
+                            kfree(pages);
+                            pages = gcvNULL;
+                            status = gcvSTATUS_OK;
+                            break;
+
+#endif
+                        }
+                        else
+                        {
+                            gcmkONERROR(gcvSTATUS_OUT_OF_RESOURCES);
+                        }
+
+                        for (i = 1, start += PAGE_SIZE; i < pageCount; ++i, start += PAGE_SIZE)
+                        {
+                            follow_pfn(vma, start, &pfn);
+                            if(ret)
+                            {
+                                gcmkONERROR(gcvSTATUS_OUT_OF_RESOURCES);
+                            }
+                            pages[i] = pfn_to_page(pfn);
+                            get_page(pages[i]);
+                        }
+                    }
+                    else
+                    {
+                        gcmkONERROR(gcvSTATUS_OUT_OF_RESOURCES);
+                    }
+                }
+            }
+
+            if (pages)
+            {
+
+                for (i = 0; i < pageCount; i++)
+                {
+
+                   if(pages[i] != gcvNULL)
+                   {
+                       if(i==0&&isStartChaDir)
+                       {
+                            __dma_page_cpu_to_dev(pages[i], 0, PAGE_SIZE, DMA_BIDIRECTIONAL);
+                       }
+                       else if(i!=0&&i==pageCount-1&&isEndChaDir)
+                       {
+                            __dma_page_cpu_to_dev(pages[i], 0, PAGE_SIZE, DMA_BIDIRECTIONAL);
+                       }
+                       else
+                       {
+                            __dma_page_cpu_to_dev(pages[i], 0, PAGE_SIZE, DMA_BIDIRECTIONAL);
+                       }
+
+                       page_cache_release(pages[i]);
+                  }
+
+                }
+
+                kfree(pages);
+                pages = gcvNULL;
+            }
+            else if(physical != ~0U)
+            {
+                gckOS_Log(_GFX_LOG_NOTIFY_, ">>>>WARN gckOS_FlushCache physical patch should not come in >>>>");
+            }
+            status = gcvSTATUS_OK;
+    }while (gcvFALSE);
+OnError:
+
+    if (gcmIS_ERROR(status))
+    {
+        /* Release page array. */
+        if (result > 0 && pages != gcvNULL)
+        {
+            for (i = 0; i < result; i++)
+            {
+                if (pages[i] == gcvNULL)
+                {
+                    break;
+                }
+                page_cache_release(pages[i]);
+            }
+        }
+
+        if (pages != gcvNULL)
+        {
+            /* Free the page table. */
+            kfree(pages);
+            pages = gcvNULL;
+        }
+
+    }
+    if(isLocked)
+    {
+        MEMORY_MAP_UNLOCK(Os);
+    }
+    /* Return the status. */
+    gcmkFOOTER();
+
+    return status;
+}
+
+#endif
+
 # endif
 
 /******************************************************************************\

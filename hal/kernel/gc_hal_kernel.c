@@ -113,7 +113,7 @@ _MapCommandBuffer(
 {
     gceSTATUS status;
     gctUINT32 i;
-    gctUINT32 physical;
+    gctPHYS_ADDR physical;
     gckMMU mmu;
 
     gcmkONERROR(gckKERNEL_GetProcessMMU(Kernel, &mmu));
@@ -1348,7 +1348,7 @@ gckKERNEL_Dispatch(
     gcskSECURE_CACHE_PTR cache;
     gctPOINTER logical;
 #endif
-    gctUINT32 paddr = gcvINVALID_ADDRESS;
+    gctUINTPTR_T paddr = gcvINVALID_ADDRESS;
 #if !USE_NEW_LINUX_SIGNAL
     gctSIGNAL   signal;
 #endif
@@ -2182,7 +2182,7 @@ gckKERNEL_Dispatch(
             {
                 /* If memory is contiguous, get physical address. */
                 gcmkONERROR(gckOS_GetPhysicalAddress(
-                    Kernel->os, logical, (gctUINT32*)&paddr));
+                    Kernel->os, logical, (gctUINTPTR_T*)&paddr));
             }
         }
 
@@ -2342,9 +2342,18 @@ gckKERNEL_Dispatch(
 
     case gcvHAL_FLUSH_CACHE:
         /* Flush Cache --- Port from bmm-lib module */
+#if MRVL_OLD_FLUSHCACHE
         gcmkONERROR(gckOS_FlushCache(Interface->u.CacheFlush.vaddr,
                                      Interface->u.CacheFlush.offset,
                                      Interface->u.CacheFlush.dir));
+#else
+        gcmkONERROR(gckOS_FlushCache(Kernel->os,
+                                     Kernel->core,
+                                     Interface->u.CacheFlush.vaddr,
+                                     Interface->u.CacheFlush.offset,
+                                     Interface->u.CacheFlush.dir));
+#endif
+
         break;
 
     case gcvHAL_SET_FSCALE_VALUE:

@@ -120,7 +120,11 @@ extern "C" {
 ******************************** Useful Macro *********************************
 \******************************************************************************/
 
+#ifdef CONFIG_ARM64
+#define gcvINVALID_ADDRESS          ~0LLU
+#else
 #define gcvINVALID_ADDRESS          ~0U
+#endif
 
 #define gcmGET_PRE_ROTATION(rotate) \
     ((rotate) & (~(gcvSURF_POST_FLIP_X | gcvSURF_POST_FLIP_Y)))
@@ -502,7 +506,7 @@ gceSTATUS
 gckOS_GetPhysicalAddress(
     IN gckOS Os,
     IN gctPOINTER Logical,
-    OUT gctUINT32 * Address
+    OUT gctUINTPTR_T * Address
     );
 
 /* Get the physical address of a corresponding logical address. */
@@ -511,7 +515,7 @@ gckOS_GetPhysicalAddressProcess(
     IN gckOS Os,
     IN gctPOINTER Logical,
     IN gctUINT32 ProcessID,
-    OUT gctUINT32 * Address
+    OUT gctUINTPTR_T * Address
     );
 
 /* Map physical memory. */
@@ -1403,7 +1407,7 @@ gckOS_CacheFlush(
     gckOS Os,
     gctUINT32 ProcessID,
     gctPHYS_ADDR Handle,
-    gctUINT32 Physical,
+    gctUINTPTR_T Physical,
     gctPOINTER Logical,
     gctSIZE_T Bytes
     );
@@ -1418,6 +1422,7 @@ gckOS_CacheInvalidate(
     gctSIZE_T Bytes
     );
 
+#if MRVL_OLD_FLUSHCACHE
 /* Flush Cache */
 gceSTATUS
 gckOS_FlushCache(
@@ -1425,6 +1430,16 @@ gckOS_FlushCache(
     IN gctSIZE_T length,
     IN gctINT direction
     );
+#else
+gceSTATUS
+gckOS_FlushCache(
+    IN gckOS Os,
+    IN gceCORE Core,
+    IN gctSIZE_T start,
+    IN gctSIZE_T length,
+    IN gctINT direction
+    );
+#endif
 
 /******************************************************************************\
 ** Debug Support

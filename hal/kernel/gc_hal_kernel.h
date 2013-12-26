@@ -949,7 +949,7 @@ struct _gckVIDMEM
     gckOS                       os;
 
     /* Information for this video memory heap. */
-    gctUINT32                   baseAddress;
+    gctUINTPTR_T                baseAddress;
     gctSIZE_T                   bytes;
     gctSIZE_T                   freeBytes;
 
@@ -1219,6 +1219,7 @@ gceSTATUS
 gckHARDWARE_QueryIdleEx(
     IN gckHARDWARE Hardware,
     OUT gctUINT32_PTR RegData,
+    OUT gctUINT32_PTR RegData3D1,
     OUT gctBOOL_PTR IsIdle
     );
 
