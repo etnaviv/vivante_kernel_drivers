@@ -287,11 +287,7 @@
         -- Protect register access when DFC to workaround Eden Z1 GC DFC issue
 */
 #if MRVL_CONFIG_ENABLE_GPUFREQ && (MRVL_PLATFORM_TTD2)
-    #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0))
-        #define MRVL_DFC_PROTECT_REG_ACCESS     0
-    #else
-        #define MRVL_DFC_PROTECT_REG_ACCESS     1
-    #endif
+#define MRVL_DFC_PROTECT_REG_ACCESS             1
 #else
 #define MRVL_DFC_PROTECT_REG_ACCESS             0
 #endif
@@ -401,7 +397,7 @@
 /* @Ziyi: If any change happened between these 2 comments please contact zyxu@marvell.com, Thanks. */
 /* #################### [START ==DO NOT CHANGE THIS MARCRO== START] #################### */
 
-#define _GC_VERSION_STRING_                     "GC version eden-kk44-bringup-r2"
+#define _GC_VERSION_STRING_                     "GC version eden-kk44-bringup-r3"
 
 /* Do not align u/v stride to 16 */
 #define VIVANTE_ALIGN_UVSTRIDE                  0

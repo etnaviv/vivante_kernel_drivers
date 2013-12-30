@@ -15,7 +15,6 @@
 #if MRVL_CONFIG_ENABLE_GPUFREQ
 #if MRVL_PLATFORM_TTD2
 #include <linux/clk.h>
-#include <plat/clock.h>
 #include <linux/err.h>
 
 #define GPUFREQ_FREQ_TABLE_MAX_NUM  10
