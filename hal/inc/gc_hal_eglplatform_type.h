@@ -1,6 +1,6 @@
 /****************************************************************************
 *
-*    Copyright 2012 - 2013 Vivante Corporation, Sunnyvale, California.
+*    Copyright 2012 - 2014 Vivante Corporation, Sunnyvale, California.
 *    All Rights Reserved.
 *
 *    Permission is hereby granted, free of charge, to any person obtaining
@@ -24,6 +24,7 @@
 *    SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 *
 *****************************************************************************/
+
 
 
 #ifndef __gc_hal_eglplatform_type_h_

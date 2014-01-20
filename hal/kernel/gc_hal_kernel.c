@@ -1,6 +1,6 @@
 /****************************************************************************
 *
-*    Copyright (c) 2005 - 2013 by Vivante Corp.  All rights reserved.
+*    Copyright (c) 2005 - 2014 by Vivante Corp.  All rights reserved.
 *
 *    The material in this file is confidential and contains trade secrets
 *    of Vivante Corporation. This is proprietary information owned by
@@ -9,6 +9,7 @@
 *    without the express written permission of Vivante Corporation.
 *
 *****************************************************************************/
+
 
 
 #include "gc_hal_kernel_precomp.h"
@@ -597,6 +598,9 @@ gckKERNEL_Destroy(
 
         /* Destroy id-pointer database mutex. */
         gcmkVERIFY_OK(gckOS_DeleteMutex(Kernel->os, Kernel->db->pointerDatabaseMutex));
+
+        /* Destroy the database. */
+        gcmkVERIFY_OK(gcmkOS_SAFE_FREE(Kernel->os, Kernel->db));
     }
 
 #if gcdENABLE_VG
@@ -759,8 +763,8 @@ gckKERNEL_AllocateLinearMemory(
                 gckVIDMEM_ConstructVirtual(Kernel, gcvFALSE, Bytes, &node));
 
             bytes = node->Virtual.bytes;
-            node->Virtual.surfType = Type;
-            gcmkVERIFY_OK(gckOS_UpdateVidMemUsage(Kernel->os, gcvTRUE, bytesAligned, node->Virtual.surfType));
+            node->Virtual.type = Type;
+            gcmkVERIFY_OK(gckOS_UpdateVidMemUsage(Kernel->os, gcvTRUE, bytesAligned, node->Virtual.type));
 
             /* Success. */
             break;
@@ -784,9 +788,8 @@ gckKERNEL_AllocateLinearMemory(
             if (gcmIS_SUCCESS(status) || forceContiguous == gcvTRUE)
             {
                 bytes = node->Virtual.bytes;
-                /* Save the surface type. */
-                node->Virtual.surfType = Type;
-                gcmkVERIFY_OK(gckOS_UpdateVidMemUsage(Kernel->os, gcvTRUE, bytesAligned, node->Virtual.surfType));
+                node->Virtual.type = Type;
+                gcmkVERIFY_OK(gckOS_UpdateVidMemUsage(Kernel->os, gcvTRUE, bytesAligned, node->Virtual.type));
 
                 /* Memory allocated. */
                 break;
@@ -813,11 +816,11 @@ gckKERNEL_AllocateLinearMemory(
                     /* Memory allocated. */
                     node->VidMem.pool = pool;
                     bytes = node->VidMem.bytes;
-                    node->VidMem.surfType = Type;
+                    node->VidMem.type = Type;
 
                     /* Update video memory usage. */
                     gcmkVERIFY_OK(gckOS_UpdateVidMemUsage(Kernel->os, gcvTRUE, node->VidMem.bytes, gcvSURF_NUM_TYPES));
-                    gcmkVERIFY_OK(gckOS_UpdateVidMemUsage(Kernel->os, gcvTRUE, node->VidMem.bytes, node->VidMem.surfType));
+                    gcmkVERIFY_OK(gckOS_UpdateVidMemUsage(Kernel->os, gcvTRUE, node->VidMem.bytes, node->VidMem.type));
                     break;
                 }
             }
@@ -1020,7 +1023,7 @@ gckKERNEL_LockVideoMemory(
     )
 {
     gceSTATUS status;
-    gckVIDMEM_NODE nodeObject;
+    gckVIDMEM_NODE nodeObject = gcvNULL;
     gcuVIDMEM_NODE_PTR node = gcvNULL;
     gctBOOL locked = gcvFALSE;
     gctBOOL asynchronous;
@@ -1129,6 +1132,11 @@ OnError:
         }
     }
 
+    if (nodeObject != gcvNULL)
+    {
+        gckVIDMEM_NODE_Dereference(Kernel, nodeObject);
+    }
+
     gcmkFOOTER();
     return status;
 }
@@ -1211,20 +1219,6 @@ gckKERNEL_UnlockVideoMemory(
                     bytes));
     }
 #endif
-
-    if (Interface->u.UnlockVideoMemory.asynchroneous == gcvFALSE)
-    {
-        /* There isn't a event to unlock this node, remove record now */
-        gcmkONERROR(
-                gckKERNEL_RemoveProcessDB(Kernel,
-                    ProcessID, gcvDB_VIDEO_MEMORY_LOCKED,
-                    gcmUINT64_TO_PTR(Interface->u.UnlockVideoMemory.node)));
-
-        gckVIDMEM_HANDLE_Dereference(Kernel, ProcessID,
-                (gctUINT32) Interface->u.UnlockVideoMemory.node);
-
-        gckVIDMEM_NODE_Dereference(Kernel, nodeObject);
-    }
 
     gcmkFOOTER_NO();
     return gcvSTATUS_OK;
@@ -1625,13 +1619,56 @@ gckKERNEL_Dispatch(
 
     case gcvHAL_EVENT_COMMIT:
         /* Commit an event queue. */
+#if gcdMULTI_GPU
+        if (Interface->u.Event.gpuMode == gcvMULTI_GPU_MODE_INDEPENDENT)
+        {
+            gcmkONERROR(
+                gckEVENT_Commit(Kernel->eventObj,
+                                gcmUINT64_TO_PTR(Interface->u.Event.queue),
+                                Interface->u.Event.chipEnable));
+        }
+        else
+        {
+            gcmkONERROR(
+                gckEVENT_Commit(Kernel->eventObj,
+                                gcmUINT64_TO_PTR(Interface->u.Event.queue),
+                                gcvCORE_3D_ALL_MASK));
+        }
+#else
         gcmkONERROR(
             gckEVENT_Commit(Kernel->eventObj,
                             gcmUINT64_TO_PTR(Interface->u.Event.queue)));
+#endif
         break;
 
     case gcvHAL_COMMIT:
         /* Commit a command and context buffer. */
+#if gcdMULTI_GPU
+        if (Interface->u.Commit.gpuMode == gcvMULTI_GPU_MODE_INDEPENDENT)
+        {
+            gcmkONERROR(
+                gckCOMMAND_Commit(Kernel->command,
+                                  Interface->u.Commit.context ?
+                                      gcmNAME_TO_PTR(Interface->u.Commit.context) : gcvNULL,
+                                  gcmUINT64_TO_PTR(Interface->u.Commit.commandBuffer),
+                                  gcmUINT64_TO_PTR(Interface->u.Commit.delta),
+                                  gcmUINT64_TO_PTR(Interface->u.Commit.queue),
+                                  processID,
+                                  Interface->u.Commit.chipEnable));
+        }
+        else
+        {
+            gcmkONERROR(
+                gckCOMMAND_Commit(Kernel->command,
+                                  Interface->u.Commit.context ?
+                                      gcmNAME_TO_PTR(Interface->u.Commit.context) : gcvNULL,
+                                  gcmUINT64_TO_PTR(Interface->u.Commit.commandBuffer),
+                                  gcmUINT64_TO_PTR(Interface->u.Commit.delta),
+                                  gcmUINT64_TO_PTR(Interface->u.Commit.queue),
+                                  processID,
+                                  gcvCORE_3D_ALL_MASK));
+        }
+#else
         gcmkONERROR(
             gckCOMMAND_Commit(Kernel->command,
                               Interface->u.Commit.context ?
@@ -1640,11 +1677,17 @@ gckKERNEL_Dispatch(
                               gcmUINT64_TO_PTR(Interface->u.Commit.delta),
                               gcmUINT64_TO_PTR(Interface->u.Commit.queue),
                               processID));
+#endif
+
         break;
 
     case gcvHAL_STALL:
         /* Stall the command queue. */
+#if gcdMULTI_GPU
+        gcmkONERROR(gckCOMMAND_Stall(Kernel->command, gcvFALSE, gcvCORE_3D_ALL_MASK));
+#else
         gcmkONERROR(gckCOMMAND_Stall(Kernel->command, gcvFALSE));
+#endif
         break;
 
     case gcvHAL_MAP_USER_MEMORY:
@@ -2283,9 +2326,6 @@ gckKERNEL_Dispatch(
         /* Only if not support multi-core */
         Interface->u.ChipInfo.count = 1;
         Interface->u.ChipInfo.types[0] = Kernel->hardware->type;
-#if gcdMULTI_GPU
-        Interface->u.ChipInfo.gpuCoreCount = Kernel->hardware->identity.gpuCoreCount;
-#endif
         break;
 
     case gcvHAL_ATTACH:
@@ -2298,6 +2338,15 @@ gckKERNEL_Dispatch(
 
         Interface->u.Attach.stateCount = bytes;
         Interface->u.Attach.context = gcmPTR_TO_NAME(context);
+
+        if (Interface->u.Attach.map == gcvTRUE)
+        {
+            gcmkVERIFY_OK(
+                gckCONTEXT_MapBuffer(context,
+                                     Interface->u.Attach.physicals,
+                                     Interface->u.Attach.logicals,
+                                     &Interface->u.Attach.bytes));
+        }
 
         gcmkVERIFY_OK(
             gckKERNEL_AddProcessDB(Kernel,
@@ -2635,7 +2684,11 @@ gckKERNEL_AttachProcessEx(
         if (Kernel->vg == gcvNULL)
 #endif
         {
+#if gcdMULTI_GPU
+            status = gckEVENT_Submit(Kernel->eventObj, gcvTRUE, gcvFALSE, gcvCORE_3D_ALL_MASK);
+#else
             status = gckEVENT_Submit(Kernel->eventObj, gcvTRUE, gcvFALSE);
+#endif
 
             if (status == gcvSTATUS_INTERRUPTED && Kernel->eventObj->submitTimer)
             {

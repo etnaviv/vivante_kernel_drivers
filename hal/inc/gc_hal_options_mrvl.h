@@ -115,7 +115,7 @@
 /*
  * Use common power/clock framework
  */
-#if (MRVL_PLATFORM_PXA1L88)
+#if (MRVL_PLATFORM_PXA1L88) || (MRVL_PLATFORM_TTD2)
 #define MRVL_ENABLE_COMMON_PWRCLK_FRAMEWORK     1
 #else
 #define MRVL_ENABLE_COMMON_PWRCLK_FRAMEWORK     0
@@ -339,7 +339,6 @@
 */
 #define MRVL_MMU_FLATMAP_2G_ADDRESS             1
 
-
 /*
     OPTION_ENABLE_GPUTEX
 
@@ -397,7 +396,7 @@
 /* @Ziyi: If any change happened between these 2 comments please contact zyxu@marvell.com, Thanks. */
 /* #################### [START ==DO NOT CHANGE THIS MARCRO== START] #################### */
 
-#define _GC_VERSION_STRING_                     "GC version eden-kk44-bringup-r3"
+#define _GC_VERSION_STRING_                     "GC version eden-kk44-alpha6-r2"
 
 /* Do not align u/v stride to 16 */
 #define VIVANTE_ALIGN_UVSTRIDE                  0
@@ -410,4 +409,10 @@
         for adir get bad performance with this on.
 */
 #define DISABLE_2D_BLOCK_SIZE_SETTING           1
+
+/* Enable NEON memcpy to replace default memcpy */
+#ifndef MRVL_ENABLE_GPUTEX_MEMCPY
+#define MRVL_ENABLE_GPUTEX_MEMCPY               1
+#endif
+
 #endif /* __gc_hal_options_mrvl_h_*/

@@ -1,6 +1,6 @@
 /****************************************************************************
 *
-*    Copyright (c) 2005 - 2013 by Vivante Corp.  All rights reserved.
+*    Copyright (c) 2005 - 2014 by Vivante Corp.  All rights reserved.
 *
 *    The material in this file is confidential and contains trade secrets
 *    of Vivante Corporation. This is proprietary information owned by
@@ -9,6 +9,7 @@
 *    without the express written permission of Vivante Corporation.
 *
 *****************************************************************************/
+
 
 
 #ifndef __gc_hal_h_
@@ -1090,16 +1091,6 @@ gckOS_CopyToUserData(
     IN gctPOINTER Pointer,
     IN gctSIZE_T Size
     );
-
-#ifdef __QNXNTO__
-/* Map user physical address. */
-gceSTATUS
-gckOS_MapUserPhysical(
-    IN gckOS Os,
-    IN gctPHYS_ADDR Phys,
-    OUT gctPOINTER * KernelPointer
-    );
-#endif
 
 gceSTATUS
 gckOS_SuspendInterrupt(
@@ -2304,6 +2295,16 @@ gckHARDWARE_End(
     IN OUT gctSIZE_T * Bytes
     );
 
+#if gcdMULTI_GPU
+gceSTATUS
+gckHARDWARE_ChipEnable(
+    IN gckHARDWARE Hardware,
+    IN gctPOINTER Logical,
+    IN gceCORE_3D_MASK ChipEnable,
+    IN OUT gctSIZE_T * Bytes
+    );
+#endif
+
 /* Add a NOP command in the command queue. */
 gceSTATUS
 gckHARDWARE_Nop(
@@ -2762,17 +2763,38 @@ gckEVENT_DestroyVirtualCommandBuffer(
     IN gceKERNEL_WHERE FromWhere
     );
 
+#if gcdMULTI_GPU
+gceSTATUS
+gckEVENT_Submit(
+    IN gckEVENT Event,
+    IN gctBOOL Wait,
+    IN gctBOOL FromPower,
+    IN gceCORE_3D_MASK ChipEnable
+    );
+#else
 gceSTATUS
 gckEVENT_Submit(
     IN gckEVENT Event,
     IN gctBOOL Wait,
     IN gctBOOL FromPower
     );
+#endif
+
+#if gcdMULTI_GPU
+gceSTATUS
+gckEVENT_Commit(
+    IN gckEVENT Event,
+    IN gcsQUEUE_PTR Queue,
+    IN gceCORE_3D_MASK ChipEnable
+    );
+#else
 gceSTATUS
 gckEVENT_Commit(
     IN gckEVENT Event,
     IN gcsQUEUE_PTR Queue
     );
+#endif
+
 /* Schedule a composition event. */
 gceSTATUS
 gckEVENT_Compose(
@@ -2847,7 +2869,19 @@ gckCOMMAND_Stop(
     IN gctBOOL FromRecovery
     );
 
+#if gcdMULTI_GPU
 /* Commit a buffer to the command queue. */
+gceSTATUS
+gckCOMMAND_Commit(
+    IN gckCOMMAND Command,
+    IN gckCONTEXT Context,
+    IN gcoCMDBUF CommandBuffer,
+    IN gcsSTATE_DELTA_PTR StateDelta,
+    IN gcsQUEUE_PTR EventQueue,
+    IN gctUINT32 ProcessID,
+    IN gceCORE_3D_MASK ChipEnable
+    );
+#else
 gceSTATUS
 gckCOMMAND_Commit(
     IN gckCOMMAND Command,
@@ -2857,6 +2891,8 @@ gckCOMMAND_Commit(
     IN gcsQUEUE_PTR EventQueue,
     IN gctUINT32 ProcessID
     );
+#endif
+
 /* Reserve space in the command buffer. */
 gceSTATUS
 gckCOMMAND_Reserve(
@@ -2874,11 +2910,21 @@ gckCOMMAND_Execute(
     );
 
 /* Stall the command queue. */
+#if gcdMULTI_GPU
+gceSTATUS
+gckCOMMAND_Stall(
+    IN gckCOMMAND Command,
+    IN gctBOOL FromPower,
+    IN gceCORE_3D_MASK ChipEnable
+    );
+#else
 gceSTATUS
 gckCOMMAND_Stall(
     IN gckCOMMAND Command,
     IN gctBOOL FromPower
     );
+#endif
+
 /* Attach user process. */
 gceSTATUS
 gckCOMMAND_Attach(
@@ -2942,6 +2988,15 @@ gceSTATUS
 gckMMU_AllocatePages(
     IN gckMMU Mmu,
     IN gctSIZE_T PageCount,
+    OUT gctPOINTER * PageTable,
+    OUT gctUINT32 * Address
+    );
+
+gceSTATUS
+gckMMU_AllocatePagesEx(
+    IN gckMMU Mmu,
+    IN gctSIZE_T PageCount,
+    IN gceSURF_TYPE Type,
     OUT gctPOINTER * PageTable,
     OUT gctUINT32 * Address
     );

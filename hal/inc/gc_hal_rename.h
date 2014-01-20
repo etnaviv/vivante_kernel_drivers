@@ -1,6 +1,6 @@
 /****************************************************************************
 *
-*    Copyright (c) 2005 - 2013 by Vivante Corp.  All rights reserved.
+*    Copyright (c) 2005 - 2014 by Vivante Corp.  All rights reserved.
 *
 *    The material in this file is confidential and contains trade secrets
 *    of Vivante Corporation. This is proprietary information owned by
@@ -9,6 +9,7 @@
 *    without the express written permission of Vivante Corporation.
 *
 *****************************************************************************/
+
 
 
 #ifndef __gc_hal_rename_h_
@@ -69,7 +70,6 @@
 #define gckOS_QueryNeedCopy             gcmHAL2D(gckOS_QueryNeedCopy)
 #define gckOS_CopyFromUserData          gcmHAL2D(gckOS_CopyFromUserData)
 #define gckOS_CopyToUserData            gcmHAL2D(gckOS_CopyToUserData)
-#define gckOS_MapUserPhysical           gcmHAL2D(gckOS_MapUserPhysical)
 #define gckOS_SuspendInterrupt          gcmHAL2D(gckOS_SuspendInterrupt)
 #define gckOS_ResumeInterrupt           gcmHAL2D(gckOS_ResumeInterrupt)
 #define gckOS_GetBaseAddress            gcmHAL2D(gckOS_GetBaseAddress)

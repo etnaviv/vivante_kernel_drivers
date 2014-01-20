@@ -1,6 +1,6 @@
 /****************************************************************************
 *
-*    Copyright (c) 2005 - 2013 by Vivante Corp.  All rights reserved.
+*    Copyright (c) 2005 - 2014 by Vivante Corp.  All rights reserved.
 *
 *    The material in this file is confidential and contains trade secrets
 *    of Vivante Corporation. This is proprietary information owned by
@@ -9,6 +9,7 @@
 *    without the express written permission of Vivante Corporation.
 *
 *****************************************************************************/
+
 
 
 #ifndef __gc_hal_types_h_
@@ -148,12 +149,30 @@ typedef gctUINT64 *             gctUINT64_PTR;
 
 typedef unsigned long           gctSIZE_T;
 typedef gctSIZE_T *             gctSIZE_T_PTR;
+typedef gctUINT32               gctTRACE;
 
 #ifdef __cplusplus
 #   define gcvNULL              0
 #else
 #   define gcvNULL              ((void *) 0)
 #endif
+
+#define gcvMAXINT8              0x7f
+#define gcvMININT8              0x80
+#define gcvMAXINT16             0x7fff
+#define gcvMININT16             0x8000
+#define gcvMAXINT32             0x7fffffff
+#define gcvMININT32             0x80000000
+#define gcvMAXINT64             0x7fffffffffffffff
+#define gcvMININT64             0x8000000000000000
+#define gcvMAXUINT8             0xff
+#define gcvMINUINT8             0x0
+#define gcvMAXUINT16            0xffff
+#define gcvMINUINT16            0x8000
+#define gcvMAXUINT32            0xffffffff
+#define gcvMINUINT32            0x80000000
+#define gcvMAXUINT64            0xffffffffffffffff
+#define gcvMINUINT64            0x8000000000000000
 
 typedef float                   gctFLOAT;
 typedef signed int              gctFIXED_POINT;
@@ -333,6 +352,7 @@ gcs2D_PROFILE;
 
 #define IN
 #define OUT
+#define INOUT
 #define OPTIONAL
 
 /******************************************************************************\
@@ -728,21 +748,19 @@ gceSTATUS;
 #   define gcmDUMPSTATEDATA(StateDelta, FixedPoint, Address, Data) \
         if (FixedPoint) \
         { \
-            gcmDUMP(gcvNULL, "@[state.x 0x%04X 0x%08X]", \
+            gcmDUMP(gcvNULL, "#[state.x 0x%04X 0x%08X]", \
                 Address, Data \
                 ); \
         } \
         else \
         { \
-            gcmDUMP(gcvNULL, "@[state 0x%04X 0x%08X]", \
+            gcmDUMP(gcvNULL, "#[state 0x%04X 0x%08X]", \
                 Address, Data \
                 ); \
         }
 #else
 #   define gcmDUMPSTATEDATA(StateDelta, FixedPoint, Address, Data)
 #endif
-
-/*----------------------------------------------------------------------------*/
 
 #define gcmDEFINESTATEBUFFER(CommandBuffer, StateDelta, Memory, ReserveSize) \
     gcmDEFINESECUREUSER() \
@@ -908,7 +926,7 @@ gceSTATUS;
     \
     *Memory++ = Data; \
     \
-    gcmDUMP(gcvNULL, "@[stall 0x%08X 0x%08X]", \
+    gcmDUMP(gcvNULL, "#[stall 0x%08X 0x%08X]", \
         gcmSETFIELDVALUE(0, AQ_SEMAPHORE, SOURCE, FRONT_END), \
         gcmSETFIELDVALUE(0, AQ_SEMAPHORE, DESTINATION, PIXEL_ENGINE)); \
     \
@@ -936,6 +954,255 @@ gceSTATUS;
     \
     *Memory++ = 0xDEADDEED; \
 }
+
+
+/*----------------------------------------------------------------------------*/
+#if !gcdTEMP_CMD_BUFFER_SIZE
+
+#define gcmDEFINESTATEBUFFER_NEW(CommandBuffer, StateDelta, Memory, ReserveSize) \
+    gcmDEFINESTATEBUFFER(CommandBuffer, StateDelta, Memory, ReserveSize)
+
+#define gcmBEGINSTATEBUFFER_NEW(Hardware, CommandBuffer, StateDelta, Memory, ReserveSize, OutSide) \
+    gcmBEGINSTATEBUFFER(Hardware, CommandBuffer, StateDelta, Memory, ReserveSize)
+
+#define gcmENDSTATEBUFFER_NEW(Hardware, CommandBuffer, Memory, ReserveSize, OutSide) \
+    gcmENDSTATEBUFFER(Hardware, CommandBuffer, Memory, ReserveSize)
+
+/*----------------------------------------------------------------------------*/
+
+#define gcmBEGINSTATEBATCH_NEW(CommandBuffer, Memory, FixedPoint, Address, Count) \
+    gcmBEGINSTATEBATCH(CommandBuffer, Memory, FixedPoint, Address, Count)
+
+#define gcmENDSTATEBATCH_NEW(CommandBuffer, Memory)  \
+    gcmENDSTATEBATCH(CommandBuffer, Memory)
+/*----------------------------------------------------------------------------*/
+
+#define gcmSETSTATEDATA_NEW(StateDelta, CommandBuffer, Memory, FixedPoint, \
+                            Address, Data) \
+    gcmSETSTATEDATA(StateDelta, CommandBuffer, Memory, FixedPoint, \
+                            Address, Data)
+
+#define gcmSETSTATEDATAWITHMASK_NEW(StateDelta, CommandBuffer, Memory, FixedPoint, \
+                                    Address, Mask, Data) \
+    gcmSETSTATEDATAWITHMASK(StateDelta, CommandBuffer, Memory, FixedPoint, \
+                                    Address, Mask, Data) \
+
+
+#define gcmSETCTRLSTATE_NEW(StateDelta, CommandBuffer, Memory, Address, Data) \
+    gcmSETCTRLSTATE(StateDelta, CommandBuffer, Memory, Address, Data)
+
+#define gcmSETFILLER_NEW(CommandBuffer, Memory) \
+    gcmSETFILLER(CommandBuffer, Memory)
+
+    /*----------------------------------------------------------------------------*/
+
+#define gcmSETSINGLESTATE_NEW(StateDelta, CommandBuffer, Memory, FixedPoint, \
+                                  Address, Data) \
+    gcmSETSINGLESTATE(StateDelta, CommandBuffer, Memory, FixedPoint, \
+                                  Address, Data)
+
+#define gcmSETSINGLESTATEWITHMASK_NEW(StateDelta, CommandBuffer, Memory, FixedPoint, \
+                                          Address, Mask, Data) \
+    gcmSETSINGLESTATEWITHMASK(StateDelta, CommandBuffer, Memory, FixedPoint, \
+                                          Address, Mask, Data)
+
+
+#define gcmSETSINGLECTRLSTATE_NEW(StateDelta, CommandBuffer, Memory, FixedPoint, \
+                                  Address, Data) \
+    gcmSETSINGLECTRLSTATE(StateDelta, CommandBuffer, Memory, FixedPoint, \
+                                  Address, Data)
+
+
+
+#define gcmSETSEMASTALLPIPE_NEW(StateDelta, CommandBuffer, Memory, Data) \
+    gcmSETSEMASTALLPIPE(StateDelta, CommandBuffer, Memory, Data)
+
+#define gcmSETSTARTDECOMMAND_NEW(CommandBuffer, Memory, Count) \
+    gcmSETSTARTDECOMMAND(CommandBuffer, Memory, Count)
+
+
+#else
+
+#define gcmDEFINESTATEBUFFER_NEW(CommandBuffer, StateDelta, Memory, ReserveSize) \
+    gcmDEFINESECUREUSER() \
+    gctSIZE_T ReserveSize = 0; \
+    gcsTEMPCMDBUF CommandBuffer = gcvNULL; \
+    gctUINT32_PTR Memory; \
+    gcsSTATE_DELTA_PTR StateDelta
+
+#define gcmBEGINSTATEBUFFER_NEW(Hardware, CommandBuffer, StateDelta, Memory, ReserveSize, OutSide) \
+{ \
+    if (OutSide) \
+    {\
+        Memory = (gctUINT32_PTR)*OutSide; \
+    }\
+    else \
+    {\
+        gcmONERROR(gcoBUFFER_StartTEMPCMDBUF( \
+            Hardware->buffer, &CommandBuffer \
+            ));\
+        \
+        Memory = (gctUINT32_PTR)(CommandBuffer->buffer); \
+        \
+    }\
+    StateDelta = Hardware->delta; \
+    \
+    gcmBEGINSECUREUSER(); \
+}
+
+#define gcmENDSTATEBUFFER_NEW(Hardware, CommandBuffer, Memory, ReserveSize, OutSide) \
+{ \
+    gcmENDSECUREUSER(); \
+    \
+    ReserveSize = ReserveSize; \
+    \
+    if (OutSide) \
+    {\
+        *OutSide = Memory; \
+    }\
+    else \
+    {\
+        CommandBuffer->currentByteSize = (gctUINT8_PTR)Memory -  \
+                                         (gctUINT8_PTR)CommandBuffer->buffer; \
+        \
+        gcmONERROR(gcoBUFFER_EndTEMPCMDBUF(Hardware->buffer));\
+    }\
+}
+
+/*----------------------------------------------------------------------------*/
+
+#define gcmBEGINSTATEBATCH_NEW(CommandBuffer, Memory, FixedPoint, Address, Count) \
+{ \
+    gcmASSERT((gctUINT32)Count <= 1024); \
+    \
+    *Memory++ \
+        = gcmSETFIELDVALUE(0, AQ_COMMAND_LOAD_STATE_COMMAND, OPCODE,  LOAD_STATE) \
+        | gcmSETFIELD     (0, AQ_COMMAND_LOAD_STATE_COMMAND, FLOAT,   FixedPoint) \
+        | gcmSETFIELD     (0, AQ_COMMAND_LOAD_STATE_COMMAND, COUNT,   Count) \
+        | gcmSETFIELD     (0, AQ_COMMAND_LOAD_STATE_COMMAND, ADDRESS, Address); \
+    \
+    gcmSKIPSECUREUSER(); \
+}
+
+#define gcmENDSTATEBATCH_NEW(CommandBuffer, Memory)
+
+/*----------------------------------------------------------------------------*/
+
+#define gcmSETSTATEDATA_NEW(StateDelta, CommandBuffer, Memory, FixedPoint, \
+                        Address, Data) \
+{ \
+    gctUINT32 __temp_data32__; \
+    \
+    __temp_data32__ = Data; \
+    \
+    *Memory++ = __temp_data32__; \
+    \
+    gcoHARDWARE_UpdateDelta( \
+        StateDelta, FixedPoint, Address, 0, __temp_data32__ \
+        ); \
+    \
+    gcmDUMPSTATEDATA(StateDelta, FixedPoint, Address, __temp_data32__); \
+    \
+    gcmUPDATESECUREUSER(); \
+}
+
+#define gcmSETSTATEDATAWITHMASK_NEW(StateDelta, CommandBuffer, Memory, FixedPoint, \
+                                Address, Mask, Data) \
+{ \
+    gctUINT32 __temp_data32__; \
+    \
+    __temp_data32__ = Data; \
+    \
+    *Memory++ = __temp_data32__; \
+    \
+    gcoHARDWARE_UpdateDelta( \
+        StateDelta, FixedPoint, Address, Mask, __temp_data32__ \
+        ); \
+    \
+    gcmDUMPSTATEDATA(StateDelta, FixedPoint, Address, __temp_data32__); \
+    \
+    gcmUPDATESECUREUSER(); \
+}
+
+
+#define gcmSETCTRLSTATE_NEW(StateDelta, CommandBuffer, Memory, Address, Data) \
+{ \
+    gctUINT32 __temp_data32__; \
+    \
+    __temp_data32__ = Data; \
+    \
+    *Memory++ = __temp_data32__; \
+    \
+    gcmDUMPSTATEDATA(StateDelta, gcvFALSE, Address, __temp_data32__); \
+    \
+    gcmSKIPSECUREUSER(); \
+}
+
+#define gcmSETFILLER_NEW(CommandBuffer, Memory) \
+{ \
+    Memory += 1; \
+    \
+    gcmSKIPSECUREUSER(); \
+}
+
+/*----------------------------------------------------------------------------*/
+
+#define gcmSETSINGLESTATE_NEW(StateDelta, CommandBuffer, Memory, FixedPoint, \
+                              Address, Data) \
+{ \
+    gcmBEGINSTATEBATCH_NEW(CommandBuffer, Memory, FixedPoint, Address, 1); \
+    gcmSETSTATEDATA_NEW(StateDelta, CommandBuffer, Memory, FixedPoint, \
+                    Address, Data); \
+    gcmENDSTATEBATCH_NEW(CommandBuffer, Memory); \
+}
+
+#define gcmSETSINGLESTATEWITHMASK_NEW(StateDelta, CommandBuffer, Memory, FixedPoint, \
+                                      Address, Mask, Data) \
+{ \
+    gcmBEGINSTATEBATCH_NEW(CommandBuffer, Memory, FixedPoint, Address, 1); \
+    gcmSETSTATEDATAWITHMASK_NEW(StateDelta, CommandBuffer, Memory, FixedPoint, \
+                    Address, Mask, Data); \
+    gcmENDSTATEBATCH_NEW(CommandBuffer, Memory); \
+}
+
+
+#define gcmSETSINGLECTRLSTATE_NEW(StateDelta, CommandBuffer, Memory, FixedPoint, \
+                              Address, Data) \
+{ \
+    gcmBEGINSTATEBATCH_NEW(CommandBuffer, Memory, FixedPoint, Address, 1); \
+    gcmSETCTRLSTATE_NEW(StateDelta, CommandBuffer, Memory, Address, Data); \
+    gcmENDSTATEBATCH_NEW(CommandBuffer, Memory); \
+}
+
+
+
+#define gcmSETSEMASTALLPIPE_NEW(StateDelta, CommandBuffer, Memory, Data) \
+{ \
+    gcmSETSINGLESTATE_NEW(StateDelta, CommandBuffer, Memory, gcvFALSE, AQSemaphoreRegAddrs, Data); \
+    \
+    *Memory++ = gcmSETFIELDVALUE(0, STALL_COMMAND, OPCODE, STALL); \
+    \
+    *Memory++ = Data; \
+    \
+    gcmDUMP(gcvNULL, "#[stall 0x%08X 0x%08X]", \
+        gcmSETFIELDVALUE(0, AQ_SEMAPHORE, SOURCE, FRONT_END), \
+        gcmSETFIELDVALUE(0, AQ_SEMAPHORE, DESTINATION, PIXEL_ENGINE)); \
+    \
+    gcmSKIPSECUREUSER(); \
+}
+
+#define gcmSETSTARTDECOMMAND_NEW(CommandBuffer, Memory, Count) \
+{ \
+    *Memory++ \
+        = gcmSETFIELDVALUE(0, AQ_COMMAND_START_DE_COMMAND, OPCODE,     START_DE) \
+        | gcmSETFIELD     (0, AQ_COMMAND_START_DE_COMMAND, COUNT,      Count) \
+        | gcmSETFIELD     (0, AQ_COMMAND_START_DE_COMMAND, DATA_COUNT, 0); \
+    \
+    *Memory++ = 0xDEADDEED; \
+    \
+}
+
+#endif
 
 /*******************************************************************************
 **
@@ -1013,6 +1280,10 @@ gceSTATUS;
 #define gcmABS(x)               (((x) < 0)    ? -(x) :  (x))
 #define gcmNEG(x)               (((x) < 0)    ?  (x) : -(x))
 
+/******************************************************************************\
+******************************** Bit Macro ********************************
+\******************************************************************************/
+#define gcmBITSET(x, y)         ((x) & (y))
 /*******************************************************************************
 **
 **  gcmPTR2INT

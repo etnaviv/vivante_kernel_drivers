@@ -1,6 +1,6 @@
 ##############################################################################
 #
-#    Copyright (c) 2005 - 2013 by Vivante Corp.  All rights reserved.
+#    Copyright (c) 2005 - 2014 by Vivante Corp.  All rights reserved.
 #
 #    The material in this file is confidential and contains trade secrets
 #    of Vivante Corporation. This is proprietary information owned by
@@ -36,6 +36,12 @@ EXTRA_CFLAGS += -fno-pic
 
 ifneq ($(USE_MULTI_GPU), )
     EXTRA_CFLAGS += -DgcdMULTI_GPU=$(USE_MULTI_GPU)
+endif
+
+ifeq ($(FPGA_BUILD), 1)
+EXTRA_CFLAGS += -DgcdFPGA_BUILD=1
+else
+EXTRA_CFLAGS += -DgcdFPGA_BUILD=0
 endif
 
 OBJS := $(OS_KERNEL_DIR)/gc_hal_kernel_device.o \

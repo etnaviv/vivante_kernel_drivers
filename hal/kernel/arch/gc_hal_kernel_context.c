@@ -1,6 +1,6 @@
 /****************************************************************************
 *
-*    Copyright (c) 2005 - 2013 by Vivante Corp.  All rights reserved.
+*    Copyright (c) 2005 - 2014 by Vivante Corp.  All rights reserved.
 *
 *    The material in this file is confidential and contains trade secrets
 *    of Vivante Corporation. This is proprietary information owned by
@@ -133,6 +133,7 @@
  * ===========|=================================================================
  *            |
  */
+
 
 #include "gc_hal.h"
 #include "gc_hal_kernel.h"
@@ -589,7 +590,7 @@ _InitializeContextBuffer(
     gctSIZE_T index;
 
 #if !defined(VIVANTE_NO_3D)
-    gctBOOL halti0, halti1, halti2;
+    gctBOOL halti0, halti1, halti2, halti3;
     gctUINT i;
     gctUINT vertexUniforms, fragmentUniforms;
     gctBOOL unifiedUnforms;
@@ -620,6 +621,7 @@ _InitializeContextBuffer(
 	halti0 = (((((gctUINT32)(Context->hardware->identity.chipMinorFeatures1)) >> (0 ? 23:23)) &((gctUINT32) ((((1 ? 23:23) - (0 ? 23:23) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 23:23) - (0 ? 23:23) + 1)))))));
 		halti1 = (((((gctUINT32)(Context->hardware->identity.chipMinorFeatures2)) >> (0 ? 11:11)) &((gctUINT32) ((((1 ? 11:11) - (0 ? 11:11) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 11:11) - (0 ? 11:11) + 1)))))));
 		halti2 = (((((gctUINT32)(Context->hardware->identity.chipMinorFeatures4)) >> (0 ? 16:16)) &((gctUINT32) ((((1 ? 16:16) - (0 ? 16:16) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 16:16) - (0 ? 16:16) + 1)))))));
+		halti3 = (((((gctUINT32)(Context->hardware->identity.chipMinorFeatures5)) >> (0 ? 9:9)) &((gctUINT32) ((((1 ? 9:9) - (0 ? 9:9) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 9:9) - (0 ? 9:9) + 1)))))));
 	
     /* Query shader support. */
     gcmkVERIFY_OK(gckHARDWARE_QueryShaderCaps(
@@ -720,7 +722,7 @@ _InitializeContextBuffer(
 		index += _State( Context, index,0x00A28 >> 2,0x00000000,1,gcvFALSE,gcvFALSE);
 		index += _State( Context, index,0x00A2C >> 2,0x00000000,1,gcvFALSE,gcvFALSE);
 		index += _State( Context, index,0x00A30 >> 2,0x00000000,1,gcvFALSE,gcvFALSE);
-		index += _State( Context, index,0x00A40 >> 2,0x00000000,10,gcvFALSE,gcvFALSE);
+		index += _State( Context, index,0x00A40 >> 2,0x00000000,Context->hardware->identity.varyingsCount,gcvFALSE,gcvFALSE);
 		index += _State( Context, index,0x00A34 >> 2,0x00000000,1,gcvFALSE,gcvFALSE);
 		index += _State( Context, index,0x00A38 >> 2,0x00000000,1,gcvFALSE,gcvFALSE);
 		index += _State( Context, index,0x00A3C >> 2,0x00000000,1,gcvFALSE,gcvFALSE);
@@ -803,15 +805,17 @@ _InitializeContextBuffer(
 		index += _State( Context, index,((0x02740 >> 2) + (0<<4)),0x00000000,12,gcvFALSE,gcvTRUE);
 	    index += _CLOSE_RANGE();
 
-    if (	(((((gctUINT32)(Context->hardware->identity.chipMinorFeatures1)) >> (0 ? 22:22)) &((gctUINT32) ((((1 ? 22:22) - (0 ? 22:22) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 22:22) - (0 ? 22:22) + 1))))))) && !halti1)
+    if (	(((((gctUINT32)(Context->hardware->identity.chipMinorFeatures1)) >> (0 ? 22:22)) &((gctUINT32) ((((1 ? 22:22) - (0 ? 22:22) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 22:22) - (0 ? 22:22) + 1))))))))
 	    {
         /*
          * Linear stride LODn will overwrite LOD0 on GC880,GC2000.
          * And only LOD0 is valid for this register.
          */
+        gctUINT count = halti1 ? 14 : 1;
+
         for (i = 0; i < 12; i += 1)
         {
-	index += _State( Context, index,(0x02C00 >> 2) + i * 16,0x00000000,1,gcvFALSE,gcvFALSE);
+	index += _State( Context, index,(0x02C00 >> 2) + i * 16,0x00000000,count,gcvFALSE,gcvFALSE);
 	        }
     }
 
@@ -916,12 +920,13 @@ _InitializeContextBuffer(
 	        index += _CLOSE_RANGE();
     }
 
-    if (Context->hardware->identity.instructionCount > 1024)
+    /* This register is programed by all chips. */
+	index += _State( Context, index,0x00860 >> 2,0x00000000,1,gcvFALSE,gcvFALSE);
+	    if (Context->hardware->identity.instructionCount > 1024)
     {
         /* New Shader instruction memory. */
 	index += _State( Context, index,0x0085C >> 2,0x00000000,1,gcvFALSE,gcvFALSE);
 		index += _State( Context, index,0x0101C >> 2,0x00000100,1,gcvFALSE,gcvFALSE);
-		index += _State( Context, index,0x00860 >> 2,0x00000000,1,gcvFALSE,gcvFALSE);
 	        index += _CLOSE_RANGE();
 
         for (i = 0;
@@ -938,7 +943,6 @@ _InitializeContextBuffer(
         /* New Shader instruction memory. */
 	index += _State( Context, index,0x0085C >> 2,0x00000000,1,gcvFALSE,gcvFALSE);
 		index += _State( Context, index,0x0101C >> 2,0x00000100,1,gcvFALSE,gcvFALSE);
-		index += _State( Context, index,0x00860 >> 2,0x00000000,1,gcvFALSE,gcvFALSE);
 	        index += _CLOSE_RANGE();
 
         /* VX instruction memory. */
@@ -1013,10 +1017,12 @@ _InitializeContextBuffer(
     else
     {
 	index += _State( Context, index,((0x01460 >> 2) + (0<<3)),0x00000000,Context->hardware->identity.pixelPipes,gcvFALSE,gcvTRUE);
-	
+	    }
+
+    if (Context->hardware->identity.pixelPipes > 1 || halti0)
+    {
 	index += _State( Context, index,((0x01480 >> 2) + (0<<3)),0x00000000,Context->hardware->identity.pixelPipes,gcvFALSE,gcvTRUE);
-	
-    }
+	    }
 
     for (i = 0; i < 3; i++)
     {
@@ -1033,6 +1039,10 @@ _InitializeContextBuffer(
 	    }
 
 
+    if (halti3)
+    {
+	index += _State( Context, index,0x014BC >> 2,0x00000000,1,gcvFALSE,gcvFALSE);
+	    }
 
     /* Resolve states. */
 	index += _State( Context, index,0x01604 >> 2,0x00000000,1,gcvFALSE,gcvFALSE);
@@ -1134,6 +1144,12 @@ _InitializeContextBuffer(
 	    }
 
     index += _CLOSE_RANGE();
+
+    if(	((((gctUINT32) (Context->hardware->identity.chipMinorFeatures4)) >> (0 ? 25:25) & ((gctUINT32) ((((1 ? 25:25) - (0 ? 25:25) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 25:25) - (0 ? 25:25) + 1)))))) == (0x1 & ((gctUINT32) ((((1 ? 25:25) - (0 ? 25:25) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 25:25) - (0 ? 25:25) + 1))))))))
+	    {
+	index += _State( Context, index,0x03860 >> 2,0x6,1,gcvFALSE,gcvFALSE);
+	        index += _CLOSE_RANGE();
+    }
 
     /* Semaphore/stall. */
     index += _SemaphoreStall(Context, index);
@@ -1823,25 +1839,6 @@ gckCONTEXT_Update(
                 /* Skip the state if not mapped. */
                 if (index == 0)
                 {
-#if gcdDEBUG
-                    if ((address != 0x0594)
-                     && (address != 0x0E00)
-                     && (address != 0x0E03)
-                     && (address != 0x0E02)
-                        )
-                    {
-
-#endif
-                        gcmkTRACE(
-                            gcvLEVEL_ERROR,
-                            "%s(%d): State 0x%04X is not mapped.\n",
-                            __FUNCTION__, __LINE__,
-                            address
-                            );
-#if gcdDEBUG
-                    }
-
-#endif
                     continue;
                 }
 
@@ -2072,4 +2069,71 @@ OnError:
     return gcvSTATUS_OK;
 
 #endif
+}
+
+gceSTATUS
+gckCONTEXT_MapBuffer(
+    IN gckCONTEXT Context,
+    OUT gctUINT32 *Physicals,
+    OUT gctUINT64 *Logicals,
+    OUT gctUINT32 *Bytes
+    )
+{
+    gceSTATUS status;
+    int i = 0;
+    gctSIZE_T pageCount;
+    gckVIRTUAL_COMMAND_BUFFER_PTR commandBuffer;
+    gckKERNEL kernel = Context->hardware->kernel;
+    gctPOINTER logical;
+    gctPHYS_ADDR physical;
+
+    gcsCONTEXT_PTR buffer;
+
+    gcmkHEADER();
+
+    gcmkVERIFY_OBJECT(Context, gcvOBJ_CONTEXT);
+
+    buffer = Context->buffer;
+
+    for (i = 0; i < gcdCONTEXT_BUFFER_COUNT; i++)
+    {
+        if (kernel->virtualCommandBuffer)
+        {
+            commandBuffer = (gckVIRTUAL_COMMAND_BUFFER_PTR)buffer->physical;
+            physical = commandBuffer->physical;
+
+            gcmkONERROR(gckOS_LockPages(
+                kernel->os,
+                physical,
+                (gctSIZE_T)Context->totalSize,
+                gcvFALSE,
+                &logical,
+                &pageCount));
+        }
+        else
+        {
+            physical = buffer->physical;
+
+            gcmkONERROR(gckOS_MapMemory(
+                kernel->os,
+                physical,
+                (gctSIZE_T)Context->totalSize,
+                &logical));
+        }
+
+        Physicals[i] = gcmPTR_TO_NAME(physical);
+
+        Logicals[i] = gcmPTR_TO_UINT64(logical);
+
+        buffer = buffer->next;
+    }
+
+    *Bytes = Context->totalSize;
+
+    gcmkFOOTER_NO();
+    return gcvSTATUS_OK;
+
+OnError:
+    gcmkFOOTER();
+    return status;
 }

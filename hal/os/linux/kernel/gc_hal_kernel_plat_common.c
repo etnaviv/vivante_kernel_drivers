@@ -14,6 +14,14 @@
 #include <linux/err.h>
 #include "gc_hal_kernel_plat_common.h"
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0))
+#define GC_CLK_ENABLE       clk_prepare_enable
+#define GC_CLK_DISABLE      clk_disable_unprepare
+#else
+#define GC_CLK_ENABLE       clk_enable
+#define GC_CLK_DISABLE      clk_disable
+#endif
+
 static struct clk * __get_gpu_clk(struct gc_iface *iface)
 {
     if(WARN_ON(unlikely(!iface)))
@@ -49,14 +57,14 @@ int gpu_clk_enable_dft(struct gc_iface *iface)
 {
     struct clk * gc_clk = __get_gpu_clk(iface);
     PR_DEBUG("[%6s] %s\n", iface->name, __func__);
-    return clk_enable(gc_clk);
+    return GC_CLK_ENABLE(gc_clk);
 }
 
 void gpu_clk_disable_dft(struct gc_iface *iface)
 {
     struct clk * gc_clk = __get_gpu_clk(iface);
     PR_DEBUG("[%6s] %s\n", iface->name, __func__);
-    clk_disable(gc_clk);
+    GC_CLK_DISABLE(gc_clk);
 }
 
 int gpu_clk_setrate_dft(struct gc_iface *iface, unsigned long rate_khz)

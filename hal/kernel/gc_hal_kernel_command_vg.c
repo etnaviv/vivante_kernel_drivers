@@ -1,6 +1,6 @@
 /****************************************************************************
 *
-*    Copyright (c) 2005 - 2013 by Vivante Corp.  All rights reserved.
+*    Copyright (c) 2005 - 2014 by Vivante Corp.  All rights reserved.
 *
 *    The material in this file is confidential and contains trade secrets
 *    of Vivante Corporation. This is proprietary information owned by
@@ -9,6 +9,7 @@
 *    without the express written permission of Vivante Corporation.
 *
 *****************************************************************************/
+
 
 
 #include "gc_hal_kernel_precomp.h"
@@ -606,6 +607,8 @@ _RemoveRecordFromProcesDB(
     gctUINT32 handle;
     gckKERNEL kernel = Command->kernel->kernel;
     gckVIDMEM_NODE unlockNode;
+    gckVIDMEM_NODE nodeObject;
+    gceDATABASE_TYPE type;
 
     /* Get the total size of all tasks. */
     size = task->size;
@@ -619,25 +622,31 @@ _RemoveRecordFromProcesDB(
         case gcvTASK_FREE_VIDEO_MEMORY:
             freeVideoMemory = (gcsTASK_FREE_VIDEO_MEMORY_PTR)Task;
 
-            /* Remove record from process db. */
-            gcmkVERIFY_OK(gckKERNEL_RemoveProcessDB(
-                Command->kernel->kernel,
-                pid,
-                gcvDB_VIDEO_MEMORY,
-                gcmINT2PTR(freeVideoMemory->node)));
-
             handle = (gctUINT32)freeVideoMemory->node;
 
             status = gckVIDMEM_HANDLE_Lookup(
                 Command->kernel->kernel,
                 pid,
                 handle,
-                (gckVIDMEM_NODE *)&freeVideoMemory->node);
+                &nodeObject);
+
+            freeVideoMemory->node = gcmALL_TO_UINT32(nodeObject);
 
             if(gcmIS_SUCCESS(status))
             {
                 gckVIDMEM_HANDLE_Dereference(kernel, pid, handle);
             }
+
+            type = gcvDB_VIDEO_MEMORY
+                | (nodeObject->type << gcdDB_VIDEO_MEMORY_TYPE_SHIFT)
+                | (nodeObject->pool << gcdDB_VIDEO_MEMORY_POOL_SHIFT);
+
+            /* Remove record from process db. */
+            gcmkVERIFY_OK(gckKERNEL_RemoveProcessDB(
+                Command->kernel->kernel,
+                pid,
+                type,
+                gcmINT2PTR(handle)));
 
             /* Advance to next task. */
             size -= sizeof(gcsTASK_FREE_VIDEO_MEMORY);
@@ -1138,7 +1147,7 @@ _AllocateCommandBuffer(
         gctUINT requestedSize;
         gctUINT allocationSize;
         gctUINT32 address = 0;
-        gcsCMDBUFFER_PTR commandBuffer;
+        gcsCMDBUFFER_PTR commandBuffer = gcvNULL;
         gctUINT8_PTR endCommand;
 
         /* Determine the aligned header size. */
@@ -1766,6 +1775,7 @@ _TaskUnmapUserMemory(
     )
 {
     gceSTATUS status;
+    gctPOINTER info;
 
     do
     {
@@ -1773,9 +1783,12 @@ _TaskUnmapUserMemory(
         gcsTASK_UNMAP_USER_MEMORY_PTR task
             = (gcsTASK_UNMAP_USER_MEMORY_PTR) TaskHeader->task;
 
+        info = gckKERNEL_QueryPointerFromName(
+                Command->kernel->kernel, gcmALL_TO_UINT32(task->info));
+
         /* Unmap the user memory. */
         gcmkERR_BREAK(gckOS_UnmapUserMemory(
-            Command->os, gcvCORE_VG, task->memory, task->size, task->info, task->address
+            Command->os, gcvCORE_VG, task->memory, task->size, info, task->address
             ));
 
         /* Update the reference counter. */

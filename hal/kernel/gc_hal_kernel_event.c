@@ -1,6 +1,6 @@
 /****************************************************************************
 *
-*    Copyright (c) 2005 - 2013 by Vivante Corp.  All rights reserved.
+*    Copyright (c) 2005 - 2014 by Vivante Corp.  All rights reserved.
 *
 *    The material in this file is confidential and contains trade secrets
 *    of Vivante Corporation. This is proprietary information owned by
@@ -9,6 +9,7 @@
 *    without the express written permission of Vivante Corporation.
 *
 *****************************************************************************/
+
 
 
 #include "gc_hal_kernel_precomp.h"
@@ -381,7 +382,11 @@ _SubmitTimerFunction(
     )
 {
     gckEVENT event = (gckEVENT)Data;
+#if gcdMULTI_GPU
+    gcmkVERIFY_OK(gckEVENT_Submit(event, gcvTRUE, gcvFALSE, gcvCORE_3D_ALL_MASK));
+#else
     gcmkVERIFY_OK(gckEVENT_Submit(event, gcvTRUE, gcvFALSE));
+#endif
 }
 
 /******************************************************************************\
@@ -480,6 +485,8 @@ gckEVENT_Construct(
     {
         gcmkONERROR(gckOS_AtomConstruct(os, &eventObj->pending3D[i]));
     }
+
+    gcmkONERROR(gckOS_AtomConstruct(os, &eventObj->pendingMask));
 #endif
 
 #endif
@@ -488,6 +495,11 @@ gckEVENT_Construct(
                                     _SubmitTimerFunction,
                                     (gctPOINTER)eventObj,
                                     &eventObj->submitTimer));
+
+#if gcdINTERRUPT_STATISTIC
+    gcmkONERROR(gckOS_AtomConstruct(os, &eventObj->interruptCount));
+    gcmkONERROR(gckOS_AtomSet(os,eventObj->interruptCount, 0));
+#endif
 
     /* Return pointer to the gckEVENT object. */
     *Event = eventObj;
@@ -543,6 +555,13 @@ OnError:
             }
         }
 #endif
+#endif
+
+#if gcdINTERRUPT_STATISTIC
+        if (eventObj->interruptCount)
+        {
+            gcmkVERIFY_OK(gckOS_AtomDestroy(os, &eventObj->interruptCount));
+        }
 #endif
         gcmkVERIFY_OK(gcmkOS_SAFE_FREE(os, eventObj));
     }
@@ -656,6 +675,10 @@ gckEVENT_Destroy(
         }
     }
 #endif
+#endif
+
+#if gcdINTERRUPT_STATISTIC
+    gcmkVERIFY_OK(gckOS_AtomDestroy(Event->os, &Event->interruptCount));
 #endif
 
     /* Mark the gckEVENT object as unknown. */
@@ -1537,12 +1560,22 @@ OnError:
 **
 **      Nothing.
 */
+#if gcdMULTI_GPU
+gceSTATUS
+gckEVENT_Submit(
+    IN gckEVENT Event,
+    IN gctBOOL Wait,
+    IN gctBOOL FromPower,
+    IN gceCORE_3D_MASK ChipEnable
+    )
+#else
 gceSTATUS
 gckEVENT_Submit(
     IN gckEVENT Event,
     IN gctBOOL Wait,
     IN gctBOOL FromPower
     )
+#endif
 {
     gceSTATUS status;
     gctUINT8 id = 0xFF;
@@ -1553,6 +1586,14 @@ gckEVENT_Submit(
 #if !gcdNULL_DRIVER
     gctSIZE_T bytes;
     gctPOINTER buffer;
+#endif
+
+#if gcdMULTI_GPU
+    gctSIZE_T chipEnableBytes;
+#endif
+
+#if gcdINTERRUPT_STATISTIC
+    gctUINT32 oldValue;
 #endif
 
     gcmkHEADER_ARG("Event=0x%x Wait=%d", Event, Wait);
@@ -1581,7 +1622,12 @@ gckEVENT_Submit(
 
             /* Allocate an event ID. */
             gcmkONERROR(gckEVENT_GetEvent(Event, Wait, &id, queue->source));
-
+#if gcdMULTI_GPU
+            if (ChipEnable == gcvCORE_3D_ALL_MASK)
+            {
+                gckOS_AtomSetMask(Event->pendingMask, (1 << id));
+            }
+#endif
             /* Copy event list to event ID queue. */
             Event->queues[id].head   = queue->head;
 
@@ -1603,6 +1649,12 @@ gckEVENT_Submit(
             gcmkONERROR(gckOS_ReleaseMutex(Event->os, Event->eventListMutex));
             acquired = gcvFALSE;
 
+#if gcdINTERRUPT_STATISTIC
+            gcmkVERIFY_OK(gckOS_AtomIncrement(Event->os,
+                                              Event->interruptCount,
+                                              &oldValue));
+#endif
+
 #if gcdNULL_DRIVER
             /* Notify immediately on infinite hardware. */
             gcmkONERROR(gckEVENT_Interrupt(Event, 1 << id));
@@ -1616,6 +1668,14 @@ gckEVENT_Submit(
                                           Event->queues[id].source,
                                           &bytes));
 
+#if gcdMULTI_GPU
+            gcmkONERROR(gckHARDWARE_ChipEnable(Event->kernel->hardware,
+                                               gcvNULL,
+                                               0,
+                                               &chipEnableBytes));
+
+            bytes += chipEnableBytes * 2;
+#endif
 
             /* Reserve space in the command queue. */
             gcmkONERROR(gckCOMMAND_Reserve(command,
@@ -1623,6 +1683,27 @@ gckEVENT_Submit(
                                            &buffer,
                                            &bytes));
 
+#if gcdMULTI_GPU
+            gcmkONERROR(gckHARDWARE_ChipEnable(Event->kernel->hardware,
+                                               buffer,
+                                               ChipEnable,
+                                               &chipEnableBytes));
+
+            /* Set the hardware event in the command queue. */
+            gcmkONERROR(gckHARDWARE_Event(Event->kernel->hardware,
+                                          buffer + chipEnableBytes,
+                                          id,
+                                          Event->queues[id].source,
+                                          &bytes));
+
+            gcmkONERROR(gckHARDWARE_ChipEnable(Event->kernel->hardware,
+                                               buffer + bytes + chipEnableBytes,
+                                               gcvCORE_3D_ALL_MASK,
+                                               &chipEnableBytes));
+
+            /* Execute the hardware event. */
+            gcmkONERROR(gckCOMMAND_Execute(command, bytes + chipEnableBytes * 2));
+#else
             /* Set the hardware event in the command queue. */
             gcmkONERROR(gckHARDWARE_Event(Event->kernel->hardware,
                                           buffer,
@@ -1632,6 +1713,7 @@ gckEVENT_Submit(
 
             /* Execute the hardware event. */
             gcmkONERROR(gckCOMMAND_Execute(command, bytes));
+#endif
 #endif
         }
 
@@ -1706,11 +1788,20 @@ OnError:
 **
 **      Nothing.
 */
+#if gcdMULTI_GPU
+gceSTATUS
+gckEVENT_Commit(
+    IN gckEVENT Event,
+    IN gcsQUEUE_PTR Queue,
+    IN gceCORE_3D_MASK ChipEnable
+    )
+#else
 gceSTATUS
 gckEVENT_Commit(
     IN gckEVENT Event,
     IN gcsQUEUE_PTR Queue
     )
+#endif
 {
     gceSTATUS status;
     gcsQUEUE_PTR record = gcvNULL, next;
@@ -1779,7 +1870,11 @@ gckEVENT_Commit(
     }
 
     /* Submit the event list. */
+#if gcdMULTI_GPU
+    gcmkONERROR(gckEVENT_Submit(Event, gcvTRUE, gcvFALSE, ChipEnable));
+#else
     gcmkONERROR(gckEVENT_Submit(Event, gcvTRUE, gcvFALSE));
+#endif
 
     /* Success */
     gcmkFOOTER_NO();
@@ -2041,6 +2136,23 @@ gckEVENT_Interrupt(
     }
 #endif
 
+#if gcdINTERRUPT_STATISTIC
+    {
+        gctINT j = 0;
+        gctUINT32 oldValue;
+
+        for (j = 0; j < gcmCOUNTOF(Event->queues); j++)
+        {
+            if ((Data & (1 << j)))
+            {
+                gcmkVERIFY_OK(gckOS_AtomDecrement(Event->os,
+                                                  Event->interruptCount,
+                                                  &oldValue));
+            }
+        }
+    }
+#endif
+
     /* Success. */
     gcmkFOOTER_NO();
     return gcvSTATUS_OK;
@@ -2080,6 +2192,7 @@ gckEVENT_Notify(
     gceCORE core = Event->kernel->core;
     gctUINT32 busy;
     gctUINT32 oldValue;
+    gctUINT pendingMask;
 #endif
 #if !gcdSMP
     gctBOOL suspended = gcvFALSE;
@@ -2142,6 +2255,8 @@ gckEVENT_Notify(
             {
                 gckOS_AtomGet(Event->os, Event->pending3D[i], (gctINT32_PTR)&pend[i]);
             }
+
+            gckOS_AtomGet(Event->os, Event->pendingMask, (gctINT32_PTR)&pendingMask);
         }
         else
 #endif
@@ -2161,6 +2276,8 @@ gckEVENT_Notify(
                 /* Get current interrupts. */
                 pend[i] = Event->pending3D[i];
             }
+
+            pendingMask = Event->pendingMask;
         }
         else
 #endif
@@ -2176,10 +2293,9 @@ gckEVENT_Notify(
 #if gcdMULTI_GPU
         if (core == gcvCORE_MAJOR)
         {
-            for (i = 0; i < gcdMULTI_GPU; i++)
-            {
-                pending = (i == 0) ? pend[0] : pending & pend[i];
-            }
+            pending = (pend[0] & pend[1] & pendingMask) /* Check combined events on both GPUs */
+                    | (pend[0] & ~pendingMask)          /* Check individual events on GPU 0   */
+                    | (pend[1] & ~pendingMask);         /* Check individual events on GPU 1   */
         }
 #endif
 
@@ -2327,6 +2443,8 @@ gckEVENT_Notify(
                 {
                     gckOS_AtomClearMask(Event->pending3D[i], pending);
                 }
+
+                gckOS_AtomClearMask(Event->pendingMask, pending);
             }
             else
 #endif
@@ -2417,6 +2535,8 @@ gckEVENT_Notify(
                 /* Mark pending interrupt as handled. */
                 gckOS_AtomClearMask(Event->pending3D[i], mask);
             }
+
+            gckOS_AtomClearMask(Event->pendingMask, mask);
         }
         else
 #endif
@@ -3034,7 +3154,11 @@ gckEVENT_Stop(
     gcmkVERIFY_OBJECT(Event, gcvOBJ_EVENT);
 
     /* Submit the current event queue. */
+#if gcdMULTI_GPU
+    gcmkONERROR(gckEVENT_Submit(Event, gcvTRUE, gcvFALSE, gcvCORE_3D_ALL_MASK));
+#else
     gcmkONERROR(gckEVENT_Submit(Event, gcvTRUE, gcvFALSE));
+#endif
 
     gcmkONERROR(gckEVENT_GetEvent(Event, gcvTRUE, &id, gcvKERNEL_PIXEL));
 
@@ -3133,6 +3257,17 @@ _PrintRecord(
                   record->info.u.FreeVirtualCommandBuffer.logical);
         break;
 
+    case gcvHAL_SYNC_POINT:
+        gcmkPRINT("      gcvHAL_SYNC_POINT syncPoint=0x%08x",
+                  gcmUINT64_TO_PTR(record->info.u.SyncPoint.syncPoint));
+
+        break;
+
+    case gcvHAL_DESTROY_MMU:
+        gcmkPRINT("      gcvHAL_DESTORY_MMU mmu=0x%08x",
+                  gcmUINT64_TO_PTR(record->info.u.DestroyMmu.mmu));
+
+        break;
     default:
         gcmkPRINT("      Illegal Event %d", record->info.command);
         break;
@@ -3154,6 +3289,9 @@ gckEVENT_Dump(
     gcsEVENT_QUEUE_PTR queue;
     gcsEVENT_PTR record = gcvNULL;
     gctINT i;
+#if gcdINTERRUPT_STATISTIC
+    gctUINT32 pendingInterrupt;
+#endif
 
     gcmkHEADER_ARG("Event=0x%x", Event);
 
@@ -3198,6 +3336,11 @@ gckEVENT_Dump(
             record = record->next;
         }
     }
+
+#if gcdINTERRUPT_STATISTIC
+    gckOS_AtomGet(Event->os, Event->interruptCount, &pendingInterrupt);
+    gcmkPRINT("  Number of Pending Interrupt: %d", pendingInterrupt);
+#endif
 
     gcmkFOOTER_NO();
     return gcvSTATUS_OK;

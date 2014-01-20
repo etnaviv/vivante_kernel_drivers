@@ -1,6 +1,6 @@
 /****************************************************************************
 *
-*    Copyright (c) 2005 - 2013 by Vivante Corp.  All rights reserved.
+*    Copyright (c) 2005 - 2014 by Vivante Corp.  All rights reserved.
 *
 *    The material in this file is confidential and contains trade secrets
 *    of Vivante Corporation. This is proprietary information owned by
@@ -11,6 +11,7 @@
 *****************************************************************************/
 
 
+
 #include "gc_hal.h"
 #include "gc_hal_kernel.h"
 #if VIVANTE_PROFILER_CONTEXT
@@ -18,7 +19,31 @@
 
 #endif
 
+#define gcdDISABLE_FE_L2    0
+
 #define _GC_OBJ_ZONE    gcvZONE_HARDWARE
+
+#define gcmSEMAPHORESTALL(buffer) \
+        do \
+        { \
+            /* Arm the PE-FE Semaphore. */ \
+            *buffer++ \
+	= ((((gctUINT32)(0)) & ~(((gctUINT32)(((gctUINT32) ((((1 ? 31:27) - (0 ? 31:27) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 31:27) - (0 ? 31:27) + 1))))))) << (0 ? 31:27))) | (((gctUINT32)(0x01 & ((gctUINT32) ((((1 ? 31:27) - (0 ? 31:27) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 31:27) - (0 ? 31:27) + 1))))))) << (0 ? 31:27))) \
+		| ((((gctUINT32)(0)) & ~(((gctUINT32)(((gctUINT32) ((((1 ? 25:16) - (0 ? 25:16) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 25:16) - (0 ? 25:16) + 1))))))) << (0 ? 25:16))) | (((gctUINT32)((gctUINT32)(1)&((gctUINT32) ((((1 ? 25:16) - (0 ? 25:16) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 25:16) - (0 ? 25:16) + 1))))))) << (0 ? 25:16))) \
+		| ((((gctUINT32)(0)) & ~(((gctUINT32)(((gctUINT32) ((((1 ? 15:0) - (0 ? 15:0) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 15:0) - (0 ? 15:0) + 1))))))) << (0 ? 15:0))) | (((gctUINT32)((gctUINT32)(0x0E02)&((gctUINT32) ((((1 ? 15:0) - (0 ? 15:0) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 15:0) - (0 ? 15:0) + 1))))))) << (0 ? 15:0))); \
+	            \
+            *buffer++ \
+	= ((((gctUINT32)(0)) & ~(((gctUINT32)(((gctUINT32) ((((1 ? 4:0) - (0 ? 4:0) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 4:0) - (0 ? 4:0) + 1))))))) << (0 ? 4:0))) | (((gctUINT32)(0x01 & ((gctUINT32) ((((1 ? 4:0) - (0 ? 4:0) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 4:0) - (0 ? 4:0) + 1))))))) << (0 ? 4:0))) \
+		| ((((gctUINT32)(0)) & ~(((gctUINT32)(((gctUINT32) ((((1 ? 12:8) - (0 ? 12:8) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 12:8) - (0 ? 12:8) + 1))))))) << (0 ? 12:8))) | (((gctUINT32)(0x07 & ((gctUINT32) ((((1 ? 12:8) - (0 ? 12:8) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 12:8) - (0 ? 12:8) + 1))))))) << (0 ? 12:8)));\
+	            \
+            /* STALL FE until PE is done flushing. */ \
+            *buffer++ \
+	= ((((gctUINT32)(0)) & ~(((gctUINT32)(((gctUINT32) ((((1 ? 31:27) - (0 ? 31:27) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 31:27) - (0 ? 31:27) + 1))))))) << (0 ? 31:27))) | (((gctUINT32)(0x09 & ((gctUINT32) ((((1 ? 31:27) - (0 ? 31:27) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 31:27) - (0 ? 31:27) + 1))))))) << (0 ? 31:27))); \
+	            \
+            *buffer++ \
+	= ((((gctUINT32)(0)) & ~(((gctUINT32)(((gctUINT32) ((((1 ? 4:0) - (0 ? 4:0) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 4:0) - (0 ? 4:0) + 1))))))) << (0 ? 4:0))) | (((gctUINT32)(0x01 & ((gctUINT32) ((((1 ? 4:0) - (0 ? 4:0) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 4:0) - (0 ? 4:0) + 1))))))) << (0 ? 4:0))) \
+		| ((((gctUINT32)(0)) & ~(((gctUINT32)(((gctUINT32) ((((1 ? 12:8) - (0 ? 12:8) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 12:8) - (0 ? 12:8) + 1))))))) << (0 ? 12:8))) | (((gctUINT32)(0x07 & ((gctUINT32) ((((1 ? 12:8) - (0 ? 12:8) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 12:8) - (0 ? 12:8) + 1))))))) << (0 ? 12:8))); \
+	        } while(0)
 
 typedef struct _gcsiDEBUG_REGISTERS * gcsiDEBUG_REGISTERS_PTR;
 typedef struct _gcsiDEBUG_REGISTERS
@@ -113,10 +138,7 @@ _IdentifyHardware(
                                  0x00020,
                                  (gctUINT32_PTR) &Identity->chipModel));
 
-        /* !!!! HACK ALERT !!!! */
-        /* Because people change device IDs without letting software know
-        ** about it - here is the hack to make it all look the same.  Only
-        ** for GC400 family.  Next time - TELL ME!!! */
+
         if (((Identity->chipModel & 0xFF00) == 0x0400)
           && (Identity->chipModel != 0x0420))
         {
@@ -310,15 +332,25 @@ _IdentifyHardware(
     /* Exception for GC1000, revision 5035 &  GC800, revision 4612 */
     if (((Identity->chipModel == gcv1000) && ((Identity->chipRevision == 0x5035)
                                            || (Identity->chipRevision == 0x5036)
-                                           || (Identity->chipRevision == 0x5037)))
+                                           || (Identity->chipRevision == 0x5037)
+                                           || (Identity->chipRevision >= 0x5040)))
     || ((Identity->chipModel == gcv800) && (Identity->chipRevision == 0x4612))
-    || ((Identity->chipModel == gcv600) && (Identity->chipRevision == 0x4650))
-    || ((Identity->chipModel == gcv860) && (Identity->chipRevision == 0x4647)))
+    || ((Identity->chipModel == gcv600) && (Identity->chipRevision >= 0x4650))
+    || ((Identity->chipModel == gcv860) && (Identity->chipRevision == 0x4647))
+    || ((Identity->chipModel == gcv400) && (Identity->chipRevision >= 0x4633)))
     {
         Identity->superTileMode = 1;
     }
 
-    if (Identity->chipModel == gcv4000 && Identity->chipRevision == 0x5245)
+    if (((Identity->chipModel == gcv4000) && (Identity->chipRevision == 0x5245))
+     || ((Identity->chipModel == gcv5000) && (Identity->chipRevision == 0x5309))
+     || ((Identity->chipModel == gcv2500) && (Identity->chipRevision == 0x5410))
+     || ((Identity->chipModel == gcv5200) && (Identity->chipRevision == 0x5410))
+     || ((Identity->chipModel == gcv6400) && (Identity->chipRevision == 0x5420))
+     || ((Identity->chipModel == gcv6400) && (Identity->chipRevision == 0x5422))
+     || ((Identity->chipModel == gcv5000) && (Identity->chipRevision == 0x5434))
+       )
+
     {
 	useHZ = ((((gctUINT32) (Identity->chipMinorFeatures3)) >> (0 ? 26:26) & ((gctUINT32) ((((1 ? 26:26) - (0 ? 26:26) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 26:26) - (0 ? 26:26) + 1)))))) == (0x1 & ((gctUINT32) ((((1 ? 26:26) - (0 ? 26:26) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 26:26) - (0 ? 26:26) + 1)))))))
 		|| ((((gctUINT32) (Identity->chipMinorFeatures3)) >> (0 ? 8:8) & ((gctUINT32) ((((1 ? 8:8) - (0 ? 8:8) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 8:8) - (0 ? 8:8) + 1)))))) == (0x1 & ((gctUINT32) ((((1 ? 8:8) - (0 ? 8:8) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 8:8) - (0 ? 8:8) + 1)))))));
@@ -1137,7 +1169,18 @@ gckHARDWARE_Construct(
             "_ResetGPU failed: status=%d\n", status);
     }
 
-#if gcdMULTI_GPU_AFFINITY
+#if gcdMULTI_GPU
+    gcmkONERROR(gckOS_WriteRegisterEx(Os,
+                                      Core,
+                                      0x0055C,
+#if gcdDISABLE_FE_L2
+                                      0x00FFFFFF));
+#else
+                                      0x00FFFF05));
+
+#endif
+
+#elif gcdMULTI_GPU_AFFINITY
 	control = ((((gctUINT32)(0x00FF0A05)) & ~(((gctUINT32)(((gctUINT32) ((((1 ? 27:27) - (0 ? 27:27) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 27:27) - (0 ? 27:27) + 1))))))) << (0 ? 27:27))) | (((gctUINT32)((gctUINT32)(1)&((gctUINT32) ((((1 ? 27:27) - (0 ? 27:27) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 27:27) - (0 ? 27:27) + 1))))))) << (0 ? 27:27)));
 	
     gcmkONERROR(gckOS_WriteRegisterEx(Os,
@@ -1558,8 +1601,7 @@ gckHARDWARE_InitializeHardware(
 
 #endif
 
-    /* Special workaround for this core
-    ** Make sure pulse eater kicks in only when SH is idle */
+
     if (Hardware->identity.chipModel == gcv4000 &&
         ((Hardware->identity.chipRevision == 0x5208) || (Hardware->identity.chipRevision == 0x5222)))
     {
@@ -1593,8 +1635,7 @@ gckHARDWARE_InitializeHardware(
                                   data));
     }
 
-    /* Special workaround for this core
-    ** Make sure FE and TX are on different buses */
+
     if ((Hardware->identity.chipModel == gcv2000)
     &&  (Hardware->identity.chipRevision  == 0x5108))
     {
@@ -2235,7 +2276,7 @@ gckHARDWARE_WaitLink(
     gcmkVERIFY_OBJECT(Hardware, gcvOBJ_HARDWARE);
     gcmkVERIFY_ARGUMENT((Logical != gcvNULL) || (Bytes != gcvNULL));
 
-#if gcdMULTI_GPU
+#if gcdMULTI_GPU && !gcdDISABLE_FE_L2
     bytes = gcmALIGN(Offset + 40, 8) - Offset;
 #else
     /* Compute number of bytes required. */
@@ -2265,7 +2306,7 @@ gckHARDWARE_WaitLink(
 	= ((((gctUINT32)(0)) & ~(((gctUINT32)(((gctUINT32) ((((1 ? 31:27) - (0 ? 31:27) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 31:27) - (0 ? 31:27) + 1))))))) << (0 ? 31:27))) | (((gctUINT32)(0x07 & ((gctUINT32) ((((1 ? 31:27) - (0 ? 31:27) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 31:27) - (0 ? 31:27) + 1))))))) << (0 ? 31:27)))
 		| ((((gctUINT32)(0)) & ~(((gctUINT32)(((gctUINT32) ((((1 ? 15:0) - (0 ? 15:0) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 15:0) - (0 ? 15:0) + 1))))))) << (0 ? 15:0))) | (((gctUINT32)((gctUINT32)(waitCount)&((gctUINT32) ((((1 ? 15:0) - (0 ? 15:0) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 15:0) - (0 ? 15:0) + 1))))))) << (0 ? 15:0)));
 	
-#if gcdMULTI_GPU
+#if gcdMULTI_GPU && !gcdDISABLE_FE_L2
 	logical[2] = ((((gctUINT32)(0)) & ~(((gctUINT32)(((gctUINT32) ((((1 ? 31:27) - (0 ? 31:27) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 31:27) - (0 ? 31:27) + 1))))))) << (0 ? 31:27))) | (((gctUINT32)(0x0D & ((gctUINT32) ((((1 ? 31:27) - (0 ? 31:27) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 31:27) - (0 ? 31:27) + 1))))))) << (0 ? 31:27)))
 	                   | gcvCORE_3D_0_MASK;
 
@@ -2332,7 +2373,7 @@ gckHARDWARE_WaitLink(
         if (WaitSize != gcvNULL)
         {
             /* Return number of bytes used by the WAIT command. */
-#if gcdMULTI_GPU
+#if gcdMULTI_GPU && !gcdDISABLE_FE_L2
             *WaitSize = 32;
 #else
             *WaitSize = 8;
@@ -2436,6 +2477,58 @@ OnError:
     gcmkFOOTER();
     return status;
 }
+
+#if gcdMULTI_GPU
+gceSTATUS
+gckHARDWARE_ChipEnable(
+    IN gckHARDWARE Hardware,
+    IN gctPOINTER Logical,
+    IN gceCORE_3D_MASK ChipEnable,
+    IN OUT gctSIZE_T * Bytes
+    )
+{
+    gctUINT32_PTR logical = (gctUINT32_PTR) Logical;
+    gceSTATUS status;
+
+    gcmkHEADER_ARG("Hardware=0x%x Logical=0x%x ChipEnable=0x%x *Bytes=%lu",
+                   Hardware, Logical, ChipEnable, gcmOPT_VALUE(Bytes));
+
+    /* Verify the arguments. */
+    gcmkVERIFY_OBJECT(Hardware, gcvOBJ_HARDWARE);
+    gcmkVERIFY_ARGUMENT((Logical == gcvNULL) || (Bytes != gcvNULL));
+
+    if (Logical != gcvNULL)
+    {
+        if (*Bytes < 8)
+        {
+            /* Command queue too small. */
+            gcmkONERROR(gcvSTATUS_BUFFER_TOO_SMALL);
+        }
+
+        /* Append CHIPENABLE. */
+	logical[0] = ((((gctUINT32)(0)) & ~(((gctUINT32)(((gctUINT32) ((((1 ? 31:27) - (0 ? 31:27) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 31:27) - (0 ? 31:27) + 1))))))) << (0 ? 31:27))) | (((gctUINT32)(0x0D & ((gctUINT32) ((((1 ? 31:27) - (0 ? 31:27) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 31:27) - (0 ? 31:27) + 1))))))) << (0 ? 31:27)))
+	                   | ChipEnable;
+
+        gcmkTRACE_ZONE(gcvLEVEL_INFO, gcvZONE_HARDWARE, "0x%x: CHIPENABLE 0x%x", Logical, ChipEnable);
+    }
+
+    if (Bytes != gcvNULL)
+    {
+        /* Return number of bytes required by the CHIPENABLE command. */
+        *Bytes = 8;
+    }
+
+    /* Success. */
+    gcmkFOOTER_ARG("*Bytes=%lu", gcmOPT_VALUE(Bytes));
+    return gcvSTATUS_OK;
+
+OnError:
+    /* Return the status. */
+    gcmkFOOTER();
+    return status;
+}
+
+#endif
 
 /*******************************************************************************
 **
@@ -2703,10 +2796,10 @@ gckHARDWARE_Event(
 
 #if gcmIS_DEBUG(gcdDEBUG_TRACE)
         {
-            gctUINT32 phys;
+            gctUINTPTR_T phys;
             gckOS_GetPhysicalAddress(Hardware->os, Logical, &phys);
             gcmkTRACE_ZONE(gcvLEVEL_INFO, gcvZONE_HARDWARE,
-                           "0x%08x: EVENT %d", phys, Event);
+                           "0x%lx: EVENT %d", phys, Event);
         }
 
 #endif
@@ -3828,7 +3921,9 @@ gckHARDWARE_SetMMUv2(
             /* Pipe Select. */
             4 * 4
             /* Configure MMU States. */
-          + 4 * 4;
+          + 4 * 4
+            /* Semaphore stall */
+          + 4 * 12;
     }
 
     /* Convert logical address into physical address. */
@@ -3908,6 +4003,8 @@ gckHARDWARE_SetMMUv2(
 
     if (config2D)
     {
+        gcmSEMAPHORESTALL(buffer);
+
         /* LoadState(AQPipeSelect, 1), pipe. */
         *buffer++
 	= ((((gctUINT32)(0)) & ~(((gctUINT32)(((gctUINT32) ((((1 ? 31:27) - (0 ? 31:27) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 31:27) - (0 ? 31:27) + 1))))))) << (0 ? 31:27))) | (((gctUINT32)(0x01 & ((gctUINT32) ((((1 ? 31:27) - (0 ? 31:27) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 31:27) - (0 ? 31:27) + 1))))))) << (0 ? 31:27)))
@@ -3930,6 +4027,8 @@ gckHARDWARE_SetMMUv2(
 	
         *buffer++ = address;
 
+        gcmSEMAPHORESTALL(buffer);
+
         /* LoadState(AQPipeSelect, 1), pipe. */
         *buffer++
 	= ((((gctUINT32)(0)) & ~(((gctUINT32)(((gctUINT32) ((((1 ? 31:27) - (0 ? 31:27) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 31:27) - (0 ? 31:27) + 1))))))) << (0 ? 31:27))) | (((gctUINT32)(0x01 & ((gctUINT32) ((((1 ? 31:27) - (0 ? 31:27) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 31:27) - (0 ? 31:27) + 1))))))) << (0 ? 31:27)))
@@ -3937,6 +4036,8 @@ gckHARDWARE_SetMMUv2(
 		| ((((gctUINT32)(0)) & ~(((gctUINT32)(((gctUINT32) ((((1 ? 25:16) - (0 ? 25:16) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 25:16) - (0 ? 25:16) + 1))))))) << (0 ? 25:16))) | (((gctUINT32)((gctUINT32)(1)&((gctUINT32) ((((1 ? 25:16) - (0 ? 25:16) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 25:16) - (0 ? 25:16) + 1))))))) << (0 ? 25:16)));
 	
         *buffer++ = 0x0;
+
+        gcmSEMAPHORESTALL(buffer);
     }
 
     gcmkTRACE_ZONE(gcvLEVEL_INFO, gcvZONE_HARDWARE,
@@ -3951,7 +4052,12 @@ gckHARDWARE_SetMMUv2(
     gcmkTRACE_ZONE(gcvLEVEL_INFO, gcvZONE_HARDWARE,
         "call gckCOMMAND_Stall to make sure the config is done.\n ");
 
+#if gcdMULTI_GPU
+    gcmkONERROR(gckCOMMAND_Stall(command, FromPower, gcvCORE_3D_ALL_MASK));
+#else
     gcmkONERROR(gckCOMMAND_Stall(command, FromPower));
+
+#endif
 
     gcmkTRACE_ZONE(gcvLEVEL_INFO, gcvZONE_HARDWARE,
         "Enable MMU through GCREG_MMU_CONTROL.");
@@ -3965,7 +4071,12 @@ gckHARDWARE_SetMMUv2(
 	    gcmkTRACE_ZONE(gcvLEVEL_INFO, gcvZONE_HARDWARE,
         "call gckCOMMAND_Stall to check MMU available.\n");
 
+#if gcdMULTI_GPU
+    gcmkONERROR(gckCOMMAND_Stall(command, FromPower, gcvCORE_3D_ALL_MASK));
+#else
     gcmkONERROR(gckCOMMAND_Stall(command, FromPower));
+
+#endif
 
 #if gcdPROCESS_ADDRESS_SPACE
     command->currentMmu = gcvNULL;
@@ -5173,7 +5284,12 @@ gckHARDWARE_SetPowerManagementState(
             commitEntered = gcvFALSE;
 
             /* Wait to finish all commands. */
+#if gcdMULTI_GPU
+            gcmkONERROR(gckCOMMAND_Stall(command, gcvTRUE, gcvCORE_3D_ALL_MASK));
+#else
             gcmkONERROR(gckCOMMAND_Stall(command, gcvTRUE));
+
+#endif
         }
     }
 
@@ -6518,6 +6634,21 @@ OnError:
     return status;
 }
 
+static gctUINT32
+CalcDelta(
+    IN gctUINT32 new,
+    IN gctUINT32 old
+    )
+{
+    if (new >= old)
+    {
+        return new - old;
+    }
+    else
+    {
+        return (gctUINT32)((gctUINT64)new + 0x100000000ll - old);
+    }
+}
 
 gceSTATUS
 gckHARDWARE_UpdateContextProfile(
@@ -6653,7 +6784,7 @@ gcmkONERROR( gckOS_ReadRegisterEx(Hardware->os,Hardware->core,0x0045C,&profiler-
 	    if (needResetShader)
     {
         temp = profiler->ps_inst_counter;
-        profiler->ps_inst_counter -= Context->prevPSInstCount;
+        profiler->ps_inst_counter = CalcDelta(temp, Context->prevPSInstCount);
         Context->prevPSInstCount = temp;
     }
     gcmkUPDATE_PROFILE_DATA(ps_inst_counter);
@@ -6663,7 +6794,7 @@ gcmkONERROR( gckOS_ReadRegisterEx(Hardware->os,Hardware->core,0x0045C,&profiler-
 	    if (needResetShader)
     {
         temp = profiler->rendered_pixel_counter;
-        profiler->rendered_pixel_counter -= Context->prevPSPixelCount;
+        profiler->rendered_pixel_counter = CalcDelta(temp, Context->prevPSPixelCount);
         Context->prevPSPixelCount = temp;
     }
     gcmkUPDATE_PROFILE_DATA(rendered_pixel_counter);
@@ -6673,7 +6804,7 @@ gcmkONERROR( gckOS_ReadRegisterEx(Hardware->os,Hardware->core,0x0045C,&profiler-
 	    if (needResetShader)
     {
         temp = profiler->vs_inst_counter;
-        profiler->vs_inst_counter -= Context->prevVSInstCount;
+        profiler->vs_inst_counter = CalcDelta(temp, Context->prevVSInstCount);
         Context->prevVSInstCount = temp;
     }
     gcmkUPDATE_PROFILE_DATA(vs_inst_counter);
@@ -6683,7 +6814,7 @@ gcmkONERROR( gckOS_ReadRegisterEx(Hardware->os,Hardware->core,0x0045C,&profiler-
 	    if (needResetShader)
     {
         temp = profiler->rendered_vertice_counter;
-        profiler->rendered_vertice_counter -= Context->prevVSVertexCount;
+        profiler->rendered_vertice_counter = CalcDelta(temp, Context->prevVSVertexCount);
         Context->prevVSVertexCount = temp;
     }
     gcmkUPDATE_PROFILE_DATA(rendered_vertice_counter);
@@ -6693,7 +6824,7 @@ gcmkONERROR( gckOS_ReadRegisterEx(Hardware->os,Hardware->core,0x0045C,&profiler-
 	    if (needResetShader)
     {
         temp = profiler->vtx_branch_inst_counter;
-        profiler->vtx_branch_inst_counter -= Context->prevVSBranchInstCount;
+        profiler->vtx_branch_inst_counter = CalcDelta(temp, Context->prevVSBranchInstCount);
         Context->prevVSBranchInstCount = temp;
     }
     gcmkUPDATE_PROFILE_DATA(vtx_branch_inst_counter);
@@ -6703,7 +6834,7 @@ gcmkONERROR( gckOS_ReadRegisterEx(Hardware->os,Hardware->core,0x0045C,&profiler-
 	    if (needResetShader)
     {
         temp = profiler->vtx_texld_inst_counter;
-        profiler->vtx_texld_inst_counter -= Context->prevVSTexInstCount;
+        profiler->vtx_texld_inst_counter = CalcDelta(temp, Context->prevVSTexInstCount);
         Context->prevVSTexInstCount = temp;
     }
     gcmkUPDATE_PROFILE_DATA(vtx_texld_inst_counter);
@@ -6713,7 +6844,7 @@ gcmkONERROR( gckOS_ReadRegisterEx(Hardware->os,Hardware->core,0x0045C,&profiler-
 	    if (needResetShader)
     {
         temp = profiler->pxl_branch_inst_counter;
-        profiler->pxl_branch_inst_counter -= Context->prevPSBranchInstCount;
+        profiler->pxl_branch_inst_counter = CalcDelta(temp, Context->prevPSBranchInstCount);
         Context->prevPSBranchInstCount = temp;
     }
     gcmkUPDATE_PROFILE_DATA(pxl_branch_inst_counter);
@@ -6723,7 +6854,7 @@ gcmkONERROR( gckOS_ReadRegisterEx(Hardware->os,Hardware->core,0x0045C,&profiler-
 	    if (needResetShader)
     {
         temp = profiler->pxl_texld_inst_counter;
-        profiler->pxl_texld_inst_counter -= Context->prevPSTexInstCount;
+        profiler->pxl_texld_inst_counter = CalcDelta(temp, Context->prevPSTexInstCount);
         Context->prevPSTexInstCount = temp;
     }
     gcmkUPDATE_PROFILE_DATA(pxl_texld_inst_counter);

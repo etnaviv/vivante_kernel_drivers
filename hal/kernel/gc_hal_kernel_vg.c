@@ -1,6 +1,6 @@
 /****************************************************************************
 *
-*    Copyright (c) 2005 - 2013 by Vivante Corp.  All rights reserved.
+*    Copyright (c) 2005 - 2014 by Vivante Corp.  All rights reserved.
 *
 *    The material in this file is confidential and contains trade secrets
 *    of Vivante Corporation. This is proprietary information owned by
@@ -9,6 +9,7 @@
 *    without the express written permission of Vivante Corporation.
 *
 *****************************************************************************/
+
 
 
 #include "gc_hal_kernel_precomp.h"
@@ -556,6 +557,9 @@ gceSTATUS gckVGKERNEL_Dispatch(
             ));
 
         kernelInterface->u.MapUserMemory.info = gcmPTR_TO_NAME(info);
+
+        /* Clear temp storage. */
+        info = gcvNULL;
         break;
 
     case gcvHAL_UNMAP_USER_MEMORY:
@@ -568,6 +572,8 @@ gceSTATUS gckVGKERNEL_Dispatch(
             gcmNAME_TO_PTR(kernelInterface->u.UnmapUserMemory.info),
             kernelInterface->u.UnmapUserMemory.address
             ));
+
+        gcmRELEASE_NAME(kernelInterface->u.UnmapUserMemory.info);
         break;
     case gcvHAL_LOCK_VIDEO_MEMORY:
         gcmkONERROR(gckKERNEL_LockVideoMemory(Kernel, gcvCORE_VG, processID, FromUser, Interface));

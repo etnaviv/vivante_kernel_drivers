@@ -1,6 +1,6 @@
 /****************************************************************************
 *
-*    Copyright (c) 2005 - 2013 by Vivante Corp.  All rights reserved.
+*    Copyright (c) 2005 - 2014 by Vivante Corp.  All rights reserved.
 *
 *    The material in this file is confidential and contains trade secrets
 *    of Vivante Corporation. This is proprietary information owned by
@@ -9,6 +9,7 @@
 *    without the express written permission of Vivante Corporation.
 *
 *****************************************************************************/
+
 
 
 #ifndef __gc_hal_options_h_
@@ -159,6 +160,70 @@
 #endif
 
 
+
+/*
+    gcdDEBUG_OPTION
+        When set to 1, the debug options are enabled. We must set other MACRO to enable
+        sub case.
+*/
+#ifndef gcdDEBUG_OPTION
+#   define gcdDEBUG_OPTION                      0
+
+#if gcdDEBUG_OPTION
+/*
+    gcdDEBUG_OPTION_KEY
+        The process name of debug application.
+*/
+#ifndef gcdDEBUG_OPTION_KEY
+#          define gcdDEBUG_OPTION_KEY                           "process"
+#       endif
+/*
+    gcdDEBUG_OPTION_NO_GL_DRAWS
+        When set to 1, all glDrawArrays and glDrawElements will be skip.
+*/
+#ifndef gcdDEBUG_OPTION_NO_GL_DRAWS
+#           define gcdDEBUG_OPTION_NO_GL_DRAWS                  0
+#       endif
+/*
+    gcdDEBUG_OPTION_NO_DRAW_PRIMITIVES
+        When set to 1, all DrawPrimitives will be skip.
+*/
+#ifndef gcdDEBUG_OPTION_NO_DRAW_PRIMITIVES
+#           define gcdDEBUG_OPTION_NO_DRAW_PRIMITIVES           0
+#       endif
+/*
+    gcdDEBUG_OPTION_SKIP_SWAP
+        When set to 1, just one out of gcdDEBUG_OPTION_SKIP_FRAMES(such as 1/10) eglSwapBuffers will be resolve,
+        others skip.
+*/
+#ifndef gcdDEBUG_OPTION_SKIP_SWAP
+#           define gcdDEBUG_OPTION_SKIP_SWAP                    0
+#           define gcdDEBUG_OPTION_SKIP_FRAMES                  10
+#       endif
+/*
+    gcdDEBUG_OPTION_FORCE_16BIT_RENDER_TARGET
+        When set to 1, the format of render target will force to RGB565.
+*/
+#ifndef gcdDEBUG_OPTION_FORCE_16BIT_RENDER_TARGET
+#           define gcdDEBUG_OPTION_FORCE_16BIT_RENDER_TARGET    0
+#       endif
+/*
+    gcdDEBUG_OPTION_NONE_TEXTURE
+        When set to 1, the type of texture will be set to AQ_TEXTURE_SAMPLE_MODE_TYPE_NONE.
+*/
+#ifndef gcdDEBUG_OPTION_NONE_TEXTURE
+#           define gcdDEBUG_OPTION_NONE_TEXTURE                 0
+#       endif
+/*
+    gcdDEBUG_OPTION_NONE_DEPTH
+        When set to 1, the depth format of surface will be set to gcvSURF_UNKNOWN.
+*/
+#ifndef gcdDEBUG_OPTION_NONE_DEPTH
+#           define gcdDEBUG_OPTION_NONE_DEPTH                   0
+#       endif
+
+#   endif
+#endif
 
 /*
     gcdDUMP_SWAP_PER_DRAW
@@ -401,11 +466,7 @@
 #   define gcdPOWER_SUSPEND_WHEN_IDLE          0
 #endif
 
-/*
-    gcdFPGA_BUILD
 
-        This define enables work arounds for FPGA images.
-*/
 #ifndef gcdFPGA_BUILD
 #   define gcdFPGA_BUILD                       0
 #endif
@@ -867,6 +928,7 @@
 */
 #ifndef gcdSTREAM_OUT_BUFFER
 #   define gcdSTREAM_OUT_BUFFER                 0
+#   define gcdSTREAM_OUT_NAIVE_SYNC             0
 #endif
 
 /*
@@ -999,7 +1061,7 @@
         will be removed in release driver.
 */
 #ifndef gcdINTERNAL_COMMENT
-#   define gcdINTERNAL_COMMENT                  0
+#   define gcdINTERNAL_COMMENT                  1
 #endif
 
 /*
@@ -1033,10 +1095,42 @@
     gcdBINARY_TRACE
 
         When non-zero, binary trace will be generated.
+
+        When gcdBINARY_TRACE_FILE_SIZE is non-zero, binary trace buffer will
+        be written to a file which size is limited to
+        gcdBINARY_TRACE_FILE_SIZE.
 */
 #ifndef gcdBINARY_TRACE
 #   define gcdBINARY_TRACE                       0
-#   define gcdBINARY_TRACE_TO_FILE               0
+#   define gcdBINARY_TRACE_FILE_SIZE             0
 #endif
+
+#ifndef gcdMOVG
+#   define gcdMOVG                              0
+#if gcdMOVG
+#       undef  gcdENABLE_TS_DOUBLE_BUFFER
+#       define gcdENABLE_TS_DOUBLE_BUFFER       0
+#   endif
+#endif
+
+/*  gcdINTERRUPT_STATISTIC
+ *
+ *  Monitor the event send to GPU and interrupt issued by GPU.
+ */
+
+#ifndef gcdINTERRUPT_STATISTIC
+#   define gcdINTERRUPT_STATISTIC               0
+#endif
+
+/*
+    gcdTEMP_CMD_BUFFER_SIZE
+        When it's zero, use original command buffer generation logic.
+        Otherwise, set it as 0x4000 as temp buffer size.
+*/
+
+#ifndef gcdTEMP_CMD_BUFFER_SIZE
+#define gcdTEMP_CMD_BUFFER_SIZE  0
+#endif
+
 
 #endif /* __gc_hal_options_h_ */

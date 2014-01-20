@@ -15,4 +15,7 @@ include $(BUILD_PREBUILT)
 build-galcore: build-kernel
 	cd $(GALCORE_SRC_PATH) &&\
 	$(MAKE) -j$(MAKE_JOBS)
+ifeq (,$(wildcard $(PRODUCT_OUT)/root/lib/modules))
+	mkdir -p $(PRODUCT_OUT)/root/lib/modules
+endif
 	cp $(GALCORE_SRC_PATH)/hal/driver/galcore.ko $(PRODUCT_OUT)/root/lib/modules

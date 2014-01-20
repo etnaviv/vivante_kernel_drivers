@@ -1,6 +1,6 @@
 /****************************************************************************
 *
-*    Copyright (c) 2005 - 2013 by Vivante Corp.  All rights reserved.
+*    Copyright (c) 2005 - 2014 by Vivante Corp.  All rights reserved.
 *
 *    The material in this file is confidential and contains trade secrets
 *    of Vivante Corporation. This is proprietary information owned by
@@ -9,6 +9,7 @@
 *    without the express written permission of Vivante Corporation.
 *
 *****************************************************************************/
+
 
 
 #ifndef __gc_hal_kernel_h_
@@ -786,11 +787,13 @@ struct _gckEVENT
 #if gcdSMP
 #if gcdMULTI_GPU
     gctPOINTER                  pending3D[gcdMULTI_GPU];
+    gctPOINTER                  pendingMask;
 #endif
     gctPOINTER                  pending;
 #else
 #if gcdMULTI_GPU
     volatile gctUINT            pending3D[gcdMULTI_GPU];
+    volatile gctUINT            pendingMask;
 #endif
     volatile gctUINT            pending;
 #endif
@@ -811,6 +814,10 @@ struct _gckEVENT
     gctPOINTER                  eventListMutex;
 
     gctPOINTER                  submitTimer;
+
+#if gcdINTERRUPT_STATISTIC
+    gctPOINTER                  interruptCount;
+#endif
 };
 
 /* Free all events belonging to a process. */
@@ -889,7 +896,7 @@ typedef union _gcuVIDMEM_NODE
         gctUINT32               processID;
 
         /* Surface type. */
-        gceSURF_TYPE            surfType;
+        gceSURF_TYPE            type;
 
 #if gcdDYNAMIC_MAP_RESERVED_MEMORY && gcdENABLE_VG
         gctPOINTER              kernelVirtual;
@@ -933,7 +940,7 @@ typedef union _gcuVIDMEM_NODE
         gctUINT32               processID;
 
         /* Surface type. */
-        gceSURF_TYPE            surfType;
+        gceSURF_TYPE            type;
     }
     Virtual;
 }
@@ -1245,6 +1252,14 @@ gckCONTEXT_Update(
     IN gckCONTEXT Context,
     IN gctUINT32 ProcessID,
     IN gcsSTATE_DELTA_PTR StateDelta
+    );
+
+gceSTATUS
+gckCONTEXT_MapBuffer(
+    IN gckCONTEXT Context,
+    OUT gctUINT32 *Physicals,
+    OUT gctUINT64 *Logicals,
+    OUT gctUINT32 *Bytes
     );
 
 #if gcdLINK_QUEUE_SIZE

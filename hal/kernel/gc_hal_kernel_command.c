@@ -1,6 +1,6 @@
 /****************************************************************************
 *
-*    Copyright (c) 2005 - 2013 by Vivante Corp.  All rights reserved.
+*    Copyright (c) 2005 - 2014 by Vivante Corp.  All rights reserved.
 *
 *    The material in this file is confidential and contains trade secrets
 *    of Vivante Corporation. This is proprietary information owned by
@@ -9,6 +9,7 @@
 *    without the express written permission of Vivante Corporation.
 *
 *****************************************************************************/
+
 
 
 #include "gc_hal_kernel_precomp.h"
@@ -1083,6 +1084,18 @@ OnError:
 **
 **      Nothing.
 */
+#if gcdMULTI_GPU
+gceSTATUS
+gckCOMMAND_Commit(
+    IN gckCOMMAND Command,
+    IN gckCONTEXT Context,
+    IN gcoCMDBUF CommandBuffer,
+    IN gcsSTATE_DELTA_PTR StateDelta,
+    IN gcsQUEUE_PTR EventQueue,
+    IN gctUINT32 ProcessID,
+    IN gceCORE_3D_MASK ChipEnable
+    )
+#else
 gceSTATUS
 gckCOMMAND_Commit(
     IN gckCOMMAND Command,
@@ -1092,6 +1105,7 @@ gckCOMMAND_Commit(
     IN gcsQUEUE_PTR EventQueue,
     IN gctUINT32 ProcessID
     )
+#endif
 {
     gceSTATUS status;
     gctBOOL commitEntered = gcvFALSE;
@@ -1157,6 +1171,10 @@ gckCOMMAND_Commit(
 #endif
 
     gctPOINTER pointer = gcvNULL;
+
+#if gcdMULTI_GPU
+    gctSIZE_T chipEnableBytes;
+#endif
 
     gcmkHEADER_ARG(
         "Command=0x%x CommandBuffer=0x%x ProcessID=%d",
@@ -1264,6 +1282,13 @@ gckCOMMAND_Commit(
         hardware, gcvNULL, gcvNULL, 0, &linkBytes
         ));
 
+#if gcdMULTI_GPU
+    /* Query the size of chip enable command sequence. */
+    gcmkONERROR(gckHARDWARE_ChipEnable(
+        hardware, gcvNULL, 0, &chipEnableBytes
+        ));
+#endif
+
     /* Compute the command buffer entry and the size. */
     commandBufferLogical
         = (gctUINT8_PTR) gcmUINT64_TO_PTR(commandBufferObject->logical)
@@ -1285,6 +1310,43 @@ gckCOMMAND_Commit(
 
     /* Compute number of bytes left in current kernel command queue. */
     bytes = Command->pageSize - offset;
+
+#if gcdMULTI_GPU
+    if (Command->kernel->core == gcvCORE_MAJOR)
+    {
+        commandBufferSize += chipEnableBytes;
+
+        gcmkONERROR(gckHARDWARE_ChipEnable(
+            hardware,
+            commandBufferLogical + pipeBytes,
+            ChipEnable,
+            &chipEnableBytes
+            ));
+
+        gcmkONERROR(gckHARDWARE_ChipEnable(
+            hardware,
+            commandBufferLogical + commandBufferSize - linkBytes - chipEnableBytes,
+            gcvCORE_3D_ALL_MASK,
+            &chipEnableBytes
+            ));
+    }
+    else
+    {
+        commandBufferSize += nopBytes;
+
+        gcmkONERROR(gckHARDWARE_Nop(
+            hardware,
+            commandBufferLogical + pipeBytes,
+            &nopBytes
+            ));
+
+        gcmkONERROR(gckHARDWARE_Nop(
+            hardware,
+            commandBufferLogical + commandBufferSize - linkBytes - nopBytes,
+            &nopBytes
+            ));
+    }
+#endif
 
 #if gcdPROCESS_ADDRESS_SPACE
     if (Command->currentMmu != mmu || oldValue)
@@ -1993,6 +2055,17 @@ gckCOMMAND_Commit(
         = (gctUINT8_PTR) gcmUINT64_TO_PTR(commandBufferObject->logical)
         +                commandBufferObject->offset;
 
+#if gcdMULTI_GPU
+    if (Command->kernel->core == gcvCORE_MAJOR)
+    {
+        commandBufferLink += chipEnableBytes;
+    }
+    else
+    {
+        commandBufferLink += nopBytes;
+    }
+#endif
+
     /* Generate a LINK from the end of the command buffer being scheduled
        back to the kernel command queue. */
     gcmkONERROR(gckHARDWARE_Link(
@@ -2143,7 +2216,11 @@ gckCOMMAND_Commit(
 #if VIVANTE_PROFILER_CONTEXT
     if(sequenceAcquired)
     {
+#if gcdMULTI_GPU
+        gcmkONERROR(gckCOMMAND_Stall(Command, gcvTRUE, ChipEnable));
+#else
         gcmkONERROR(gckCOMMAND_Stall(Command, gcvTRUE));
+#endif
         if (Command->currContext)
         {
             gcmkONERROR(gckHARDWARE_UpdateContextProfile(
@@ -2212,7 +2289,11 @@ gckCOMMAND_Commit(
     }
 
     /* Submit events. */
+#if gcdMULTI_GPU
+    status = gckEVENT_Submit(Command->kernel->eventObj, gcvTRUE, gcvFALSE, ChipEnable);
+#else
     status = gckEVENT_Submit(Command->kernel->eventObj, gcvTRUE, gcvFALSE);
+#endif
     if (status == gcvSTATUS_INTERRUPTED)
     {
         gcmkTRACE(
@@ -2580,11 +2661,20 @@ OnError:
 **
 **      Nothing.
 */
+#if gcdMULTI_GPU
+gceSTATUS
+gckCOMMAND_Stall(
+    IN gckCOMMAND Command,
+    IN gctBOOL FromPower,
+    IN gceCORE_3D_MASK ChipEnable
+    )
+#else
 gceSTATUS
 gckCOMMAND_Stall(
     IN gckCOMMAND Command,
     IN gctBOOL FromPower
     )
+#endif
 {
 #if gcdNULL_DRIVER
     /* Do nothing with infinite hardware. */
@@ -2621,7 +2711,11 @@ gckCOMMAND_Stall(
     gcmkONERROR(gckEVENT_Signal(eventObject, signal, gcvKERNEL_PIXEL));
 
     /* Submit the event queue. */
+#if gcdMULTI_GPU
+    gcmkONERROR(gckEVENT_Submit(eventObject, gcvTRUE, FromPower, ChipEnable));
+#else
     gcmkONERROR(gckEVENT_Submit(eventObject, gcvTRUE, FromPower));
+#endif
 
 #if gcdDUMP_COMMAND
     gcmkPRINT("@[kernel.stall]");

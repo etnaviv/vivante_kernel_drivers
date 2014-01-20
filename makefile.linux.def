@@ -1,6 +1,6 @@
 ##############################################################################
 #
-#    Copyright (c) 2005 - 2013 by Vivante Corp.  All rights reserved.
+#    Copyright (c) 2005 - 2014 by Vivante Corp.  All rights reserved.
 #
 #    The material in this file is confidential and contains trade secrets
 #    of Vivante Corporation. This is proprietary information owned by
@@ -239,6 +239,19 @@ ifeq ($(EGL_API_WL), 1)
 endif
 
 ifeq ($(EGL_API_DRI), 1)
+
+    ifeq ($(DRI_PIXMAPRENDER_ASYNC), 1)
+    	CFLAGS += -DDRI_PIXMAPRENDER_ASYNC
+    endif
+
+    ifeq ($(DRI_PIXMAPRENDER), 1)
+	CFLAGS += -DDRI_PIXMAPRENDER
+    endif
+
+    ifeq ($(DRI_PIXMAPRENDER_GL), 1)
+   	CFLAGS += -DDRI_PIXMAPRENDER_GL
+    endif
+
     CFLAGS += -DEGL_API_DRI
     CFLAGS += -I$(X11_ARM_DIR)/include/arm-linux-gnueabi
 endif
@@ -388,10 +401,8 @@ CLICD_DIR       := $(AQROOT)/driver/khronos/libCL/icd
 VSC_DIR         := $(AQROOT)/compiler/libVSC
 GLSLC_DIR       := $(AQROOT)/compiler/libGLSLC
 ifeq ($(ANDROID), 1)
-GCU_DIR         := $(AQROOT)/gcu/proj/android
 GCU3_DIR        := $(AQROOT)/gcu3/proj/android
 else
-GCU_DIR         := $(AQROOT)/gcu/proj/linux
 GCU3_DIR        := $(AQROOT)/gcu3/proj/linux
 endif
 

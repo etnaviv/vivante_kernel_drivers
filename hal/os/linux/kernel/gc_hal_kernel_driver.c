@@ -1,6 +1,6 @@
 /****************************************************************************
 *
-*    Copyright (c) 2005 - 2013 by Vivante Corp.  All rights reserved.
+*    Copyright (c) 2005 - 2014 by Vivante Corp.  All rights reserved.
 *
 *    The material in this file is confidential and contains trade secrets
 *    of Vivante Corporation. This is proprietary information owned by
@@ -9,6 +9,7 @@
 *    without the express written permission of Vivante Corporation.
 *
 *****************************************************************************/
+
 
 
 #include <linux/device.h>
@@ -110,7 +111,11 @@ module_param(fastClear, int, 0644);
 static int compression = -1;
 module_param(compression, int, 0644);
 
+#if gcdFPGA_BUILD
+static int powerManagement = 0;
+#else
 static int powerManagement = 1;
+#endif
 module_param(powerManagement, int, 0644);
 
 static int gpuProfiler = 0;

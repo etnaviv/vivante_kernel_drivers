@@ -1,6 +1,6 @@
 /****************************************************************************
 *
-*    Copyright (c) 2005 - 2013 by Vivante Corp.  All rights reserved.
+*    Copyright (c) 2005 - 2014 by Vivante Corp.  All rights reserved.
 *
 *    The material in this file is confidential and contains trade secrets
 *    of Vivante Corporation. This is proprietary information owned by
@@ -9,6 +9,7 @@
 *    without the express written permission of Vivante Corporation.
 *
 *****************************************************************************/
+
 
 
 #ifndef __gc_hal_driver_h_
@@ -549,7 +550,7 @@ typedef struct _gcsHAL_INTERFACE
             IN gctUINT64            queue;
 
 #if gcdMULTI_GPU
-            IN gceCORE_3D_ID        coreId;
+            IN gceCORE_3D_MASK     chipEnable;
 
             IN gceMULTI_GPU_MODE    gpuMode;
 #endif
@@ -572,7 +573,7 @@ typedef struct _gcsHAL_INTERFACE
             IN gctUINT64            queue;
 
 #if gcdMULTI_GPU
-            IN gceCORE_3D_ID        coreId;
+            IN gceCORE_3D_MASK      chipEnable;
 
             IN gceMULTI_GPU_MODE    gpuMode;
 #endif
@@ -930,10 +931,6 @@ typedef struct _gcsHAL_INTERFACE
 
             /* Chip types. */
             OUT gceHARDWARE_TYPE        types[gcdCHIP_COUNT];
-#if gcdMULTI_GPU
-            /* 3D core count. */
-            OUT gctUINT32               gpuCoreCount;
-#endif
         }
         ChipInfo;
 
@@ -945,6 +942,18 @@ typedef struct _gcsHAL_INTERFACE
 
             /* Number of states in the buffer. */
             OUT gctUINT64               stateCount;
+
+            /* Map context buffer to user or not. */
+            IN gctBOOL                  map;
+
+            /* Physical of context buffer. */
+            OUT gctUINT32               physicals[2];
+
+            /* Physical of context buffer. */
+            OUT gctUINT64               logicals[2];
+
+            /* Bytes of context buffer. */
+            OUT gctUINT32               bytes;
         }
         Attach;
 

@@ -1,6 +1,6 @@
 /****************************************************************************
 *
-*    Copyright (c) 2005 - 2013 by Vivante Corp.  All rights reserved.
+*    Copyright (c) 2005 - 2014 by Vivante Corp.  All rights reserved.
 *
 *    The material in this file is confidential and contains trade secrets
 *    of Vivante Corporation. This is proprietary information owned by
@@ -9,6 +9,7 @@
 *    without the express written permission of Vivante Corporation.
 *
 *****************************************************************************/
+
 
 
 #ifndef __gc_hal_kernel_buffer_h_
@@ -206,6 +207,18 @@ struct _gcoQUEUE
     /* Number of records currently in queue */
     gctUINT32                   recordCount;
 };
+
+
+#if gcdTEMP_CMD_BUFFER_SIZE
+
+struct _gcsTEMPCMDBUF
+{
+    gctUINT32 currentByteSize;
+    gctPOINTER buffer;
+    gctBOOL  inUse;
+};
+
+#endif
 
 #ifdef __cplusplus
 }

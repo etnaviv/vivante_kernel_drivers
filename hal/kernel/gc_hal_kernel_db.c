@@ -1,6 +1,6 @@
 /****************************************************************************
 *
-*    Copyright (c) 2005 - 2013 by Vivante Corp.  All rights reserved.
+*    Copyright (c) 2005 - 2014 by Vivante Corp.  All rights reserved.
 *
 *    The material in this file is confidential and contains trade secrets
 *    of Vivante Corporation. This is proprietary information owned by
@@ -9,6 +9,8 @@
 *    without the express written permission of Vivante Corporation.
 *
 *****************************************************************************/
+
+
 
 #include "gc_hal_kernel_precomp.h"
 #ifdef LINUX
@@ -720,6 +722,13 @@ gckKERNEL_CreateProcessDB(
         database->vidMemType[i].totalBytes = 0;
     }
 
+    for (i = 0; i < gcvPOOL_NUMBER_OF_POOLS; i++)
+    {
+        database->vidMemPool[i].bytes = 0;
+        database->vidMemPool[i].maxBytes = 0;
+        database->vidMemPool[i].totalBytes = 0;
+    }
+
     gcmkASSERT(database->handleDatabase == gcvNULL);
     gcmkONERROR(
         gckKERNEL_CreateIntegerDatabase(Kernel, &database->handleDatabase));
@@ -1255,14 +1264,14 @@ gctUINT32 _print_VIDMEM_by_pid(
                 {
                     if(ProcessID == node->VidMem.processID)
                     {
-                        size[node->VidMem.surfType] += node->VidMem.bytes;
+                        size[node->VidMem.type] += node->VidMem.bytes;
                     }
                 }
                 else
                 {
                     if(ProcessID == node->Virtual.processID)
                     {
-                        size[node->Virtual.surfType] += node->Virtual.bytes;
+                        size[node->Virtual.type] += node->Virtual.bytes;
                     }
                 }
 
@@ -1375,7 +1384,7 @@ gctUINT32 _print_VIDMEM_by_type(
                            (node->VidMem.memory->object.type == gcvOBJ_VIDMEM))
                         {
                             if((database->processID == node->VidMem.processID) &&
-                               (node->VidMem.surfType == Type))
+                               (node->VidMem.type == Type))
                             {
                                 size += node->VidMem.bytes;
                             }
@@ -1383,7 +1392,7 @@ gctUINT32 _print_VIDMEM_by_type(
                         else
                         {
                             if((database->processID == node->Virtual.processID) &&
-                               (node->Virtual.surfType == Type))
+                               (node->Virtual.type == Type))
                             {
                                 size += node->Virtual.bytes;
                             }
@@ -1496,14 +1505,14 @@ gctUINT32 _print_VIDMEM_by_type_sum(
                         {
                             if (database->processID == node->VidMem.processID)
                             {
-                                size[node->VidMem.surfType] += node->VidMem.bytes;
+                                size[node->VidMem.type] += node->VidMem.bytes;
                             }
                         }
                         else
                         {
                             if (database->processID == node->Virtual.processID)
                             {
-                                size[node->Virtual.surfType] += node->Virtual.bytes;
+                                size[node->Virtual.type] += node->Virtual.bytes;
                             }
                         }
 

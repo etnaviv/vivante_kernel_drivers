@@ -1,6 +1,6 @@
 /****************************************************************************
 *
-*    Copyright (c) 2005 - 2013 by Vivante Corp.  All rights reserved.
+*    Copyright (c) 2005 - 2014 by Vivante Corp.  All rights reserved.
 *
 *    The material in this file is confidential and contains trade secrets
 *    of Vivante Corporation. This is proprietary information owned by
@@ -9,6 +9,8 @@
 *    without the express written permission of Vivante Corporation.
 *
 *****************************************************************************/
+
+
 
 
 #ifndef __gc_hal_vg_h_
@@ -658,14 +660,11 @@ typedef struct _gcsVGCONTEXT
     /* State map/mod buffer. */
     gctSIZE_T                   mapFirst;
     gctSIZE_T                   mapLast;
-#ifdef __QNXNTO__
-    gctSIZE_T                   mapContainerSize;
-#endif
-    gcsVGCONTEXT_MAP_PTR            mapContainer;
-    gcsVGCONTEXT_MAP_PTR            mapPrev;
-    gcsVGCONTEXT_MAP_PTR            mapCurr;
-    gcsVGCONTEXT_MAP_PTR            firstPrevMap;
-    gcsVGCONTEXT_MAP_PTR            firstCurrMap;
+    gcsVGCONTEXT_MAP_PTR        mapContainer;
+    gcsVGCONTEXT_MAP_PTR        mapPrev;
+    gcsVGCONTEXT_MAP_PTR        mapCurr;
+    gcsVGCONTEXT_MAP_PTR        firstPrevMap;
+    gcsVGCONTEXT_MAP_PTR        firstCurrMap;
 
     /* Main context buffer. */
     gcsCMDBUFFER_PTR            header;

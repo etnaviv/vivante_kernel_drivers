@@ -1,6 +1,6 @@
 /****************************************************************************
 *
-*    Copyright (c) 2005 - 2013 by Vivante Corp.  All rights reserved.
+*    Copyright (c) 2005 - 2014 by Vivante Corp.  All rights reserved.
 *
 *    The material in this file is confidential and contains trade secrets
 *    of Vivante Corporation. This is proprietary information owned by
@@ -9,6 +9,8 @@
 *    without the express written permission of Vivante Corporation.
 *
 *****************************************************************************/
+
+
 
 
 #ifndef __gc_hal_engine_vg_h_
@@ -734,6 +736,8 @@ gcoVG_SetColorRamp(
 gceSTATUS
 gcoVG_SetPattern(
     IN gcoVG Vg,
+    IN gctINT32 width,
+    IN gctINT32 height,
     IN gcoSURF Pattern,
     IN gceTILE_MODE TileMode,
     IN gceIMAGE_FILTER Filter
@@ -784,6 +788,9 @@ gcoVG_DrawPath(
     IN gcsPATH_DATA_PTR PathData,
     IN gctFLOAT Scale,
     IN gctFLOAT Bias,
+#if gcdMOVG
+    IN gctFLOAT *Bounds,
+#endif
     IN gctBOOL SoftwareTesselation
     );
 
@@ -800,7 +807,8 @@ gcoVG_DrawImage(
     IN gctINT TargetY,
     IN gctINT Width,
     IN gctINT Height,
-    IN gctBOOL Mask
+    IN gctBOOL Mask,
+    IN gctBOOL isDrawImage
     );
 
 gceSTATUS
@@ -810,7 +818,12 @@ gcoVG_TesselateImage(
     IN gcsVG_RECT_PTR Rectangle,
     IN gceIMAGE_FILTER Filter,
     IN gctBOOL Mask,
+#if gcdMOVG
+    IN gctBOOL SoftwareTesselation,
+    IN gceVG_BLEND BlendMode
+#else
     IN gctBOOL SoftwareTesselation
+#endif
     );
 
 gceSTATUS
