@@ -1,6 +1,8 @@
 .PHONY: build-galcore
 
+ifeq ($(ARCH),arm)
 $(PRODUCT_OUT)/ramdisk.img: galcore.ko
+endif
 
 include $(CLEAR_VARS)
 GALCORE_SRC_PATH := $(ANDROID_BUILD_TOP)/vendor/marvell/generic/graphics/driver
