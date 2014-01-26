@@ -38,12 +38,6 @@ ifneq ($(USE_MULTI_GPU), )
     EXTRA_CFLAGS += -DgcdMULTI_GPU=$(USE_MULTI_GPU)
 endif
 
-ifeq ($(FPGA_BUILD), 1)
-EXTRA_CFLAGS += -DgcdFPGA_BUILD=1
-else
-EXTRA_CFLAGS += -DgcdFPGA_BUILD=0
-endif
-
 OBJS := $(OS_KERNEL_DIR)/gc_hal_kernel_device.o \
         $(OS_KERNEL_DIR)/gc_hal_kernel_driver.o \
         $(OS_KERNEL_DIR)/gc_hal_kernel_linux.o \
@@ -247,6 +241,12 @@ ifeq ($(USE_BANK_ALIGNMENT), 1)
     ifneq ($(BANK_CHANNEL_BIT), 0)
         EXTRA_CFLAGS += -DgcdBANK_CHANNEL_BIT=$(BANK_CHANNEL_BIT)
     endif
+endif
+
+ifeq ($(FPGA_BUILD), 1)
+EXTRA_CFLAGS += -DgcdFPGA_BUILD=1
+else
+EXTRA_CFLAGS += -DgcdFPGA_BUILD=0
 endif
 
 EXTRA_CFLAGS += -I$(AQROOT)/hal/inc

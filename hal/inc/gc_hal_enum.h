@@ -320,6 +320,8 @@ typedef enum _gceSURF_TYPE
 
     gcvSURF_CREATE_AS_TEXTURE  = 0x4000,  /* create it as a texture */
 
+    gcvSURF_2D_COMPRESSED      = 0x01000000, /* create a header buffer along with it */
+
     gcvSURF_TEXTURE_LINEAR               = gcvSURF_TEXTURE
                                          | gcvSURF_LINEAR,
 

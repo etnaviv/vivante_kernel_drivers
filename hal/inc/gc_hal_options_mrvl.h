@@ -311,6 +311,12 @@
 #endif
 
 /*
+    MRVL_ENABLE_S3TC_TEXTURE
+        -- Marco for S3TC compression texture
+*/
+#define MRVL_ENABLE_S3TC_TEXTURE                1
+
+/*
     MRVL_ENABLE_LINEAR_TEXTURE
         -- Marco for linear texture
 */
@@ -396,7 +402,7 @@
 /* @Ziyi: If any change happened between these 2 comments please contact zyxu@marvell.com, Thanks. */
 /* #################### [START ==DO NOT CHANGE THIS MARCRO== START] #################### */
 
-#define _GC_VERSION_STRING_                     "GC version eden-kk44-alpha6-r2"
+#define _GC_VERSION_STRING_                     "GC version eden-kk44-alpha6-r3"
 
 /* Do not align u/v stride to 16 */
 #define VIVANTE_ALIGN_UVSTRIDE                  0

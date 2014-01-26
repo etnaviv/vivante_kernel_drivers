@@ -426,6 +426,7 @@ typedef enum _gcePATCH_ID
     gcvPATCH_FSBHAWAIIF,
     gcvPATCH_GOOGLEMAP,
     gcvPATCH_GOOGLEPLUS,
+    gcvPATCH_CKZOMBIES2,
 
     gcvPATCH_COUNT
 } gcePATCH_ID;

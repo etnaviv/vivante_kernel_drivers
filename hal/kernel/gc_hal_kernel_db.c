@@ -85,8 +85,6 @@ gckKERNEL_NewDatabase(
         /* Allocate a database from the free list. */
         database             = Kernel->db->freeDatabase;
         Kernel->db->freeDatabase = database->next;
-
-        gckOS_ZeroMemory(database, gcmSIZEOF(gcsDATABASE));
     }
     else
     {
@@ -402,8 +400,6 @@ gckKERNEL_NewRecord(
         /* Allocate the record from the free list. */
         record             = Kernel->db->freeRecord;
         Kernel->db->freeRecord = record->next;
-
-        gckOS_ZeroMemory(record, gcmSIZEOF(gcsDATABASE_RECORD));
     }
     else
     {
@@ -413,8 +409,6 @@ gckKERNEL_NewRecord(
         gcmkONERROR(gckOS_Allocate(Kernel->os,
                                    gcmSIZEOF(gcsDATABASE_RECORD),
                                    &pointer));
-
-        gckOS_ZeroMemory(pointer, gcmSIZEOF(gcsDATABASE_RECORD));
 
         record = pointer;
     }
