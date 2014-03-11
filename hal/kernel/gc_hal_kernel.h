@@ -547,11 +547,9 @@ struct _gckKERNEL
     gctBOOL                     dbCreated;
     gctBOOL                     dbflag;
 
-#if gcdENABLE_RECOVERY
     gctPOINTER                  resetFlagClearTimer;
     gctPOINTER                  resetAtom;
     gctUINT64                   resetTimeStamp;
-#endif
 
     /* Pointer to gckEVENT object. */
     gcsTIMER                    timers[8];
@@ -650,11 +648,13 @@ struct _gckCOMMAND
         gctSIGNAL               signal;
         gctPHYS_ADDR            physical;
         gctPOINTER              logical;
+        gctUINT32               address;
     }
     queues[gcdCOMMAND_QUEUES];
 
     gctPHYS_ADDR                physical;
     gctPOINTER                  logical;
+    gctUINT32                   address;
     gctUINT32                   offset;
     gctINT                      index;
 #if gcmIS_DEBUG(gcdDEBUG_TRACE)
@@ -732,6 +732,11 @@ typedef struct _gcsEVENT_QUEUE
     /* Source of the event. */
     gceKERNEL_WHERE             source;
 
+#if gcdMULTI_GPU
+    /* Which chip(s) of the event */
+    gceCORE_3D_MASK             chipEnable;
+#endif
+
     /* Pointer to head of event queue. */
     gcsEVENT_PTR                head;
 
@@ -787,12 +792,14 @@ struct _gckEVENT
 #if gcdSMP
 #if gcdMULTI_GPU
     gctPOINTER                  pending3D[gcdMULTI_GPU];
+    gctPOINTER                  pending3DMask[gcdMULTI_GPU];
     gctPOINTER                  pendingMask;
 #endif
     gctPOINTER                  pending;
 #else
 #if gcdMULTI_GPU
     volatile gctUINT            pending3D[gcdMULTI_GPU];
+    volatile gctUINT            pending3DMask[gcdMULTI_GPU];
     volatile gctUINT            pendingMask;
 #endif
     volatile gctUINT            pending;
@@ -881,7 +888,7 @@ typedef union _gcuVIDMEM_NODE
         gctUINT32               alignment;
 
 #ifdef __QNXNTO__
-        /* Client/server vaddr (mapped using mmap_join). */
+        /* Client virtual address. */
         gctPOINTER              logical;
 #endif
 
@@ -956,7 +963,7 @@ struct _gckVIDMEM
     gckOS                       os;
 
     /* Information for this video memory heap. */
-    gctUINTPTR_T                baseAddress;
+    gctUINT32                   baseAddress;
     gctSIZE_T                   bytes;
     gctSIZE_T                   freeBytes;
 
@@ -1143,16 +1150,36 @@ struct _gckMMU
 
 gceSTATUS
 gckOS_CreateKernelVirtualMapping(
+    IN gckOS Os,
     IN gctPHYS_ADDR Physical,
     IN gctSIZE_T Bytes,
-    OUT gctSIZE_T * PageCount,
-    OUT gctPOINTER * Logical
+    OUT gctPOINTER * Logical,
+    OUT gctSIZE_T * PageCount
     );
 
 gceSTATUS
 gckOS_DestroyKernelVirtualMapping(
-    IN gctPOINTER Logical,
-    IN gctSIZE_T Bytes
+    IN gckOS Os,
+    IN gctPHYS_ADDR Physical,
+    IN gctSIZE_T Bytes,
+    IN gctPOINTER Logical
+    );
+
+gceSTATUS
+gckOS_CreateUserVirtualMapping(
+    IN gckOS Os,
+    IN gctPHYS_ADDR Physical,
+    IN gctSIZE_T Bytes,
+    OUT gctPOINTER * Logical,
+    OUT gctSIZE_T * PageCount
+    );
+
+gceSTATUS
+gckOS_DestroyUserVirtualMapping(
+    IN gckOS Os,
+    IN gctPHYS_ADDR Physical,
+    IN gctSIZE_T Bytes,
+    IN gctPOINTER Logical
     );
 
 gceSTATUS
@@ -1176,6 +1203,7 @@ gceSTATUS
 gckKERNEL_GetGPUAddress(
     IN gckKERNEL Kernel,
     IN gctPOINTER Logical,
+    IN gctBOOL InUserSpace,
     OUT gctUINT32 * Address
     );
 

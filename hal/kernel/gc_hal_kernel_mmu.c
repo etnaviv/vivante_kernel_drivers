@@ -39,7 +39,7 @@ gceMMU_TYPE;
 #   define gcdMMU_CLEAR_VALUE                   0x00000ABC
 #endif
 
-/*! Start GPU address for gcvSURF_VERTEX.  */
+/*VIV: Start GPU address for gcvSURF_VERTEX.  */
 #define gcdVERTEX_START      (128 << 10)
 
 typedef struct _gcsMMU_STLB *gcsMMU_STLB_PTR;
@@ -49,7 +49,7 @@ typedef struct _gcsMMU_STLB
     gctPHYS_ADDR    physical;
     gctUINT32_PTR   logical;
     gctSIZE_T       size;
-    gctUINTPTR_T    physBase;
+    gctUINT32       physBase;
     gctSIZE_T       pageCount;
     gctUINT32       mtlbIndex;
     gctUINT32       mtlbEntryNum;
@@ -694,7 +694,7 @@ _SetupDynamicSpace(
     gceSTATUS status;
     gcsDynamicSpaceNode_PTR nodeArray = gcvNULL;
     gctINT i, nodeArraySize = 0;
-    gctUINTPTR_T physical;
+    gctUINT32 physical;
     gctINT numEntries = 0;
     gctUINT32_PTR map;
     gctBOOL acquired = gcvFALSE;
@@ -1663,7 +1663,7 @@ gckMMU_AllocatePages(
     )
 {
     return gckMMU_AllocatePagesEx(
-                Mmu, PageCount, gcvSURF_UNKNOWN, PageTable, Address);
+                Mmu, PageCount, gcvSURF_TYPE_UNKNOWN, PageTable, Address);
 }
 
 gceSTATUS

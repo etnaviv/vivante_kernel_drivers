@@ -121,11 +121,7 @@ extern "C" {
 ******************************** Useful Macro *********************************
 \******************************************************************************/
 
-#ifdef CONFIG_ARM64
-#define gcvINVALID_ADDRESS          ~0LLU
-#else
 #define gcvINVALID_ADDRESS          ~0U
-#endif
 
 #define gcmGET_PRE_ROTATION(rotate) \
     ((rotate) & (~(gcvSURF_POST_FLIP_X | gcvSURF_POST_FLIP_Y)))
@@ -401,9 +397,6 @@ gceSTATUS
 gckOS_MapPages(
     IN gckOS Os,
     IN gctPHYS_ADDR Physical,
-#ifdef __QNXNTO__
-    IN gctPOINTER Logical,
-#endif
     IN gctSIZE_T PageCount,
     IN gctPOINTER PageTable
     );
@@ -414,9 +407,6 @@ gckOS_MapPagesEx(
     IN gckOS Os,
     IN gceCORE Core,
     IN gctPHYS_ADDR Physical,
-#ifdef __QNXNTO__
-    IN gctPOINTER Logical,
-#endif
     IN gctSIZE_T PageCount,
 #if gcdPROCESS_ADDRESS_SPACE
     IN gctUINT32 Address,
@@ -507,7 +497,15 @@ gceSTATUS
 gckOS_GetPhysicalAddress(
     IN gckOS Os,
     IN gctPOINTER Logical,
-    OUT gctUINTPTR_T * Address
+    OUT gctUINT32 * Address
+    );
+
+/* Get the physical address of a corresponding user logical address. */
+gceSTATUS
+gckOS_UserLogicalToPhysical(
+    IN gckOS Os,
+    IN gctPOINTER Logical,
+    OUT gctUINT32 * Address
     );
 
 /* Get the physical address of a corresponding logical address. */
@@ -516,7 +514,7 @@ gckOS_GetPhysicalAddressProcess(
     IN gckOS Os,
     IN gctPOINTER Logical,
     IN gctUINT32 ProcessID,
-    OUT gctUINTPTR_T * Address
+    OUT gctUINT32 * Address
     );
 
 /* Map physical memory. */
@@ -1398,7 +1396,7 @@ gckOS_CacheFlush(
     gckOS Os,
     gctUINT32 ProcessID,
     gctPHYS_ADDR Handle,
-    gctUINTPTR_T Physical,
+    gctUINT32 Physical,
     gctPOINTER Logical,
     gctSIZE_T Bytes
     );
@@ -1967,6 +1965,7 @@ typedef enum _gceKERNEL_FLUSH
 #if gcdMULTI_GPU
     gcvFLUSH_L2                 = 0x10,
 #endif
+    gcvFLUSH_TILE_STATUS        = 0x20,
     gcvFLUSH_ALL                = gcvFLUSH_COLOR
                                 | gcvFLUSH_DEPTH
                                 | gcvFLUSH_TEXTURE
@@ -1974,6 +1973,7 @@ typedef enum _gceKERNEL_FLUSH
 #if gcdMULTI_GPU
                                 | gcvFLUSH_L2
 #endif
+                                | gcvFLUSH_TILE_STATUS
 }
 gceKERNEL_FLUSH;
 
@@ -2269,23 +2269,9 @@ gckHARDWARE_WaitLink(
 gceSTATUS
 gckHARDWARE_Execute(
     IN gckHARDWARE Hardware,
-    IN gctPOINTER Logical,
-#ifdef __QNXNTO__
-    IN gctPOINTER Physical,
-    IN gctBOOL PhysicalAddresses,
-#endif
+    IN gctUINT32 Address,
     IN gctSIZE_T Bytes
     );
-
-#if gcdPROCESS_ADDRESS_SPACE
-/* Kickstart the command processor with GPU adddress. */
-gceSTATUS
-gckHARDWARE_ExecutePhysical(
-    IN gckHARDWARE Hardware,
-    IN gctUINT32 Physical,
-    IN gctSIZE_T Bytes
-    );
-#endif
 
 /* Add an END command in the command queue. */
 gceSTATUS
@@ -2313,15 +2299,6 @@ gckHARDWARE_Nop(
     IN OUT gctSIZE_T * Bytes
     );
 
-/* Add a WAIT command in the command queue. */
-gceSTATUS
-gckHARDWARE_Wait(
-    IN gckHARDWARE Hardware,
-    IN gctPOINTER Logical,
-    IN gctUINT32 Count,
-    IN OUT gctSIZE_T * Bytes
-    );
-
 /* Add a PIPESELECT command in the command queue. */
 gceSTATUS
 gckHARDWARE_PipeSelect(
@@ -2336,7 +2313,7 @@ gceSTATUS
 gckHARDWARE_Link(
     IN gckHARDWARE Hardware,
     IN gctPOINTER Logical,
-    IN gctPOINTER FetchAddress,
+    IN gctUINT32 FetchAddress,
     IN gctSIZE_T FetchSize,
     IN OUT gctSIZE_T * Bytes
     );
@@ -2403,18 +2380,9 @@ gceSTATUS
 gckHARDWARE_ConvertLogical(
     IN gckHARDWARE Hardware,
     IN gctPOINTER Logical,
+    IN gctBOOL InUserSpace,
     OUT gctUINT32 * Address
     );
-
-#ifdef __QNXNTO__
-/* Convert physical address to hardware specific address. */
-gceSTATUS
-gckHARDWARE_ConvertPhysical(
-    IN gckHARDWARE Hardware,
-    IN gctPHYS_ADDR Physical,
-    OUT gctUINT32 * Address
-    );
-#endif
 
 /* Interrupt manager. */
 gceSTATUS
@@ -2684,6 +2652,16 @@ gckEVENT_Destroy(
     );
 
 /* Reserve the next available hardware event. */
+#if gcdMULTI_GPU
+gceSTATUS
+gckEVENT_GetEvent(
+    IN gckEVENT Event,
+    IN gctBOOL Wait,
+    OUT gctUINT8 * EventID,
+    IN gceKERNEL_WHERE Source,
+    IN gceCORE_3D_MASK ChipEnable
+    );
+#else
 gceSTATUS
 gckEVENT_GetEvent(
     IN gckEVENT Event,
@@ -2691,6 +2669,7 @@ gckEVENT_GetEvent(
     OUT gctUINT8 * EventID,
     IN gceKERNEL_WHERE Source
    );
+#endif
 
 /* Add a new event to the list of events. */
 gceSTATUS
@@ -2951,7 +2930,7 @@ gckCOMMAND_DumpExecutingBuffer(
 gceSTATUS
 gckCOMMAND_AddressInKernelCommandBuffer(
     IN gckCOMMAND Command,
-    IN gctPOINTER Logical,
+    IN gctUINT32 Address,
     OUT gctBOOL *In
     );
 

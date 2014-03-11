@@ -331,6 +331,20 @@ gco2D_SetColorSourceEx(
     IN gctUINT32 TransparencyColor
     );
 
+gceSTATUS
+gco2D_SetColorSourceExSW(
+    IN gco2D Engine,
+    IN gctUINT8_PTR Address,
+    IN gctUINT32 Stride,
+    IN gceSURF_FORMAT Format,
+    IN gceSURF_ROTATION Rotation,
+    IN gctUINT32 SurfaceWidth,
+    IN gctUINT32 SurfaceHeight,
+    IN gctBOOL CoordRelative,
+    IN gceSURF_TRANSPARENCY Transparency,
+    IN gctUINT32 TransparencyColor
+    );
+
 /* Configure color source. */
 gceSTATUS
 gco2D_SetColorSourceAdvanced(
@@ -381,6 +395,19 @@ gco2D_SetMaskedSourceEx(
     IN gctUINT32 SurfaceHeight
     );
 
+gceSTATUS
+gco2D_SetMaskedSourceExSW(
+    IN gco2D Engine,
+    IN gctUINT8_PTR Address,
+    IN gctUINT32 Stride,
+    IN gceSURF_FORMAT Format,
+    IN gctBOOL CoordRelative,
+    IN gceSURF_MONOPACK MaskPack,
+    IN gceSURF_ROTATION Rotation,
+    IN gctUINT32 SurfaceWidth,
+    IN gctUINT32 SurfaceHeight
+    );
+
 /* Setup the source rectangle. */
 gceSTATUS
 gco2D_SetSource(
@@ -410,6 +437,16 @@ gceSTATUS
 gco2D_SetTargetEx(
     IN gco2D Engine,
     IN gctUINT32 Address,
+    IN gctUINT32 Stride,
+    IN gceSURF_ROTATION Rotation,
+    IN gctUINT32 SurfaceWidth,
+    IN gctUINT32 SurfaceHeight
+    );
+
+gceSTATUS
+gco2D_SetTargetExSW(
+    IN gco2D Engine,
+    IN gctUINT8_PTR Address,
     IN gctUINT32 Stride,
     IN gceSURF_ROTATION Rotation,
     IN gctUINT32 SurfaceWidth,

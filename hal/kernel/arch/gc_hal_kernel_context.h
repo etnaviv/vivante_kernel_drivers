@@ -56,6 +56,9 @@ typedef struct _gcsCONTEXT
     /* Logical address of the context buffer. */
     gctUINT32_PTR               logical;
 
+    /* Hardware address of the context buffer. */
+    gctUINT32                   address;
+
     /* Pointer to the LINK commands. */
     gctPOINTER                  link2D;
     gctPOINTER                  link3D;

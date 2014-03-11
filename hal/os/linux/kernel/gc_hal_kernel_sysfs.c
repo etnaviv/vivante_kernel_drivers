@@ -430,16 +430,7 @@ static ssize_t store_clk_rate (struct device *dev,
     SYSFS_VERIFY_INPUT_RANGE(core, 0, (gpu_count-1));
     SYSFS_VERIFY_INPUT_RANGE(frequency, 156, 624);
 
-#if MRVL_3D_CORE_SH_CLOCK_SEPARATED
-    if(core ==gcvCORE_SH)
-    {
-        status = gckOS_SetClkRate(galDevice->os, gcvCORE_SH, frequency*1000);
-    }
-    else
-#endif
-    {
-        status = gckOS_SetClkRate(galDevice->os, core, frequency*1000);
-    }
+    status = gckOS_SetClkRate(galDevice->os, core, frequency*1000);
 
     if(gcmIS_ERROR(status))
     {
@@ -468,26 +459,25 @@ static ssize_t show_clk_rate (struct device *dev,
                 len += sprintf(buf+len, "[%s] current frequency: %u MHZ\n", _core_desc[i], clockRate/1000/1000);
             else
                 len += sprintf(buf+len, "[%s] failed to get clock rate\n", _core_desc[i]);
-        }
-    }
+#if MRVL_3D_CORE_SH_CLOCK_SEPARATED
+            if(i == gcvCORE_MAJOR)
+            {
+                unsigned int shClkRate = 0;
 
-
-#if MRVL_CONFIG_SHADER_CLK_CONTROL
-    if(galDevice->kernels[gcvCORE_MAJOR] != gcvNULL)
-    {
-        unsigned int shClkRate = 0;
-
-        status = gckOS_QueryShClkRate(galDevice->os, gcvCORE_MAJOR, &shClkRate);
-        if(!status)
-        {
-            len += sprintf(buf+len, "[%s] current frequency: %u MHZ\n", "SH", shClkRate/1000/1000);
-        }
-        else
-        {
-            len += sprintf(buf+len, "[SH] failed to get clock rate\n");
-        }
-    }
+                status = gckOS_QueryClkRate(galDevice->os, gcvCORE_SH, &shClkRate);
+                if(status == gcvSTATUS_OK)
+                {
+                    len += sprintf(buf+len, "[%s] current frequency: %u MHZ\n", "SH", shClkRate/1000/1000);
+                }
+                else
+                {
+                    len += sprintf(buf+len, "[%s] failed to get clock rate\n", "SH");
+                }
+            }
 #endif
+
+        }
+    }
 
     return len;
 }
@@ -503,7 +493,7 @@ static ssize_t store_clk_rate (struct device *dev,
         if (galDevice->kernels[i] != gcvNULL)
             gpu_count++;
 
-#if MRVL_CONFIG_SHADER_CLK_CONTROL
+#if MRVL_3D_CORE_SH_CLOCK_SEPARATED
     gpu_count++;
 #endif
 
@@ -512,16 +502,7 @@ static ssize_t store_clk_rate (struct device *dev,
     SYSFS_VERIFY_INPUT_RANGE(core, 0, (gpu_count-1));
     SYSFS_VERIFY_INPUT_RANGE(frequency, 156, 624);
 
-#if MRVL_CONFIG_SHADER_CLK_CONTROL
-    if(core ==gcvCORE_SH)
-    {
-        status = gckOS_SetShClkRate(galDevice->os, gcvCORE_MAJOR, frequency*1000*1000);
-    }
-    else
-#endif
-    {
-        status = gckOS_SetClkRate(galDevice->os, core, frequency*1000*1000);
-    }
+    status = gckOS_SetClkRate(galDevice->os, core, frequency*1000*1000);
 
     if(gcmIS_ERROR(status))
     {

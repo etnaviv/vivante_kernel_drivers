@@ -861,6 +861,11 @@ _InitializeContextBuffer(
 	index += _State( Context, index,0x10700 >> 2,0x00000F00,32,gcvFALSE,gcvFALSE);
 	    }
 
+    if (halti3)
+    {
+	index += _State( Context, index,0x10780 >> 2,0x00030000,32,gcvFALSE,gcvFALSE);
+	    }
+
     /* ASTC */
     if (	(((((gctUINT32)(Context->hardware->identity.chipMinorFeatures4)) >> (0 ? 13:13)) &((gctUINT32) ((((1 ? 13:13) - (0 ? 13:13) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 13:13) - (0 ? 13:13) + 1))))))))
 	    {
@@ -960,19 +965,28 @@ _InitializeContextBuffer(
 
     if (unifiedUnforms)
     {
+        gctINT numConstants = Context->hardware->identity.numConstants;
+
 	index += _State( Context, index,0x01024 >> 2,0x00000100,1,gcvFALSE,gcvFALSE);
 		index += _State( Context, index,0x00864 >> 2,0x00000000,1,gcvFALSE,gcvFALSE);
 	        index += _CLOSE_RANGE();
 
         for (i = 0;
-             i < Context->hardware->identity.numConstants << 2;
-             i += 256 << 2
+             numConstants > 0;
+             i += 256 << 2,
+             numConstants -= 256
              )
         {
+            if (numConstants >= 256)
+            {
 	index += _State( Context, index,(0x30000 >> 2) + i,0x00000000,256 << 2,gcvFALSE,gcvFALSE);
-	            index += _CLOSE_RANGE();
+	            }
+            else
+            {
+	index += _State( Context, index,(0x30000 >> 2) + i,0x00000000,numConstants << 2,gcvFALSE,gcvFALSE);
+	            }
+            index += _CLOSE_RANGE();
         }
-        index += _CLOSE_RANGE();
     }
 
     /* Store the index of the "XD" entry. */
@@ -1357,6 +1371,7 @@ gckCONTEXT_Construct(
     gctSIZE_T allocationSize;
     gctUINT i;
     gctPOINTER pointer = gcvNULL;
+    gctUINT32 address;
 
     gcmkHEADER_ARG("Os=0x%08X Hardware=0x%08X", Os, Hardware);
 
@@ -1524,6 +1539,13 @@ gckCONTEXT_Construct(
                 &buffer->physical,
                 &pointer
                 ));
+
+            gcmkONERROR(gckKERNEL_GetGPUAddress(
+                context->hardware->kernel,
+                pointer,
+                gcvFALSE,
+                &address
+                ));
         }
         else
         {
@@ -1534,9 +1556,17 @@ gckCONTEXT_Construct(
                 &buffer->physical,
                 &pointer
                 ));
+
+            gcmkONERROR(gckHARDWARE_ConvertLogical(
+                context->hardware,
+                pointer,
+                gcvFALSE,
+                &address
+                ));
         }
 
         buffer->logical = pointer;
+        buffer->address = address;
 
         /* Set gckEVENT object pointer. */
         buffer->eventObj = Hardware->kernel->eventObj;
@@ -1555,7 +1585,7 @@ gckCONTEXT_Construct(
         if (context->linkIndexXD != 0)
         {
             gctPOINTER xdLink;
-            gctUINT8_PTR xdEntryLogical;
+            gctUINT32 xdEntryAddress;
             gctSIZE_T xdEntrySize;
             gctSIZE_T linkBytes;
 
@@ -1563,8 +1593,8 @@ gckCONTEXT_Construct(
             xdLink
                 = &buffer->logical[context->linkIndexXD];
 
-            xdEntryLogical
-                = (gctUINT8_PTR) buffer->logical
+            xdEntryAddress
+                = buffer->address
                 + context->entryOffsetXDFrom3D;
 
             xdEntrySize
@@ -1573,14 +1603,14 @@ gckCONTEXT_Construct(
 
             /* Query LINK size. */
             gcmkONERROR(gckHARDWARE_Link(
-                Hardware, gcvNULL, gcvNULL, 0, &linkBytes
+                Hardware, gcvNULL, 0, 0, &linkBytes
                 ));
 
             /* Generate a LINK. */
             gcmkONERROR(gckHARDWARE_Link(
                 Hardware,
                 xdLink,
-                xdEntryLogical,
+                xdEntryAddress,
                 xdEntrySize,
                 &linkBytes
                 ));
@@ -2102,11 +2132,10 @@ gckCONTEXT_MapBuffer(
             commandBuffer = (gckVIRTUAL_COMMAND_BUFFER_PTR)buffer->physical;
             physical = commandBuffer->physical;
 
-            gcmkONERROR(gckOS_LockPages(
+            gcmkONERROR(gckOS_CreateUserVirtualMapping(
                 kernel->os,
                 physical,
                 (gctSIZE_T)Context->totalSize,
-                gcvFALSE,
                 &logical,
                 &pageCount));
         }
