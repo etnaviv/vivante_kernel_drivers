@@ -1901,7 +1901,7 @@ gckKERNEL_DestroyProcessDB(
             /* Unlock what we still locked */
             status = gckVIDMEM_Unlock(record->kernel,
                                       nodeObject->node,
-                                      nodeObject->type,
+                                      gcvSURF_TYPE_UNKNOWN,
                                       &asynchronous);
 
 #if gcdENABLE_VG
@@ -1912,7 +1912,7 @@ gckKERNEL_DestroyProcessDB(
                     /* TODO: we maybe need to schedule a event here */
                     status = gckVIDMEM_Unlock(record->kernel,
                                               nodeObject->node,
-                                              nodeObject->type,
+                                              gcvSURF_TYPE_UNKNOWN,
                                               gcvNULL);
                 }
 
@@ -1936,7 +1936,7 @@ gckKERNEL_DestroyProcessDB(
                     status = gckEVENT_Unlock(record->kernel->eventObj,
                                              gcvKERNEL_PIXEL,
                                              nodeObject,
-                                             nodeObject->type);
+                                             gcvSURF_TYPE_UNKNOWN);
                 }
                 else
                 {
@@ -1968,8 +1968,8 @@ gckKERNEL_DestroyProcessDB(
                                            record->data);
 
             gcmkTRACE_ZONE(gcvLEVEL_WARNING, gcvZONE_DATABASE,
-                           "DB: MAP MEMORY %p (status=%d)",
-                           record->data, status);
+                           "DB: MAP MEMORY %d (status=%d)",
+                           gcmPTR2INT(record->data), status);
             break;
 
         case gcvDB_MAP_USER_MEMORY:
@@ -1983,8 +1983,8 @@ gckKERNEL_DestroyProcessDB(
             gcmRELEASE_NAME(record->data);
 
             gcmkTRACE_ZONE(gcvLEVEL_WARNING, gcvZONE_DATABASE,
-                           "DB: MAP USER MEMORY %p (status=%d)",
-                           record->data, status);
+                           "DB: MAP USER MEMORY %d (status=%d)",
+                           gcmPTR2INT(record->data), status);
             break;
 
 #if gcdANDROID_NATIVE_FENCE_SYNC

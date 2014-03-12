@@ -764,6 +764,15 @@
 #endif
 
 /*
+    gcdENABLE_RECOVERY
+
+        This define enables the recovery code.
+*/
+#ifndef gcdENABLE_RECOVERY
+#   define gcdENABLE_RECOVERY                   1
+#endif
+
+/*
     gcdRENDER_THREADS
 
         Number of render threads. Make it zero, and there will be no render
@@ -887,6 +896,7 @@
 #endif
 
 
+
 /*
     gcdDVFS
 
@@ -971,11 +981,7 @@
 #if gcdDUMP
 #   define gcdENABLE_RENDER_INTO_WINDOW         0
 #else
-#if (defined USE_LOCAL_GRALLOC) && USE_LOCAL_GRALLOC
-#   define gcdENABLE_RENDER_INTO_WINDOW         1
-#else
 #   define gcdENABLE_RENDER_INTO_WINDOW         0
-#endif
 #endif
 #endif
 
@@ -1119,29 +1125,12 @@
 /*
     gcdTEMP_CMD_BUFFER_SIZE
         When it's zero, use original command buffer generation logic.
-        Otherwise, set it as 0x20000 as temp buffer size.
+        Otherwise, set it as 0x4000 as temp buffer size.
 */
 
 #ifndef gcdTEMP_CMD_BUFFER_SIZE
-#   define gcdTEMP_CMD_BUFFER_SIZE  0x20000
+#define gcdTEMP_CMD_BUFFER_SIZE  0
 #endif
 
-/*
-    gcdYINVERTED_RENDERING
-        When it's not zero, we will rendering display buffer
-        with top-bottom direction. All other offscreen rendering
-        will be bottom-top, which follow OpenGL ES spec.
-*/
-#ifndef gcdYINVERTED_RENDERING
-#   define gcdYINVERTED_RENDERING 0
-#endif
-
-/*
-    gcdFENCE_WAIT_LOOP_COUNT
-        Wait fence, loop count.
-*/
-#ifndef gcdFENCE_WAIT_LOOP_COUNT
-#   define gcdFENCE_WAIT_LOOP_COUNT 10000
-#endif
 
 #endif /* __gc_hal_options_h_ */

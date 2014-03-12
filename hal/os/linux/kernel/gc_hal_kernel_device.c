@@ -76,7 +76,7 @@ _AllocateContiguousMemory(
 
     status = gckOS_AllocateVidmemFromMemblock(device->os,
                                               ContiguousSize,
-                                              (gctPOINTER)(gctUINTPTR_T)ContiguousBase,
+                                              (gctPOINTER)ContiguousBase,
                                               &device->contiguousPhysical);
 
     if (gcmIS_SUCCESS(status))

@@ -444,10 +444,6 @@ gckVIDMEM_Construct(
         node->VidMem.logical   = gcvNULL;
 #endif
 
-#if gcdDYNAMIC_MAP_RESERVED_MEMORY && gcdENABLE_VG
-        node->VidMem.kernelVirtual = gcvNULL;
-#endif
-
         /* Initialize the linked list of nodes. */
         memory->sentinel[i].VidMem.next     =
         memory->sentinel[i].VidMem.prev     =
@@ -1235,7 +1231,7 @@ _NeedVirtualMapping(
 )
 {
     gceSTATUS status;
-    gctUINT32 phys;
+    gctUINTPTR_T phys;
     gctUINT32 end;
     gcePOOL pool;
     gctUINT32 offset;
@@ -1260,9 +1256,8 @@ _NeedVirtualMapping(
 #endif
         {
             /* Convert logical address into a physical address. */
-            gcmkONERROR(gckOS_UserLogicalToPhysical(
-                        Kernel->os, Node->Virtual.logical, &phys
-                        ));
+            gcmkONERROR(
+                gckOS_GetPhysicalAddress(Kernel->os, Node->Virtual.logical, &phys));
 
             gcmkONERROR(gckOS_GetBaseAddress(Kernel->os, &baseAddress));
 
@@ -1518,19 +1513,15 @@ gckVIDMEM_Lock(
 #if gcdENABLE_VG
                 if (Kernel->vg != gcvNULL)
                 {
-                    gcmkONERROR(gckVGHARDWARE_ConvertLogical(
-                                Kernel->vg->hardware,
+                    gcmkONERROR(gckVGHARDWARE_ConvertLogical(Kernel->vg->hardware,
                                 Node->Virtual.logical,
-                                gcvTRUE,
                                 &Node->Virtual.addresses[Kernel->core]));
                 }
                 else
 #endif
                 {
-                    gcmkONERROR(gckHARDWARE_ConvertLogical(
-                                Kernel->hardware,
+                    gcmkONERROR(gckHARDWARE_ConvertLogical(Kernel->hardware,
                                 Node->Virtual.logical,
-                                gcvTRUE,
                                 &Node->Virtual.addresses[Kernel->core]));
                 }
             }
@@ -1561,12 +1552,22 @@ gckVIDMEM_Lock(
                 Node->Virtual.lockKernels[Kernel->core] = Kernel;
 
                 /* Map the pages. */
+#ifdef __QNXNTO__
+                gcmkONERROR(
+                    gckOS_MapPagesEx(os,
+                                     Kernel->core,
+                                     Node->Virtual.physical,
+                                     Node->Virtual.logical,
+                                     Node->Virtual.pageCount,
+                                     Node->Virtual.pageTables[Kernel->core]));
+#else
                 gcmkONERROR(
                     gckOS_MapPagesEx(os,
                                      Kernel->core,
                                      Node->Virtual.physical,
                                      Node->Virtual.pageCount,
                                      Node->Virtual.pageTables[Kernel->core]));
+#endif
 
 #if gcdENABLE_VG
                 if (Kernel->core == gcvCORE_VG)
@@ -2072,13 +2073,13 @@ gckVIDMEM_HANDLE_Allocate(
     )
 {
     gceSTATUS status;
-    gctUINT32 processID           = 0;
-    gctPOINTER pointer            = gcvNULL;
-    gctPOINTER handleDatabase     = gcvNULL;
-    gctPOINTER mutex              = gcvNULL;
-    gctUINT32 handle              = 0;
+    gctUINT32 processID;
+    gctPOINTER pointer = gcvNULL;
+    gctPOINTER handleDatabase;
+    gctPOINTER mutex;
+    gctUINT32 handle;
     gckVIDMEM_HANDLE handleObject = gcvNULL;
-    gckOS os                      = Kernel->os;
+    gckOS os = Kernel->os;
 
     gcmkHEADER_ARG("Kernel=0x%X, Node=0x%X", Kernel, Node);
 
@@ -2154,11 +2155,11 @@ gckVIDMEM_HANDLE_Reference(
     )
 {
     gceSTATUS status;
-    gckVIDMEM_HANDLE handleObject = gcvNULL;
-    gctPOINTER database           = gcvNULL;
-    gctPOINTER mutex              = gcvNULL;
-    gctINT32 oldValue             = 0;
-    gctBOOL acquired              = gcvFALSE;
+    gckVIDMEM_HANDLE handleObject;
+    gctPOINTER database;
+    gctPOINTER mutex;
+    gctINT32 oldValue;
+    gctBOOL acquired = gcvFALSE;
 
     gcmkHEADER_ARG("Handle=%d PrcoessID=%d", Handle, ProcessID);
 
@@ -2199,11 +2200,11 @@ gckVIDMEM_HANDLE_Dereference(
     )
 {
     gceSTATUS status;
-    gctPOINTER handleDatabase     = gcvNULL;
-    gctPOINTER mutex              = gcvNULL;
-    gctINT32 oldValue             = 0;
-    gckVIDMEM_HANDLE handleObject = gcvNULL;
-    gctBOOL acquired              = gcvFALSE;
+    gctPOINTER handleDatabase;
+    gctPOINTER mutex;
+    gctINT32 oldValue;
+    gckVIDMEM_HANDLE handleObject;
+    gctBOOL acquired = gcvFALSE;
 
     gcmkHEADER_ARG("Handle=%d PrcoessID=%d", Handle, ProcessID);
 
@@ -2258,12 +2259,12 @@ gckVIDMEM_HANDLE_LookupAndReference(
     )
 {
     gceSTATUS status;
-    gckVIDMEM_HANDLE handleObject = gcvNULL;
-    gckVIDMEM_NODE node           = gcvNULL;
-    gctPOINTER database           = gcvNULL;
-    gctPOINTER mutex              = gcvNULL;
-    gctUINT32 processID           = 0;
-    gctBOOL acquired              = gcvFALSE;
+    gckVIDMEM_HANDLE handleObject;
+    gckVIDMEM_NODE node;
+    gctPOINTER database;
+    gctPOINTER mutex;
+    gctUINT32 processID;
+    gctBOOL acquired = gcvFALSE;
 
     gcmkHEADER_ARG("Kernel=0x%X Handle=%d", Kernel, Handle);
 
@@ -2313,11 +2314,11 @@ gckVIDMEM_HANDLE_Lookup(
     )
 {
     gceSTATUS status;
-    gckVIDMEM_HANDLE handleObject = gcvNULL;
-    gckVIDMEM_NODE node           = gcvNULL;
-    gctPOINTER database           = gcvNULL;
-    gctPOINTER mutex              = gcvNULL;
-    gctBOOL acquired              = gcvFALSE;
+    gckVIDMEM_HANDLE handleObject;
+    gckVIDMEM_NODE node;
+    gctPOINTER database;
+    gctPOINTER mutex;
+    gctBOOL acquired = gcvFALSE;
 
     gcmkHEADER_ARG("Kernel=0x%X ProcessID=%d Handle=%d",
                    Kernel, ProcessID, Handle);
@@ -2382,9 +2383,9 @@ gckVIDMEM_NODE_Allocate(
 {
     gceSTATUS status;
     gckVIDMEM_NODE node = gcvNULL;
-    gctPOINTER pointer  = gcvNULL;
-    gctUINT32 handle    = 0;
-    gckOS os            = Kernel->os;
+    gctPOINTER pointer = gcvNULL;
+    gctUINT32 handle = 0;
+    gckOS os = Kernel->os;
 
     gcmkHEADER_ARG("Kernel=0x%X VideoNode=0x%X", Kernel, VideoNode);
 
@@ -2444,9 +2445,9 @@ gckVIDMEM_NODE_Dereference(
     IN gckVIDMEM_NODE Node
     )
 {
-    gctINT32 oldValue   = 0;
+    gctINT32 oldValue;
     gctPOINTER database = Kernel->db->nameDatabase;
-    gctPOINTER mutex    = Kernel->db->nameDatabaseMutex;
+    gctPOINTER mutex = Kernel->db->nameDatabaseMutex;
 
     gcmkHEADER_ARG("Kernel=0x%X Node=0x%X", Kernel, Node);
 
@@ -2506,12 +2507,12 @@ gckVIDMEM_NODE_Name(
 {
     gceSTATUS status;
     gckVIDMEM_NODE node = gcvNULL;
-    gctUINT32 name      = 0;
-    gctUINT32 processID = 0;
+    gctUINT32 name;
+    gctUINT32 processID;
     gctPOINTER database = Kernel->db->nameDatabase;
-    gctPOINTER mutex    = Kernel->db->nameDatabaseMutex;
-    gctBOOL acquired    = gcvFALSE;
-    gctBOOL referenced  = gcvFALSE;
+    gctPOINTER mutex = Kernel->db->nameDatabaseMutex;
+    gctBOOL acquired = gcvFALSE;
+    gctBOOL referenced = gcvFALSE;
     gcmkHEADER_ARG("Kernel=0x%X Handle=%d", Kernel, Handle);
 
     gcmkONERROR(gckOS_GetProcessID(&processID));
@@ -2534,10 +2535,7 @@ gckVIDMEM_NODE_Name(
 
     gcmkVERIFY_OK(gckVIDMEM_NODE_Dereference(Kernel, node));
 
-    if(node)
-    {
-        *Name = node->name;
-    }
+    *Name = node->name;
 
     gcmkFOOTER_ARG("*Name=%d", *Name);
     return gcvSTATUS_OK;
@@ -2587,9 +2585,9 @@ gckVIDMEM_NODE_Import(
     gceSTATUS status;
     gckVIDMEM_NODE node = gcvNULL;
     gctPOINTER database = Kernel->db->nameDatabase;
-    gctPOINTER mutex    = Kernel->db->nameDatabaseMutex;
-    gctBOOL acquired    = gcvFALSE;
-    gctBOOL referenced  = gcvFALSE;
+    gctPOINTER mutex = Kernel->db->nameDatabaseMutex;
+    gctBOOL acquired = gcvFALSE;
+    gctBOOL referenced = gcvFALSE;
 
     gcmkHEADER_ARG("Kernel=0x%X Name=%d", Kernel, Name);
 

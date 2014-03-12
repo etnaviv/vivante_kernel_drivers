@@ -139,10 +139,7 @@ typedef struct _gcsSURF_BLIT_ARGS
     gctBOOL     scissorTest;
     gcsRECT     scissor;
     gctUINT     flags;
-}
-gcsSURF_BLIT_ARGS;
-
-
+} gcsSURF_BLIT_ARGS;
 
 
 /* Clear flags. */
@@ -212,62 +209,9 @@ typedef struct _gcsSURF_CLEAR_ARGS
 
 typedef gcsSURF_CLEAR_ARGS* gcsSURF_CLEAR_ARGS_PTR;
 
-typedef struct _gscSURF_BLITDRAW_BLIT
-{
-    gcoSURF  srcSurface;
-    gcoSURF  dstSurface;
-    gcsRECT  srcRect;
-    gcsRECT  dstRect;
-    gceTEXTURE_FILTER  filterMode;
-    gctBOOL  xReverse;
-    gctBOOL  yReverse;
-    gctBOOL  scissorEnabled;
-    gcsRECT  scissor;
-}gscSURF_BLITDRAW_BLIT;
-
-
-typedef struct _gscSURF_BLITDRAW_ARGS
-{
-    /* always the fist member */
-    gceHAL_ARG_VERSION version;
-
-    union _gcsSURF_BLITDRAW_ARGS_UNION
-    {
-       struct _gscSURF_BLITDRAW_ARG_v1
-       {
-            /* Whether it's clear or blit operation, can be extended. */
-            gctBOOL isClear;
-
-            union _gscSURF_BLITDRAW_UNION
-            {
-                gscSURF_BLITDRAW_BLIT blit;
-
-                struct _gscSURF_BLITDRAW_CLEAR
-                {
-                    gcsSURF_CLEAR_ARGS clearArgs;
-                    gcoSURF rtSurface;
-                    gcoSURF dsSurface;
-                } clear;
-            } u;
-       } v1;
-    } uArgs;
-}
-gcsSURF_BLITDRAW_ARGS;
-
-
 
 /* CPU Blit with format (including linear <-> tile) conversion*/
-gceSTATUS
-gcoSURF_BlitCPU(
-    gcsSURF_BLIT_ARGS* args
-    );
-
-
-gceSTATUS
-gcoSURF_BlitDraw(
-    IN gcsSURF_BLITDRAW_ARGS *args
-    );
-
+gceSTATUS gcoSURF_BlitCPU(gcsSURF_BLIT_ARGS* args);
 
 /* Copy surface. */
 gceSTATUS

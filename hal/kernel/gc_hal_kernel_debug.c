@@ -131,7 +131,7 @@ static gctUINT32 _debugZones = gcvZONE_NONE;
 
 #define gcmPTRALIGNMENT(Pointer, Alignemnt) \
 ( \
-    gcmALIGN((gctUINTPTR_T)(Pointer), Alignemnt) - (gctUINTPTR_T)(Pointer) \
+    gcmALIGN(gcmPTR2INT(Pointer), Alignemnt) - gcmPTR2INT(Pointer) \
 )
 
 #if gcdALIGNBYSIZE
@@ -139,7 +139,7 @@ static gctUINT32 _debugZones = gcvZONE_NONE;
         (((Offset) & ((Alignment) - 1)) == 0)
 
 #   define gcmkALIGNPTR(Type, Pointer, Alignment) \
-        Pointer = (Type) gcmINT2PTR(gcmALIGN((gctUINTPTR_T)(Pointer), Alignment))
+        Pointer = (Type) gcmINT2PTR(gcmALIGN(gcmPTR2INT(Pointer), Alignment))
 #else
 #   define gcmISALIGNED(Offset, Alignment) \
         gcvTRUE
@@ -587,7 +587,7 @@ _PrintBuffer(
     IN gctINT Indent,
     IN gctPOINTER PrefixData,
     IN gctPOINTER Data,
-    IN gctUINT Address,
+    IN gctUINTPTR_T Address,
     IN gctUINT DataSize,
     IN gceDUMP_BUFFER Type,
     IN gctUINT32 DmaAddress
@@ -673,7 +673,7 @@ _PrintBuffer(
     {
         gcmkSPRINTF2(
             buffer + indent, gcmSIZEOF(buffer) - indent,
-            "@[kernel.command %08X %08X\n", Address, DataSize
+            "@[kernel.command %08lX %08X\n", Address, DataSize
             );
 
         gcmkOUTPUT_STRING(buffer);
@@ -1446,7 +1446,7 @@ _AppendBuffer(
     IN gctINT Indent,
     IN gctPOINTER PrefixData,
     IN gctPOINTER Data,
-    IN gctUINT Address,
+    IN gctUINTPTR_T Address,
     IN gctUINT DataSize,
     IN gceDUMP_BUFFER Type,
     IN gctUINT32 DmaAddress
@@ -1953,10 +1953,10 @@ gckOS_DumpBuffer(
     IN gctBOOL CopyMessage
     )
 {
-    gctUINT32 address                   = 0;
-    gcsBUFFERED_OUTPUT_PTR outputBuffer = gcvNULL;
+    gctUINTPTR_T address;
+    gcsBUFFERED_OUTPUT_PTR outputBuffer;
     static gctBOOL userLocked;
-    gctCHAR *buffer                     = (gctCHAR*)Buffer;
+    gctCHAR *buffer = (gctCHAR*)Buffer;
 
     gcmkDECLARE_LOCK(lockHandle);
 

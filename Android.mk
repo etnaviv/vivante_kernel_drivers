@@ -1,6 +1,8 @@
 .PHONY: build-galcore
 
+ifeq ($(ARCH),arm)
 $(PRODUCT_OUT)/ramdisk.img: galcore.ko
+endif
 
 include $(CLEAR_VARS)
 GALCORE_SRC_PATH := $(ANDROID_BUILD_TOP)/vendor/marvell/generic/graphics/driver
@@ -12,7 +14,7 @@ LOCAL_MODULE_PATH := $(PRODUCT_OUT)/root/lib/modules
 $(LOCAL_PATH)/$(LOCAL_SRC_FILES): build-galcore
 include $(BUILD_PREBUILT)
 
-build-galcore: $(build-kernel)
+build-galcore: build-kernel
 	cd $(GALCORE_SRC_PATH) &&\
 	$(MAKE) -j$(MAKE_JOBS)
 ifeq (,$(wildcard $(PRODUCT_OUT)/root/lib/modules))

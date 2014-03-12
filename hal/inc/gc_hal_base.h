@@ -426,8 +426,6 @@ typedef enum _gcePATCH_ID
     gcvPATCH_FSBHAWAIIF,
     gcvPATCH_GOOGLEMAP,
     gcvPATCH_GOOGLEPLUS,
-    gcvPATCH_AIRNAVY,
-    gcvPATCH_F18NEW,
     gcvPATCH_CKZOMBIES2,
 
     gcvPATCH_COUNT
@@ -864,12 +862,7 @@ gcoHAL_Query3DCoreCount(
     );
 
 gceSTATUS
-gcoHAL_QuerySeparated2D(
-    IN gcoHAL Hal
-    );
-
-gceSTATUS
-gcoHAL_Is3DAvailable(
+gcoHAL_QuerySeparated3D2D(
     IN gcoHAL Hal
     );
 
@@ -2461,7 +2454,7 @@ gcoSURF_Unlock(
 gceSTATUS
 gcoSURF_QueryFlags(
     IN gcoSURF Surface,
-    IN gceSURF_FLAG Flag
+    IN gctUINT Flag
     );
 
 /* Return pixel format parameters; Info is required to be a pointer to an
@@ -2520,11 +2513,11 @@ gcoSURF_ConstructWrapper(
     OUT gcoSURF * Surface
     );
 
-/* Set surface flags.*/
+/*. Query surface flags.*/
 gceSTATUS
 gcoSURF_SetFlags(
     IN gcoSURF Surface,
-    IN gceSURF_FLAG Flag,
+    IN gctUINT Flag,
     IN gctBOOL Value
     );
 
@@ -3335,9 +3328,6 @@ gcsBINARY_TRACE_MESSAGE;
 
 #define gcdHEADER_LEVEL             gcvLEVEL_VERBOSE
 
-#ifndef gcdEMPTY_HEADER_FOOTER
-#define gcdEMPTY_HEADER_FOOTER 0
-#endif
 
 #if gcdENABLE_PROFILING
 void
@@ -3371,9 +3361,7 @@ gcoOS_ProfileDB(
 
 #else /* gcdENABLE_PROFILING */
 
-#if gcdEMPTY_HEADER_FOOTER
-#   define gcmHEADER()
-#elif gcdHAS_ELLIPSIS
+#if gcdHAS_ELLIPSIS
 #define gcmHEADER() \
     gctINT8 __user__ = 1; \
     gctINT8_PTR __user_ptr__ = &__user__; \
@@ -3390,9 +3378,6 @@ gcoOS_ProfileDB(
 #endif
 
 #if gcdHAS_ELLIPSIS
-#if gcdEMPTY_HEADER_FOOTER
-#   define gcmHEADER_ARG(Text, ...)
-#else
 #   define gcmHEADER_ARG(Text, ...) \
         gctINT8 __user__ = 1; \
         gctINT8_PTR __user_ptr__ = &__user__; \
@@ -3400,7 +3385,6 @@ gcoOS_ProfileDB(
         gcmBINARY_TRACE(__FUNCTION__, __LINE__, Text, __VA_ARGS__); \
         gcmTRACE_ZONE(gcdHEADER_LEVEL, _GC_OBJ_ZONE, \
                       "++%s(%d): " Text, __FUNCTION__, __LINE__, __VA_ARGS__)
-#endif
 #else
     gcmINLINE static void
     __dummy_header_arg(
@@ -3412,9 +3396,7 @@ gcoOS_ProfileDB(
 #   define gcmHEADER_ARG                __dummy_header_arg
 #endif
 
-#if gcdEMPTY_HEADER_FOOTER
-#   define gcmFOOTER()
-#elif gcdHAS_ELLIPSIS
+#if gcdHAS_ELLIPSIS
 #   define gcmFOOTER() \
     gcmSTACK_POP(__user_ptr__, __FUNCTION__); \
     gcmBINARY_TRACE(__FUNCTION__, __LINE__, gcvNULL, gcvNULL); \
@@ -3431,9 +3413,7 @@ gcoOS_ProfileDB(
 #   define gcmFOOTER                    __dummy_footer
 #endif
 
-#if gcdEMPTY_HEADER_FOOTER
-#   define gcmFOOTER_NO()
-#elif gcdHAS_ELLIPSIS
+#if gcdHAS_ELLIPSIS
 #define gcmFOOTER_NO() \
     gcmSTACK_POP(__user_ptr__, __FUNCTION__); \
     gcmBINARY_TRACE(__FUNCTION__, __LINE__, gcvNULL, gcvNULL); \
@@ -3448,9 +3428,7 @@ gcoOS_ProfileDB(
 #   define gcmFOOTER_NO                 __dummy_footer_no
 #endif
 
-#if gcdEMPTY_HEADER_FOOTER
-#   define gcmFOOTER_KILL()
-#elif gcdHAS_ELLIPSIS
+#if gcdHAS_ELLIPSIS
 #define gcmFOOTER_KILL() \
     gcmSTACK_POP(__user_ptr__, __FUNCTION__); \
     gcmBINARY_TRACE(__FUNCTION__, __LINE__, gcvNULL, gcvNULL); \
@@ -3466,16 +3444,12 @@ gcoOS_ProfileDB(
 #endif
 
 #if gcdHAS_ELLIPSIS
-#if gcdEMPTY_HEADER_FOOTER
-#   define gcmFOOTER_ARG(Text, ...)
-#else
 #   define gcmFOOTER_ARG(Text, ...) \
         gcmSTACK_POP(__user_ptr__, __FUNCTION__); \
         gcmBINARY_TRACE(__FUNCTION__, __LINE__, Text, __VA_ARGS__); \
         gcmTRACE_ZONE(gcdHEADER_LEVEL, _GC_OBJ_ZONE, \
                       "--%s(%d): " Text, __FUNCTION__, __LINE__, __VA_ARGS__); \
         *__user_ptr__ -= 1
-#endif
 #else
     gcmINLINE static void
     __dummy_footer_arg(

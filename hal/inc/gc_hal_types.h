@@ -1211,7 +1211,7 @@ gceSTATUS;
 **      Configure uniforms according to chip and numConstants.
 */
 #define gcmCONFIGUREUNIFORMS(ChipModel, ChipRevision, NumConstants, \
-             UnifiedConst, VsConstBase, PsConstBase, VsConstMax, PsConstMax, ConstMax) \
+             UnifiedConst, VsConstBase, PsConstBase, VsConstMax, PsConstMax) \
 { \
     if (ChipModel == gcv2000 && ChipRevision == 0x5118) \
     { \
@@ -1220,7 +1220,6 @@ gceSTATUS;
         PsConstBase  = 0x1C00; \
         VsConstMax   = 256; \
         PsConstMax   = 64; \
-        ConstMax     = 320; \
     } \
     else if (NumConstants == 320) \
     { \
@@ -1229,7 +1228,6 @@ gceSTATUS;
         PsConstBase  = 0x1C00; \
         VsConstMax   = 256; \
         PsConstMax   = 64; \
-        ConstMax     = 320; \
     } \
     /* All GC1000 series chips can only support 64 uniforms for ps on non-unified const mode. */ \
     else if (NumConstants > 256 && ChipModel == gcv1000) \
@@ -1239,7 +1237,6 @@ gceSTATUS;
         PsConstBase  = 0x1C00; \
         VsConstMax   = 256; \
         PsConstMax   = 64; \
-        ConstMax     = 320; \
     } \
     else if (NumConstants > 256) \
     { \
@@ -1248,7 +1245,6 @@ gceSTATUS;
         PsConstBase  = 0x1C00; \
         VsConstMax   = 256; \
         PsConstMax   = 256; \
-        ConstMax     = 512; \
     } \
     else if (NumConstants == 256) \
     { \
@@ -1257,7 +1253,6 @@ gceSTATUS;
         PsConstBase  = 0x1C00; \
         VsConstMax   = 256; \
         PsConstMax   = 256; \
-        ConstMax     = 512; \
     } \
     else \
     { \
@@ -1266,7 +1261,6 @@ gceSTATUS;
         PsConstBase  = 0x1C00; \
         VsConstMax   = 168; \
         PsConstMax   = 64; \
-        ConstMax     = 232; \
     } \
 }
 

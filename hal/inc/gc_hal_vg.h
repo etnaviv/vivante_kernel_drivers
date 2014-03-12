@@ -487,7 +487,6 @@ gceSTATUS
 gckVGHARDWARE_ConvertLogical(
     IN gckVGHARDWARE Hardware,
     IN gctPOINTER Logical,
-    IN gctBOOL InUserSpace,
     OUT gctUINT32 * Address
     );
 

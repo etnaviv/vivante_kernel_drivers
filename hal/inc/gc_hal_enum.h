@@ -22,16 +22,13 @@ extern "C" {
 /* Chip models. */
 typedef enum _gceCHIPMODEL
 {
-    gcv200  = 0x0200,
     gcv300  = 0x0300,
     gcv320  = 0x0320,
-    gcv328  = 0x0328,
     gcv350  = 0x0350,
     gcv355  = 0x0355,
     gcv400  = 0x0400,
     gcv410  = 0x0410,
     gcv420  = 0x0420,
-    gcv428  = 0x0428,
     gcv450  = 0x0450,
     gcv500  = 0x0500,
     gcv530  = 0x0530,
@@ -229,13 +226,6 @@ typedef enum _gceFEATURE
 
     gcvFEATURE_UNIFIED_SAMPLERS,
     gcvFEATURE_CL_PS_WALKER,
-    gcvFEATURE_NEW_HZ,
-
-    gcvFEATURE_TX_FRAC_PRECISION_6BIT,
-    gcvFEATURE_SH_INSTRUCTION_PREFETCH,
-    gcvFEATURE_PROBE,
-
-    gcvFEATURE_BUG_FIXES8,
 
     /* Insert features above this comment only. */
     gcvFEATURE_COUNT                /* Not a feature. */
@@ -407,23 +397,6 @@ typedef enum _gceSURF_ROTATION
     gcvSURF_POST_FLIP_Y = 0x80000000,
 }
 gceSURF_ROTATION;
-
-/* Surface flag */
-typedef enum _gceSURF_FLAG
-{
-    /* None flag */
-    gcvSURF_FLAG_NONE                = 0x0,
-    /* content is preserved after swap */
-    gcvSURF_FLAG_CONTENT_PRESERVED   = 0x1,
-    /* content is updated after swap*/
-    gcvSURF_FLAG_CONTENT_UPDATED     = 0x2,
-
-
-    /* content is y inverted */
-    gcvSURF_FLAG_CONTENT_YINVERTED   = 0x4,
-
-}
-gceSURF_FLAG;
 
 typedef enum _gceMIPMAP_IMAGE_FORMAT
 {
@@ -1461,14 +1434,6 @@ typedef enum _gceMACHINECODE
 }
 gceMACHINECODE;
 
-
-typedef enum _gceHAL_ARG_VERSION
-{
-    gcvHAL_ARG_VERSION_V1 = 0x0,
-}
-gceHAL_ARG_VERSION;
-
-
 /* GL_VIV internal usage */
 #ifndef GL_MAP_BUFFER_OBJ_VIV
 #define GL_MAP_BUFFER_OBJ_VIV       0x10000
@@ -1480,6 +1445,10 @@ gceHAL_ARG_VERSION;
 
 typedef struct _gckCONTEXT          * gckCONTEXT;
 typedef struct _gcoCMDBUF           * gcoCMDBUF;
+
+#if gcdTEMP_CMD_BUFFER_SIZE
+typedef struct _gcsTEMPCMDBUF       * gcsTEMPCMDBUF;
+#endif
 
 typedef struct _gcsSTATE_DELTA      * gcsSTATE_DELTA_PTR;
 typedef struct _gcsQUEUE            * gcsQUEUE_PTR;
