@@ -2796,7 +2796,7 @@ gckHARDWARE_Event(
 
 #if gcmIS_DEBUG(gcdDEBUG_TRACE)
         {
-            gctUINTPTR_T phys;
+            gctUINT32 phys;
             gckOS_GetPhysicalAddress(Hardware->os, Logical, &phys);
             gcmkTRACE_ZONE(gcvLEVEL_INFO, gcvZONE_HARDWARE,
                            "0x%lx: EVENT %d", phys, Event);
@@ -3190,7 +3190,7 @@ gckHARDWARE_ConvertLogical(
     OUT gctUINT32 * Address
     )
 {
-    gctUINTPTR_T address;
+    gctUINT32 address;
     gceSTATUS status = gcvSTATUS_INVALID_ADDRESS;
     gctUINT32 baseAddress;
 
@@ -3713,7 +3713,7 @@ gckHARDWARE_FlushMMU(
     gctPOINTER pointer = gcvNULL;
     gctUINT32 flushSize;
     gctUINT32 count;
-    gctUINTPTR_T physical;
+    gctUINT32 physical;
 
     gcmkHEADER_ARG("Hardware=0x%x", Hardware);
 
@@ -3889,7 +3889,7 @@ gckHARDWARE_SetMMUv2(
 {
 #if 1 
     gceSTATUS status;
-    gctUINTPTR_T config, address;
+    gctUINT32 config, address;
     gckCOMMAND command;
     gctUINT32_PTR buffer;
     gctSIZE_T bufferSize;

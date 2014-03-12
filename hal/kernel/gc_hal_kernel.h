@@ -956,7 +956,7 @@ struct _gckVIDMEM
     gckOS                       os;
 
     /* Information for this video memory heap. */
-    gctUINTPTR_T                baseAddress;
+    gctUINT32                   baseAddress;
     gctSIZE_T                   bytes;
     gctSIZE_T                   freeBytes;
 

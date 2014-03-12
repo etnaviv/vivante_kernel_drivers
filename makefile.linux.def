@@ -168,6 +168,15 @@ ifeq ($(ANDROID), 1)
             CFLAGS += -Wno-unused-but-set-variable -fno-strict-volatile-bitfields
         endif
     endif
+    ifeq ($(ARCH_TYPE), arm64)
+        ifeq ($(shell expr $(PLATFORM_SDK_VERSION) ">=" 17),1)
+            CFLAGS += -I $(ANDROID_HOME) -include build/core/combo/include/arch/linux-arm/AndroidConfig.h
+        endif
+        CFLAGS += -I $(ANDROID_HOME)/vendor/marvell/generic/marvell-gralloc -I $(ANDROID_HOME)/libnativehelper/include/nativehelper -isystem $(ANDROID_HOME)/system/core/include -isystem $(ANDROID_HOME)/hardware/libhardware/include -isystem $(ANDROID_HOME)/hardware/libhardware_legacy/include -isystem $(ANDROID_HOME)/hardware/ril/include -isystem $(ANDROID_HOME)/libnativehelper/include -isystem $(ANDROID_HOME)/frameworks/native/include -isystem $(ANDROID_HOME)/frameworks/native/opengl/include -isystem $(ANDROID_HOME)/frameworks/av/include -isystem $(ANDROID_HOME)/frameworks/base/include -isystem $(ANDROID_HOME)/frameworks/base/opengl/include -isystem $(ANDROID_HOME)/external/skia/include -isystem $(ANDROID_PRODUCT_OUT)/obj/include -isystem $(ANDROID_HOME)/bionic/libc/arch-aarch64/include -isystem $(ANDROID_HOME)/bionic/libc/include -isystem $(ANDROID_HOME)/bionic/libstdc++/include -isystem $(ANDROID_HOME)/bionic/libc/kernel/common -isystem $(ANDROID_HOME)/bionic/libc/kernel/arch-arm -isystem $(ANDROID_HOME)/bionic/libm/include -isystem $(ANDROID_HOME)/bionic/libm/include/arm -isystem $(ANDROID_HOME)/bionic/libthread_db/include -fno-exceptions -Wno-multichar -fpic -fPIE -ffunction-sections -fdata-sections -funwind-tables -Wa,--noexecstack -Werror=format-security -D_FORTIFY_SOURCE=1 -fno-short-enums -I $(ANDROID_HOME)/build/core/combo/include/arch/linux-aarch64/ -fno-builtin-sin -Wno-psabi -fmessage-length=0 -W -Wall -Wno-unused -Winit-self -Wpointer-arith -Werror=return-type -Werror=non-virtual-dtor -Werror=address -Werror=sequence-point -DNDEBUG -g -Wstrict-aliasing=2 -fgcse-after-reload -frerun-cse-after-loop -frename-registers -UDEBUG -Os -fomit-frame-pointer -fno-strict-aliasing -Wno-missing-field-initializers -Wno-unused-parameter -Wextra -DINTEGRATED_WITH_MARVELL -MD
+        ifeq ($(shell expr $(PLATFORM_SDK_VERSION) ">=" 16),1)
+            CFLAGS += -Wno-unused-but-set-variable -fno-strict-volatile-bitfields
+        endif
+    endif
 
     CFLAGS += -DANDROID_SDK_VERSION=$(PLATFORM_SDK_VERSION)
 endif

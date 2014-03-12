@@ -114,7 +114,7 @@ _MapCommandBuffer(
 {
     gceSTATUS status;
     gctUINT32 i;
-    gctPHYS_ADDR physical;
+    gctUINT32 physical;
     gckMMU mmu;
 
     gcmkONERROR(gckKERNEL_GetProcessMMU(Kernel, &mmu));
@@ -1342,7 +1342,7 @@ gckKERNEL_Dispatch(
     gcskSECURE_CACHE_PTR cache;
     gctPOINTER logical;
 #endif
-    gctUINTPTR_T paddr = gcvINVALID_ADDRESS;
+    gctUINT32 paddr = gcvINVALID_ADDRESS;
 #if !USE_NEW_LINUX_SIGNAL
     gctSIGNAL   signal;
 #endif
@@ -2225,7 +2225,7 @@ gckKERNEL_Dispatch(
             {
                 /* If memory is contiguous, get physical address. */
                 gcmkONERROR(gckOS_GetPhysicalAddress(
-                    Kernel->os, logical, (gctUINTPTR_T*)&paddr));
+                    Kernel->os, logical, (gctUINT32*)&paddr));
             }
         }
 

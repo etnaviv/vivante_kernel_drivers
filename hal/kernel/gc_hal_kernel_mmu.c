@@ -49,7 +49,7 @@ typedef struct _gcsMMU_STLB
     gctPHYS_ADDR    physical;
     gctUINT32_PTR   logical;
     gctSIZE_T       size;
-    gctUINTPTR_T    physBase;
+    gctUINT32       physBase;
     gctSIZE_T       pageCount;
     gctUINT32       mtlbIndex;
     gctUINT32       mtlbEntryNum;
@@ -694,7 +694,7 @@ _SetupDynamicSpace(
     gceSTATUS status;
     gcsDynamicSpaceNode_PTR nodeArray = gcvNULL;
     gctINT i, nodeArraySize = 0;
-    gctUINTPTR_T physical;
+    gctUINT32 physical;
     gctINT numEntries = 0;
     gctUINT32_PTR map;
     gctBOOL acquired = gcvFALSE;

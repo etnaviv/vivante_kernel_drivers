@@ -121,11 +121,7 @@ extern "C" {
 ******************************** Useful Macro *********************************
 \******************************************************************************/
 
-#ifdef CONFIG_ARM64
-#define gcvINVALID_ADDRESS          ~0LLU
-#else
 #define gcvINVALID_ADDRESS          ~0U
-#endif
 
 #define gcmGET_PRE_ROTATION(rotate) \
     ((rotate) & (~(gcvSURF_POST_FLIP_X | gcvSURF_POST_FLIP_Y)))
@@ -507,7 +503,7 @@ gceSTATUS
 gckOS_GetPhysicalAddress(
     IN gckOS Os,
     IN gctPOINTER Logical,
-    OUT gctUINTPTR_T * Address
+    OUT gctUINT32 * Address
     );
 
 /* Get the physical address of a corresponding logical address. */
@@ -516,7 +512,7 @@ gckOS_GetPhysicalAddressProcess(
     IN gckOS Os,
     IN gctPOINTER Logical,
     IN gctUINT32 ProcessID,
-    OUT gctUINTPTR_T * Address
+    OUT gctUINT32 * Address
     );
 
 /* Map physical memory. */
@@ -1398,7 +1394,7 @@ gckOS_CacheFlush(
     gckOS Os,
     gctUINT32 ProcessID,
     gctPHYS_ADDR Handle,
-    gctUINTPTR_T Physical,
+    gctUINT32 Physical,
     gctPOINTER Logical,
     gctSIZE_T Bytes
     );

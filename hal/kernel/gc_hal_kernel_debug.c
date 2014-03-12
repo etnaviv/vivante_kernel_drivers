@@ -587,7 +587,7 @@ _PrintBuffer(
     IN gctINT Indent,
     IN gctPOINTER PrefixData,
     IN gctPOINTER Data,
-    IN gctUINTPTR_T Address,
+    IN gctUINT Address,
     IN gctUINT DataSize,
     IN gceDUMP_BUFFER Type,
     IN gctUINT32 DmaAddress
@@ -673,7 +673,7 @@ _PrintBuffer(
     {
         gcmkSPRINTF2(
             buffer + indent, gcmSIZEOF(buffer) - indent,
-            "@[kernel.command %08lX %08X\n", Address, DataSize
+            "@[kernel.command %08X %08X\n", Address, DataSize
             );
 
         gcmkOUTPUT_STRING(buffer);
@@ -1446,7 +1446,7 @@ _AppendBuffer(
     IN gctINT Indent,
     IN gctPOINTER PrefixData,
     IN gctPOINTER Data,
-    IN gctUINTPTR_T Address,
+    IN gctUINT Address,
     IN gctUINT DataSize,
     IN gceDUMP_BUFFER Type,
     IN gctUINT32 DmaAddress
@@ -1953,7 +1953,7 @@ gckOS_DumpBuffer(
     IN gctBOOL CopyMessage
     )
 {
-    gctUINTPTR_T address;
+    gctUINT32 address;
     gcsBUFFERED_OUTPUT_PTR outputBuffer;
     static gctBOOL userLocked;
     gctCHAR *buffer = (gctCHAR*)Buffer;

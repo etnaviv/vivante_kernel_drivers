@@ -156,7 +156,7 @@
 #endif
 
 /* Reserve memory by using memblock when board inits */
-#if defined(CONFIG_GPU_RESERVE_MEM)
+#if (defined CONFIG_GPU_RESERVE_MEM) || (defined CONFIG_ARM64)
 #define MRVL_USE_GPU_RESERVE_MEM                1
 #else
 #define MRVL_USE_GPU_RESERVE_MEM                0
@@ -394,6 +394,12 @@
 #define MRVL_GC_FLUSHCACHE_PFN                1
 
 /*
+    MRVL_GFX_2D_ONLY
+        -- Only 2D hardware is avaible
+*/
+#define MRVL_GFX_2D_ONLY                      0
+
+/*
 *  Definitions for vendor, renderer and version strings
 */
 /* #################### [START ==DO NOT CHANGE THIS MARCRO== START] #################### */
@@ -402,7 +408,7 @@
 /* @Ziyi: If any change happened between these 2 comments please contact zyxu@marvell.com, Thanks. */
 /* #################### [START ==DO NOT CHANGE THIS MARCRO== START] #################### */
 
-#define _GC_VERSION_STRING_                     "GC version eden-kk44-alpha6-r3"
+#define _GC_VERSION_STRING_                     "GC version eden-kk44-bringup-fpga"
 
 /* Do not align u/v stride to 16 */
 #define VIVANTE_ALIGN_UVSTRIDE                  0
@@ -417,8 +423,11 @@
 #define DISABLE_2D_BLOCK_SIZE_SETTING           1
 
 /* Enable NEON memcpy to replace default memcpy */
-#ifndef MRVL_ENABLE_GPUTEX_MEMCPY
+#if (!defined MRVL_ENABLE_GPUTEX_MEMCPY) && (defined ANDROID) \
+    && (!gcdFPGA_BUILD)
 #define MRVL_ENABLE_GPUTEX_MEMCPY               1
+#else
+#define MRVL_ENABLE_GPUTEX_MEMCPY               0
 #endif
 
 #endif /* __gc_hal_options_mrvl_h_*/

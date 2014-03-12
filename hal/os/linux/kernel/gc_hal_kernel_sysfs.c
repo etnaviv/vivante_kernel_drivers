@@ -106,7 +106,9 @@ static ssize_t store_pm_state (struct device *dev,
 
     /* read input and verify */
     SYSFS_VERIFY_INPUT(sscanf(buf, "%d,%d", &core, &state), 2);
+#if !MRVL_GFX_2D_ONLY
     SYSFS_VERIFY_INPUT_RANGE(core, 0, (gpu_count-1));
+#endif
     SYSFS_VERIFY_INPUT_RANGE(state, 0, 3);
 
     /* power state transition */

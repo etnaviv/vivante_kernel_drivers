@@ -1012,6 +1012,10 @@ static int drv_init(void)
         gckDEBUGFS_Initialize();
     }
 
+#if MRVL_GFX_2D_ONLY
+    irqLine = -1;
+#endif
+
     /* Create the GAL device. */
     status = gckGALDEVICE_Construct(
 #if gcdMULTI_GPU || gcdMULTI_GPU_AFFINITY
@@ -1048,6 +1052,7 @@ static int drv_init(void)
     /* Start the GAL device. */
     gcmkONERROR(gckGALDEVICE_Start(device));
 
+#if !MRVL_GFX_2D_ONLY
     if ((physSize != 0)
        && (device->kernels[gcvCORE_MAJOR] != gcvNULL)
        && (device->kernels[gcvCORE_MAJOR]->hardware->mmuVersion != 0))
@@ -1073,6 +1078,21 @@ static int drv_init(void)
         /* Reset the base address */
         device->baseAddress = 0;
     }
+#else
+    {
+        if ((physSize != 0)
+            && (device->kernels[gcvCORE_2D] != gcvNULL)
+            && (device->kernels[gcvCORE_2D]->hardware->mmuVersion != 0))
+        {
+            status = gckMMU_Enable(device->kernels[gcvCORE_2D]->mmu, baseAddress, physSize);
+            gcmkTRACE_ZONE(gcvLEVEL_INFO, gcvZONE_DRIVER,
+                "Enable new MMU for 2D: status=%d\n", status);
+        }
+
+        /* Reset the base address */
+        device->baseAddress = 0;
+    }
+#endif
 
     for (i = 0; i < gcdMAX_GPU_COUNT; i++)
     {

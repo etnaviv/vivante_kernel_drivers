@@ -125,7 +125,7 @@ typedef struct _gcsUSER_MAPPING
     gcsUSER_MAPPING_PTR         next;
 
     /* Physical address of this mapping. */
-    gctUINTPTR_T                physical;
+    gctUINT32                   physical;
 
     /* Logical address of this mapping. */
     gctPOINTER                  logical;
@@ -985,7 +985,7 @@ _UnmapUserLogical(
 gceSTATUS
 _QueryProcessPageTable(
     IN gctPOINTER Logical,
-    OUT gctUINTPTR_T * Address
+    OUT gctUINT32 * Address
     )
 {
     spinlock_t *lock;
@@ -3035,7 +3035,7 @@ gceSTATUS
 gckOS_GetPhysicalAddress(
     IN gckOS Os,
     IN gctPOINTER Logical,
-    OUT gctUINTPTR_T * Address
+    OUT gctUINT32 * Address
     )
 {
     gceSTATUS status;
@@ -3161,7 +3161,7 @@ _ConvertLogical2Physical(
     IN gctPOINTER Logical,
     IN gctUINT32 ProcessID,
     IN PLINUX_MDL Mdl,
-    OUT gctUINTPTR_T * Physical
+    OUT gctUINT32_PTR Physical
     )
 {
     gctINT8_PTR base, vBase;
@@ -3182,7 +3182,7 @@ _ConvertLogical2Physical(
         if (Mdl->dmaHandle != 0)
         {
             /* The memory was from coherent area. */
-            *Physical = (gctUINTPTR_T) Mdl->dmaHandle + offset;
+            *Physical = (gctUINT32) Mdl->dmaHandle + offset;
         }
         else if (Mdl->pagedMem && !Mdl->contiguous)
         {
@@ -3191,7 +3191,7 @@ _ConvertLogical2Physical(
         }
         else
         {
-            *Physical = (gctUINTPTR_T)(virt_to_phys(base)) + offset;
+            *Physical = gcmPTR2INT(virt_to_phys(base)) + offset;
         }
 
         return gcvSTATUS_OK;
@@ -3205,7 +3205,7 @@ _ConvertLogical2Physical(
         )
         {
             *Physical = userMap->physical
-                      + (gctUINTPTR_T) ((gctINT8_PTR) Logical - userMap->start);
+                      + (gctUINT32) ((gctINT8_PTR) Logical - userMap->start);
 
             return gcvSTATUS_OK;
         }
@@ -3227,7 +3227,7 @@ _ConvertLogical2Physical(
             if (Mdl->dmaHandle != 0)
             {
                 /* The memory was from coherent area. */
-                *Physical = (gctUINTPTR_T) Mdl->dmaHandle + offset;
+                *Physical = (gctUINT32) Mdl->dmaHandle + offset;
             }
             else if (Mdl->pagedMem && !Mdl->contiguous)
             {
@@ -3235,7 +3235,7 @@ _ConvertLogical2Physical(
             }
             else
             {
-                *Physical = (gctUINTPTR_T)page_to_phys(Mdl->u.contiguousPages) + offset;
+                *Physical = page_to_phys(Mdl->u.contiguousPages) + offset;
             }
 
             return gcvSTATUS_OK;
@@ -3274,7 +3274,7 @@ gckOS_GetPhysicalAddressProcess(
     IN gckOS Os,
     IN gctPOINTER Logical,
     IN gctUINT32 ProcessID,
-    OUT gctUINTPTR_T * Address
+    OUT gctUINT32 * Address
     )
 {
     PLINUX_MDL mdl;
@@ -5596,11 +5596,11 @@ gckOS_AllocateVidmemFromMemblock(
 
     gcmkTRACE_ZONE(gcvLEVEL_INFO,
                 gcvZONE_OS,
-                "%s: Bytes->0x%x, Mdl->%p, Logical->0x%x dmaHandle->0x%x",
+                "%s: Bytes->0x%x, Mdl->%p, Logical->0x%lx dmaHandle->0x%x",
                 __func__,
                 (gctUINT32)Bytes,
                 mdl,
-                (gctUINT32)mdl->addr,
+                mdl->addr,
                 mdl->dmaHandle);
 
     return gcvSTATUS_OK;
@@ -5680,7 +5680,6 @@ gckOS_FreeVidmemFromMemblock(
     return status;
 }
 #endif
-
 
 /*******************************************************************************
 **
@@ -7227,7 +7226,11 @@ gckOS_GetMmuVersion(
     gcmkVERIFY_ARGUMENT(mmuVersion != gcvNULL);
 
     /* Return mmu version. */
+#if !MRVL_GFX_2D_ONLY
     *mmuVersion = Os->device->kernels[gcvCORE_MAJOR]->hardware->mmuVersion ;
+#else
+    *mmuVersion = Os->device->kernels[gcvCORE_2D]->hardware->mmuVersion ;
+#endif
 
     /* Success. */
     gcmkFOOTER_ARG("*mmuVersion=0x%08x", *mmuVersion);
@@ -7389,7 +7392,7 @@ _HandleCache(
     IN gckOS Os,
     IN gctUINT32 ProcessID,
     IN gctPHYS_ADDR Handle,
-    IN gctUINTPTR_T Physical,
+    IN gctUINT32 Physical,
     IN gctPOINTER Logical,
     IN gctSIZE_T Bytes,
     IN enum dma_data_direction Dir
@@ -7397,7 +7400,7 @@ _HandleCache(
 {
     gceSTATUS status;
     gctUINT32 i, pageNum;
-    unsigned long paddr;
+    gctUINT32 paddr;
     gctPOINTER vaddr;
 
     gcmkHEADER_ARG("Os=0x%X ProcessID=%d Handle=0x%X Logical=0x%X Bytes=%lu",
@@ -7406,10 +7409,9 @@ _HandleCache(
     if (Physical != gcvINVALID_ADDRESS)
     {
         /* Non paged memory or gcvPOOL_USER surface */
-        paddr = (unsigned long) Physical;
         dma_sync_single_for_device(
                   gcvNULL,
-                  (dma_addr_t)paddr,
+                  (dma_addr_t)(gctUINTPTR_T)Physical,
                   Bytes,
                   Dir);
     }
@@ -7418,10 +7420,10 @@ _HandleCache(
     )
     {
         /* Video Memory or contiguous virtual memory */
-        gcmkONERROR(gckOS_GetPhysicalAddress(Os, Logical, (gctUINTPTR_T*)&paddr));
+        gcmkONERROR(gckOS_GetPhysicalAddress(Os, Logical, &paddr));
         dma_sync_single_for_device(
                   gcvNULL,
-                  (dma_addr_t)paddr,
+                  (dma_addr_t)(gctUINTPTR_T)paddr,
                   Bytes,
                   Dir);
     }
@@ -7438,12 +7440,12 @@ _HandleCache(
                 vaddr + PAGE_SIZE * i,
                 ProcessID,
                 (PLINUX_MDL)Handle,
-                (gctUINTPTR_T*)&paddr
+                &paddr
                 ));
 
             dma_sync_single_for_device(
                       gcvNULL,
-                      (dma_addr_t)paddr,
+                      (dma_addr_t)(gctUINTPTR_T)paddr,
                       PAGE_SIZE,
                       Dir);
         }
@@ -7775,7 +7777,7 @@ gckOS_CacheFlush(
     IN gckOS Os,
     IN gctUINT32 ProcessID,
     IN gctPHYS_ADDR Handle,
-    IN gctUINTPTR_T Physical,
+    IN gctUINT32 Physical,
     IN gctPOINTER Logical,
     IN gctSIZE_T Bytes
     )
