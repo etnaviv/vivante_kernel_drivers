@@ -85,13 +85,13 @@
 #endif
 
 /* Eden/TTD2 */
-#if (defined CONFIG_MACH_TTD2_FPGA) || (defined CONFIG_MACH_EDEN_FPGA)
+#if (defined CONFIG_MACH_TTD2_FPGA) || (defined CONFIG_MACH_PXA1928_FPGA)
 #define MRVL_PLATFORM_TTD2_FPGA                 1
 #else
 #define MRVL_PLATFORM_TTD2_FPGA                 0
 #endif
 
-#if (defined CONFIG_CPU_TTD2) || (defined CONFIG_CPU_EDEN)
+#if (defined CONFIG_CPU_TTD2) || (defined CONFIG_CPU_PXA1928)
 #define MRVL_PLATFORM_TTD2                      1
 #else
 #define MRVL_PLATFORM_TTD2                      0
