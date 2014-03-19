@@ -157,11 +157,14 @@ module_param(showArgs, int, 0644);
 #elif (MRVL_PLATFORM_988 || MRVL_PLATFORM_PXA1088 || MRVL_PLATFORM_ADIR)
     unsigned long coreClock = 624;
 #elif MRVL_PLATFORM_TTD2
-    unsigned long coreClock = 156;
+    unsigned long coreClock = 624;
 #else
     unsigned long coreClock = 533;
 #endif
     module_param(coreClock, ulong, 0644);
+
+static unsigned long coreClock2D = 312;
+module_param(coreClock2D, ulong, 0644);
 #endif
 
 /******************************************************************************\
@@ -964,10 +967,10 @@ static int drv_init(void)
 
 #if ENABLE_GPU_CLOCK_BY_DRIVER && LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,28)
     {
-        gcmkONERROR(gckOS_SetGPUPowerOnBeforeInit(gcvCORE_MAJOR, gcvTRUE, gcvTRUE));
+        gcmkONERROR(gckOS_SetGPUPowerOnBeforeInit(gcvCORE_MAJOR, gcvTRUE, gcvTRUE, coreClock * 1000));
 
 #   if MRVL_2D3D_CLOCK_SEPARATED
-        gcmkONERROR(gckOS_SetGPUPowerOnBeforeInit(gcvCORE_2D, gcvTRUE, gcvTRUE));
+        gcmkONERROR(gckOS_SetGPUPowerOnBeforeInit(gcvCORE_2D, gcvTRUE, gcvTRUE, coreClock2D * 1000));
 #   endif
     }
 #endif

@@ -9745,11 +9745,13 @@ gceSTATUS
 gckOS_SetGPUPowerOnBeforeInit(
     IN gceCORE Core,
     IN gctBOOL EnableClk,
-    IN gctBOOL EnablePwr
+    IN gctBOOL EnablePwr,
+    IN gctUINT clkRate
 )
 {
     gceSTATUS status;
     struct gc_iface *iface;
+    struct gc_iface *ifaceShader = gcvNULL;
     int ret = 0;
     gcmkHEADER_ARG("Core=%d EnableClk=%d EnablePwr=%d", Core, EnableClk, EnablePwr);
 
@@ -9767,6 +9769,19 @@ gckOS_SetGPUPowerOnBeforeInit(
     if(EnableClk)
     {
         gpu_clk_enable(iface);
+    }
+
+    if (clkRate)
+    {
+        gpu_clk_setrate(iface, clkRate);
+
+#if MRVL_3D_CORE_SH_CLOCK_SEPARATED
+        if (Core == gcvCORE_MAJOR)
+        {
+            gcmkONERROR(gckOS_GetIfaceMapping(NULL, gcvCORE_SH, (gctPOINTER *)&ifaceShader));
+            gpu_clk_setrate(ifaceShader, clkRate);
+        }
+#endif
     }
 
 OnError:

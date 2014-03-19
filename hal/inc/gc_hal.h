@@ -1555,7 +1555,8 @@ gceSTATUS
 gckOS_SetGPUPowerOnBeforeInit(
     IN gceCORE Core,
     IN gctBOOL EnableClk,
-    IN gctBOOL EnablePwr
+    IN gctBOOL EnablePwr,
+    IN gctUINT clkRate
     );
 
 #else /* MRVL_ENABLE_COMMON_PWRCLK_FRAMEWORK == 0 */
