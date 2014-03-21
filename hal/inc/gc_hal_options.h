@@ -701,7 +701,7 @@
         can't be set 1 at same time
 */
 #ifndef gcdNONPAGED_MEMORY_BUFFERABLE
-#   define gcdNONPAGED_MEMORY_BUFFERABLE        0
+#   define gcdNONPAGED_MEMORY_BUFFERABLE        1
 #endif
 
 /*
