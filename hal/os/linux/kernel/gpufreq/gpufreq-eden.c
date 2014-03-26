@@ -94,7 +94,7 @@ OnError:
 }
 #endif
 
-#define RESTRICT_MAX_FREQ_600M        1
+#define RESTRICT_MAX_FREQ_600M        0
 
 static int gpufreq_frequency_table_get(unsigned int gpu,
     struct gpufreq_frequency_table *core_table,
