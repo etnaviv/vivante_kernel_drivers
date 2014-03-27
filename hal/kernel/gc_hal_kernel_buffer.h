@@ -15,7 +15,6 @@
 #ifndef __gc_hal_kernel_buffer_h_
 #define __gc_hal_kernel_buffer_h_
 
-
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -133,20 +132,20 @@ struct _gcoCMDBUF
     gctUINT64                   logical;
 
     /* Number of bytes in command buffer. */
-    gctUINT                     bytes;
+    gctUINT32                   bytes;
 
     /* Start offset into the command buffer. */
-    gctUINT                     startOffset;
+    gctUINT32                   startOffset;
 
     /* Current offset into the command buffer. */
-    gctUINT                     offset;
+    gctUINT32                   offset;
 
     /* Number of free bytes in command buffer. */
-    gctUINT                     free;
+    gctUINT32                   free;
 
     /* Location of the last reserved area. */
     gctUINT64                   lastReserve;
-    gctUINT                     lastOffset;
+    gctUINT32                   lastOffset;
 
 #if gcdSECURE_USER
     /* Hint array for the current command buffer. */
@@ -194,22 +193,16 @@ struct _gcoQUEUE
     gcsQUEUE_PTR                head;
     gcsQUEUE_PTR                tail;
 
-#ifdef __QNXNTO__
-    /* Buffer for records. */
-    gcsQUEUE_PTR                records;
-    gctUINT32                   freeBytes;
-    gctUINT32                   offset;
-#else
+    /* chunks of the records. */
+    gctPOINTER                  chunks;
+
     /* List of free records. */
     gcsQUEUE_PTR                freeList;
-#endif
+
     #define gcdIN_QUEUE_RECORD_LIMIT 16
     /* Number of records currently in queue */
     gctUINT32                   recordCount;
 };
-
-
-#if gcdTEMP_CMD_BUFFER_SIZE
 
 struct _gcsTEMPCMDBUF
 {
@@ -217,8 +210,6 @@ struct _gcsTEMPCMDBUF
     gctPOINTER buffer;
     gctBOOL  inUse;
 };
-
-#endif
 
 #ifdef __cplusplus
 }

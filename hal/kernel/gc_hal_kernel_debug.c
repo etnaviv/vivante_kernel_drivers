@@ -131,7 +131,7 @@ static gctUINT32 _debugZones = gcvZONE_NONE;
 
 #define gcmPTRALIGNMENT(Pointer, Alignemnt) \
 ( \
-    gcmALIGN(gcmPTR2INT(Pointer), Alignemnt) - gcmPTR2INT(Pointer) \
+    gcmALIGN((gctUINTPTR_T)(Pointer), Alignemnt) - (gctUINTPTR_T)(Pointer) \
 )
 
 #if gcdALIGNBYSIZE
@@ -139,7 +139,7 @@ static gctUINT32 _debugZones = gcvZONE_NONE;
         (((Offset) & ((Alignment) - 1)) == 0)
 
 #   define gcmkALIGNPTR(Type, Pointer, Alignment) \
-        Pointer = (Type) gcmINT2PTR(gcmALIGN(gcmPTR2INT(Pointer), Alignment))
+        Pointer = (Type) gcmINT2PTR(gcmALIGN((gctUINTPTR_T)(Pointer), Alignment))
 #else
 #   define gcmISALIGNED(Offset, Alignment) \
         gcvTRUE
@@ -1953,10 +1953,10 @@ gckOS_DumpBuffer(
     IN gctBOOL CopyMessage
     )
 {
-    gctUINT32 address;
-    gcsBUFFERED_OUTPUT_PTR outputBuffer;
+    gctUINT32 address                   = 0;
+    gcsBUFFERED_OUTPUT_PTR outputBuffer = gcvNULL;
     static gctBOOL userLocked;
-    gctCHAR *buffer = (gctCHAR*)Buffer;
+    gctCHAR *buffer                     = (gctCHAR*)Buffer;
 
     gcmkDECLARE_LOCK(lockHandle);
 
@@ -2621,7 +2621,7 @@ _VerifyMessage(
 
     /* Get function name. */
     function = (gctSTRING)&message->payload;
-    functionBytes = strlen(function) + 1;
+    functionBytes = (gctUINT32)strlen(function) + 1;
 
     /* Get arguments number. */
     numArguments = message->numArguments;
@@ -2732,7 +2732,7 @@ gckOS_BinaryTrace(
     payload = (gctSTRING)&message->payload;
 
     /* Function name. */
-    functionBytes = gcmkSTRLEN(Function) + 1;
+    functionBytes = (gctUINT32)gcmkSTRLEN(Function) + 1;
     gcmkMEMCPY(payload, Function, functionBytes);
 
     /* Advance to next payload. */
@@ -2758,6 +2758,6 @@ gckOS_BinaryTrace(
 
 
     /* Send buffer to ring buffer. */
-    gckOS_WriteToRingBuffer(buffer, payload - buffer);
+    gckOS_WriteToRingBuffer(buffer, (gctUINT32)(payload - buffer));
 }
 

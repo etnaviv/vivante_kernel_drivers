@@ -1,8 +1,5 @@
 /*
- * gpufreq-helanlte.c
- *
- * Author: Watson Wang <zswang@marvell.com>
- * Copyright (C) 2013 Marvell International Ltd.
+ * gpufreq-pxa988.c
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -13,7 +10,7 @@
 #include "gpufreq.h"
 
 #if MRVL_CONFIG_ENABLE_GPUFREQ
-#if MRVL_PLATFORM_PXA1L88
+#if MRVL_PLATFORM_PXA988_FAMILY
 #include <linux/clk.h>
 #include <linux/err.h>
 #if MRVL_CONFIG_ENABLE_QOS_SUPPORT
@@ -36,7 +33,7 @@ extern int get_gcu2d_freqs_table(unsigned long *gcu2d_freqs_table,
 
 typedef int (*PFUNC_GET_FREQS_TBL)(unsigned long *, unsigned int *, unsigned int);
 
-struct gpufreq_helanlte {
+struct gpufreq_pxa988 {
 #if !MRVL_ENABLE_COMMON_PWRCLK_FRAMEWORK
     /* 2d/3d clk*/
     struct clk *gc_clk;
@@ -49,7 +46,7 @@ struct gpufreq_helanlte {
     PFUNC_GET_FREQS_TBL pf_get_freqs_table;
 };
 
-struct gpufreq_helanlte gh[GPUFREQ_GPU_NUMS];
+struct gpufreq_pxa988 gh[GPUFREQ_GPU_NUMS];
 static gckOS gpu_os;
 
 static int gpufreq_frequency_table_get(unsigned int gpu, struct gpufreq_frequency_table *table_freqs)
@@ -116,11 +113,11 @@ static struct gpufreq_freq_attr *driver_attrs[] = {
     NULL
 };
 
-static int helanlte_gpufreq_init (struct gpufreq_policy *policy);
-static int helanlte_gpufreq_verify (struct gpufreq_policy *policy);
-static int helanlte_gpufreq_target (struct gpufreq_policy *policy, unsigned int target_freq, unsigned int relation);
-static int helanlte_gpufreq_set(unsigned int gpu, struct gpufreq_freqs* freqs);
-static unsigned int helanlte_gpufreq_get (unsigned int chip);
+static int pxa988_gpufreq_init (struct gpufreq_policy *policy);
+static int pxa988_gpufreq_verify (struct gpufreq_policy *policy);
+static int pxa988_gpufreq_target (struct gpufreq_policy *policy, unsigned int target_freq, unsigned int relation);
+static int pxa988_gpufreq_set(unsigned int gpu, struct gpufreq_freqs* freqs);
+static unsigned int pxa988_gpufreq_get (unsigned int chip);
 
 #if MRVL_CONFIG_ENABLE_QOS_SUPPORT
 static unsigned int is_qos_inited = 0;
@@ -152,16 +149,16 @@ static struct _gc_qos gc_qos[] = {
 
 #endif /* MRVL_CONFIG_ENABLE_QOS_SUPPORT */
 
-static struct gpufreq_driver helanlte_gpufreq_driver = {
-    .init   = helanlte_gpufreq_init,
-    .verify = helanlte_gpufreq_verify,
-    .get    = helanlte_gpufreq_get,
-    .target = helanlte_gpufreq_target,
-    .name   = "helanlte-gpufreq",
+static struct gpufreq_driver pxa988_gpufreq_driver = {
+    .init   = pxa988_gpufreq_init,
+    .verify = pxa988_gpufreq_verify,
+    .get    = pxa988_gpufreq_get,
+    .target = pxa988_gpufreq_target,
+    .name   = "pxa988-gpufreq",
     .attr   = driver_attrs,
 };
 
-static int helanlte_gpufreq_init (struct gpufreq_policy *policy)
+static int pxa988_gpufreq_init (struct gpufreq_policy *policy)
 {
     unsigned int gpu = policy->gpu;
 #if !MRVL_ENABLE_COMMON_PWRCLK_FRAMEWORK
@@ -211,7 +208,7 @@ static int helanlte_gpufreq_init (struct gpufreq_policy *policy)
     }
 #endif
 
-    policy->cur = helanlte_gpufreq_get(policy->gpu);
+    policy->cur = pxa988_gpufreq_get(policy->gpu);
 
 #if MRVL_CONFIG_ENABLE_QOS_SUPPORT
     if(unlikely(!(is_qos_inited & (1 << gpu))))
@@ -231,14 +228,14 @@ static int helanlte_gpufreq_init (struct gpufreq_policy *policy)
     return 0;
 }
 
-static int helanlte_gpufreq_verify (struct gpufreq_policy *policy)
+static int pxa988_gpufreq_verify (struct gpufreq_policy *policy)
 {
     gpufreq_verify_within_limits(policy, policy->gpuinfo.min_freq,
                      policy->gpuinfo.max_freq);
     return 0;
 }
 
-static int helanlte_gpufreq_target (struct gpufreq_policy *policy, unsigned int target_freq, unsigned int relation)
+static int pxa988_gpufreq_target (struct gpufreq_policy *policy, unsigned int target_freq, unsigned int relation)
 {
     int index;
     int ret = 0;
@@ -278,7 +275,7 @@ static int helanlte_gpufreq_target (struct gpufreq_policy *policy, unsigned int 
 
     gpufreq_notify_transition(&freqs, GPUFREQ_PRECHANGE);
 
-    ret = helanlte_gpufreq_set(gpu, &freqs);
+    ret = pxa988_gpufreq_set(gpu, &freqs);
 
     gpufreq_notify_transition(&freqs, GPUFREQ_POSTCHANGE);
 
@@ -286,7 +283,7 @@ static int helanlte_gpufreq_target (struct gpufreq_policy *policy, unsigned int 
 }
 
 #if MRVL_ENABLE_COMMON_PWRCLK_FRAMEWORK /* == 1 */
-static int helanlte_gpufreq_set(unsigned int gpu, struct gpufreq_freqs* freqs)
+static int pxa988_gpufreq_set(unsigned int gpu, struct gpufreq_freqs* freqs)
 {
     int ret = 0;
     unsigned int rate = 0;
@@ -301,7 +298,7 @@ static int helanlte_gpufreq_set(unsigned int gpu, struct gpufreq_freqs* freqs)
     }
 
     /* update current frequency after adjustment */
-    rate = helanlte_gpufreq_get(gpu);
+    rate = pxa988_gpufreq_get(gpu);
     if(rate == -EINVAL)
     {
         debug_log(GPUFREQ_LOG_WARNING, "failed get rate for gpu %u\n", gpu);
@@ -316,7 +313,7 @@ static int helanlte_gpufreq_set(unsigned int gpu, struct gpufreq_freqs* freqs)
     return ret;
 }
 
-static unsigned int helanlte_gpufreq_get (unsigned int gpu)
+static unsigned int pxa988_gpufreq_get (unsigned int gpu)
 {
     gceSTATUS status;
     unsigned int rate = ~0;
@@ -329,7 +326,7 @@ OnError:
     return -EINVAL;
 }
 #else /* MRVL_ENABLE_COMMON_PWRCLK_FRAMEWORK == 0 */
-static int helanlte_gpufreq_set(unsigned int gpu, struct gpufreq_freqs* freqs)
+static int pxa988_gpufreq_set(unsigned int gpu, struct gpufreq_freqs* freqs)
 {
     int ret = 0;
     unsigned int rate = 0;
@@ -343,7 +340,7 @@ static int helanlte_gpufreq_set(unsigned int gpu, struct gpufreq_freqs* freqs)
     }
 
     /* update current frequency after adjustment */
-    rate = helanlte_gpufreq_get(gpu);
+    rate = pxa988_gpufreq_get(gpu);
     if(rate == -EINVAL)
     {
         debug_log(GPUFREQ_LOG_WARNING, "failed get rate for gpu %u\n", gpu);
@@ -358,7 +355,7 @@ static int helanlte_gpufreq_set(unsigned int gpu, struct gpufreq_freqs* freqs)
     return ret;
 }
 
-static unsigned int helanlte_gpufreq_get (unsigned int gpu)
+static unsigned int pxa988_gpufreq_get (unsigned int gpu)
 {
     unsigned int rate = ~0;
     struct clk *gc_clk = gh[gpu].gc_clk;
@@ -400,7 +397,7 @@ int __GPUFREQ_EXPORT_TO_GC gpufreq_init(gckOS Os)
     }
 #endif
 
-    gpufreq_register_driver(Os, &helanlte_gpufreq_driver);
+    gpufreq_register_driver(Os, &pxa988_gpufreq_driver);
     return 0;
 }
 
@@ -417,11 +414,11 @@ void __GPUFREQ_EXPORT_TO_GC gpufreq_exit(gckOS Os)
     }
 #endif
 
-    gpufreq_unregister_driver(Os, &helanlte_gpufreq_driver);
+    gpufreq_unregister_driver(Os, &pxa988_gpufreq_driver);
     gpufreq_late_exit();
 }
 
-#endif /* End of MRVL_PLATFORM_PXA1L88 */
+#endif /* End of MRVL_PLATFORM_PXA988_FAMILY */
 #endif /* End of MRVL_CONFIG_ENABLE_GPUFREQ */
 
 

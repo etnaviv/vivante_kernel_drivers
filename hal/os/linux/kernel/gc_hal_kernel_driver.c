@@ -150,14 +150,12 @@ static int showArgs = 1;
 module_param(showArgs, int, 0644);
 
 #if ENABLE_GPU_CLOCK_BY_DRIVER
-#if MRVL_PLATFORM_988_FPGA
-    unsigned long coreClock = 0;
-#elif MRVL_PLATFORM_TTD2_FPGA
+#if MRVL_PLATFORM_TTD2_FPGA
     unsigned long coreClock = 50;
-#elif (MRVL_PLATFORM_988 || MRVL_PLATFORM_PXA1088 || MRVL_PLATFORM_ADIR)
+#elif MRVL_PLATFORM_ADIR
     unsigned long coreClock = 624;
 #elif MRVL_PLATFORM_TTD2
-    unsigned long coreClock = 624;
+    unsigned long coreClock = 531;
 #else
     unsigned long coreClock = 533;
 #endif
@@ -476,12 +474,15 @@ int drv_open(
 
     if (!galDevice->contiguousMapped)
     {
-        gcmkONERROR(gckOS_MapMemory(
-            galDevice->os,
-            galDevice->contiguousPhysical,
-            galDevice->contiguousSize,
-            &data->contiguousLogical
-            ));
+        if (galDevice->contiguousPhysical != gcvNULL)
+        {
+            gcmkONERROR(gckOS_MapMemory(
+                galDevice->os,
+                galDevice->contiguousPhysical,
+                galDevice->contiguousSize,
+                &data->contiguousLogical
+                ));
+        }
     }
 
     filp->private_data = data;
@@ -1015,10 +1016,6 @@ static int drv_init(void)
         gckDEBUGFS_Initialize();
     }
 
-#if MRVL_GFX_2D_ONLY
-    irqLine = -1;
-#endif
-
     /* Create the GAL device. */
     status = gckGALDEVICE_Construct(
 #if gcdMULTI_GPU || gcdMULTI_GPU_AFFINITY
@@ -1055,7 +1052,6 @@ static int drv_init(void)
     /* Start the GAL device. */
     gcmkONERROR(gckGALDEVICE_Start(device));
 
-#if !MRVL_GFX_2D_ONLY
     if ((physSize != 0)
        && (device->kernels[gcvCORE_MAJOR] != gcvNULL)
        && (device->kernels[gcvCORE_MAJOR]->hardware->mmuVersion != 0))
@@ -1081,21 +1077,6 @@ static int drv_init(void)
         /* Reset the base address */
         device->baseAddress = 0;
     }
-#else
-    {
-        if ((physSize != 0)
-            && (device->kernels[gcvCORE_2D] != gcvNULL)
-            && (device->kernels[gcvCORE_2D]->hardware->mmuVersion != 0))
-        {
-            status = gckMMU_Enable(device->kernels[gcvCORE_2D]->mmu, baseAddress, physSize);
-            gcmkTRACE_ZONE(gcvLEVEL_INFO, gcvZONE_DRIVER,
-                "Enable new MMU for 2D: status=%d\n", status);
-        }
-
-        /* Reset the base address */
-        device->baseAddress = 0;
-    }
-#endif
 
     for (i = 0; i < gcdMAX_GPU_COUNT; i++)
     {
@@ -1106,7 +1087,7 @@ static int drv_init(void)
     }
 
     /* Register the character device. */
-    ret = register_chrdev(major, DRV_NAME, &driver_fops);
+    ret = register_chrdev(major, DEVICE_NAME, &driver_fops);
 
     if (ret < 0)
     {
@@ -1139,9 +1120,9 @@ static int drv_init(void)
     }
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,27)
-    device_create(device_class, NULL, MKDEV(major, 0), NULL, "galcore");
+    device_create(device_class, NULL, MKDEV(major, 0), NULL, DEVICE_NAME);
 #else
-    device_create(device_class, NULL, MKDEV(major, 0), "galcore");
+    device_create(device_class, NULL, MKDEV(major, 0), DEVICE_NAME);
 #endif
 
     galDevice = device;
@@ -1197,7 +1178,7 @@ static void drv_exit(void)
     device_destroy(gpuClass, MKDEV(major, 0));
     class_destroy(gpuClass);
 
-    unregister_chrdev(major, DRV_NAME);
+    unregister_chrdev(major, DEVICE_NAME);
 
     gcmkVERIFY_OK(gckGALDEVICE_Stop(galDevice));
     gcmkVERIFY_OK(gckGALDEVICE_Destroy(galDevice));
@@ -1246,12 +1227,6 @@ static void drv_exit(void)
     module_init(drv_init);
     module_exit(drv_exit);
 #else
-
-#ifdef CONFIG_DOVE_GPU
-#   define DEVICE_NAME "dove_gpu"
-#else
-#   define DEVICE_NAME "galcore"
-#endif
 
 #if MRVL_CONFIG_ENABLE_GPUFREQ
 static int __enable_gpufreq(gckGALDEVICE device)

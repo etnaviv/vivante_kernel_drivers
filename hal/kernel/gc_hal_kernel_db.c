@@ -490,7 +490,6 @@ gckKERNEL_DeleteRecord(
         gckOS_AcquireMutex(Kernel->os, Kernel->db->dbMutex, gcvINFINITE));
     acquired = gcvTRUE;
 
-
     /* Scan the database for this record. */
     for (record = Database->list[slot], previous = gcvNULL;
          record != gcvNULL;
@@ -646,7 +645,6 @@ OnError:
     gcmkFOOTER();
     return status;
 }
-
 
 /*******************************************************************************
 ***** Public API **************************************************************/
@@ -1804,17 +1802,16 @@ gckKERNEL_DestroyProcessDB(
         case gcvDB_VIDEO_MEMORY:
             gcmkERR_BREAK(gckVIDMEM_HANDLE_Lookup(record->kernel,
                                                   ProcessID,
-                                                  gcmPTR2INT(record->data),
+                                                  gcmPTR2INT32(record->data),
                                                   &nodeObject));
 
             /* Free the video memory. */
             gcmkVERIFY_OK(gckVIDMEM_HANDLE_Dereference(record->kernel,
                                                        ProcessID,
-                                                       gcmPTR2INT(record->data)));
+                                                       gcmPTR2INT32(record->data)));
 
             gcmkVERIFY_OK(gckVIDMEM_NODE_Dereference(record->kernel,
                                                      nodeObject));
-
 
             gcmkTRACE_ZONE(gcvLEVEL_WARNING, gcvZONE_DATABASE,
                            "DB: VIDEO_MEMORY 0x%x (status=%d)",
@@ -1830,10 +1827,11 @@ gckKERNEL_DestroyProcessDB(
                                             record->data);
 
             /* Free the non paged memory. */
-            status = gckOS_FreeNonPagedMemory(Kernel->os,
-                                              record->bytes,
-                                              physical,
-                                              record->data);
+            status = gckEVENT_FreeNonPagedMemory(Kernel->eventObj,
+                                                 record->bytes,
+                                                 physical,
+                                                 record->data,
+                                                 gcvKERNEL_PIXEL);
             gcmRELEASE_NAME(record->physical);
 
             gcmkTRACE_ZONE(gcvLEVEL_WARNING, gcvZONE_DATABASE,
@@ -1882,7 +1880,7 @@ gckKERNEL_DestroyProcessDB(
 #else
             /* Free the user signal. */
             status = gckOS_DestroyUserSignal(Kernel->os,
-                                             gcmPTR2INT(record->data));
+                                             gcmPTR2INT32(record->data));
 #endif /* USE_NEW_LINUX_SIGNAL */
 
             gcmkTRACE_ZONE(gcvLEVEL_WARNING, gcvZONE_DATABASE,
@@ -1891,7 +1889,7 @@ gckKERNEL_DestroyProcessDB(
             break;
 
         case gcvDB_VIDEO_MEMORY_LOCKED:
-            handle = gcmPTR2INT(record->data);
+            handle = gcmPTR2INT32(record->data);
 
             gcmkERR_BREAK(gckVIDMEM_HANDLE_Lookup(record->kernel,
                                                   ProcessID,
@@ -1901,7 +1899,7 @@ gckKERNEL_DestroyProcessDB(
             /* Unlock what we still locked */
             status = gckVIDMEM_Unlock(record->kernel,
                                       nodeObject->node,
-                                      gcvSURF_TYPE_UNKNOWN,
+                                      nodeObject->type,
                                       &asynchronous);
 
 #if gcdENABLE_VG
@@ -1912,7 +1910,7 @@ gckKERNEL_DestroyProcessDB(
                     /* TODO: we maybe need to schedule a event here */
                     status = gckVIDMEM_Unlock(record->kernel,
                                               nodeObject->node,
-                                              gcvSURF_TYPE_UNKNOWN,
+                                              nodeObject->type,
                                               gcvNULL);
                 }
 
@@ -1932,11 +1930,10 @@ gckKERNEL_DestroyProcessDB(
 
                 if (gcmIS_SUCCESS(status) && (gcvTRUE == asynchronous))
                 {
-
                     status = gckEVENT_Unlock(record->kernel->eventObj,
                                              gcvKERNEL_PIXEL,
                                              nodeObject,
-                                             gcvSURF_TYPE_UNKNOWN);
+                                             nodeObject->type);
                 }
                 else
                 {
@@ -1968,8 +1965,8 @@ gckKERNEL_DestroyProcessDB(
                                            record->data);
 
             gcmkTRACE_ZONE(gcvLEVEL_WARNING, gcvZONE_DATABASE,
-                           "DB: MAP MEMORY %d (status=%d)",
-                           gcmPTR2INT(record->data), status);
+                           "DB: MAP MEMORY %p (status=%d)",
+                           record->data, status);
             break;
 
         case gcvDB_MAP_USER_MEMORY:
@@ -1983,8 +1980,8 @@ gckKERNEL_DestroyProcessDB(
             gcmRELEASE_NAME(record->data);
 
             gcmkTRACE_ZONE(gcvLEVEL_WARNING, gcvZONE_DATABASE,
-                           "DB: MAP USER MEMORY %d (status=%d)",
-                           gcmPTR2INT(record->data), status);
+                           "DB: MAP USER MEMORY %p (status=%d)",
+                           record->data, status);
             break;
 
 #if gcdANDROID_NATIVE_FENCE_SYNC
@@ -2790,4 +2787,3 @@ OnError:
     gcmkFOOTER();
     return status;
 }
-

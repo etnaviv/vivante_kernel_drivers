@@ -25,7 +25,7 @@
 #define INOUT
 #define __GPUFREQ_EXPORT_TO_GC
 
-#if MRVL_PLATFORM_MMP3 || MRVL_PLATFORM_PXA1088 || MRVL_PLATFORM_PXA1L88 || MRVL_PLATFORM_TTD2
+#if MRVL_PLATFORM_PXA988_FAMILY || MRVL_PLATFORM_TTD2
 #   define GPUFREQ_HAVE_MULTI_CORES     1
 #else /* default */
 #   define GPUFREQ_HAVE_MULTI_CORES     0
@@ -306,8 +306,8 @@ int gpufreq_get_gpu_load(unsigned int gpu, unsigned int t);
 /*********************************************************************
  *                       gpufreq default governor                    *
  *********************************************************************/
-extern struct gpufreq_governor gpufreq_gov_ondemand;
-#define GPUFREQ_DEFAULT_GOVERNOR    (&gpufreq_gov_ondemand)
+extern struct gpufreq_governor gpufreq_gov_userspace;
+#define GPUFREQ_DEFAULT_GOVERNOR    (&gpufreq_gov_userspace)
 
 /*********************************************************************
  *                            frequency table                        *

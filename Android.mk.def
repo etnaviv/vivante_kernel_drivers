@@ -24,7 +24,7 @@ ifeq ($(VIVANTE_ANDROID_MK_DEF),)
 FIXED_ARCH_TYPE              ?=
 
 # Set this variable to Kernel directory.
-KERNEL_DIR                   ?= $(ANDROID_BUILD_TOP)/kernel/kernel
+KERNEL_DIR                   ?= $(ANDROID_PRODUCT_OUT)/obj/kernel
 
 # Cross compiler for building kernel module.
 CROSS_COMPILE                ?= arm-marvell-linux-gnueabi-
@@ -65,6 +65,7 @@ DEBUG                        ?= 0
 
 # Build OpenCL
 USE_OPENCL ?= 1
+BUILD_OPENCL_ICD             ?= 0
 
 # Build libGLESv3x
 BUILD_HALTI                  ?= 1
@@ -73,7 +74,10 @@ BUILD_HALTI                  ?= 1
 ENABLE_OUTER_CACHE_PATCH     ?= 1
 
 # 2D VG
-VIVANTE_ENABLE_VG := 0
+VIVANTE_ENABLE_VG 			 ?= 0
+
+# Security
+SECURITY                     ?= 0
 
 # Use reg or non-reg arch files
 USE_ARCH_REG ?= 1
@@ -154,6 +158,10 @@ ifeq ($(DEBUG), 1)
 CFLAGS        += -DDBG=1 -DDEBUG -D_DEBUG -O0 -g
 endif
 
+ifeq ($(SECURITY), 1)
+CFLAGS        += -DgcdSECURITY=1
+endif
+
 CFLAGS        += -DVIVANTE_PROFILER=0
 CFLAGS        += -DVIVANTE_PROFILER_CONTEXT=0
 
@@ -163,8 +171,10 @@ else
 CFLAGS        += -DgcdPAGED_MEMORY_CACHEABLE=0
 endif
 
-
-CFLAGS += -DMRVL_USE_VIV_GRALLOC=1
+USE_LOCAL_GRALLOC ?= 0
+ifeq ($(USE_LOCAL_GRALLOC), 1)
+    CFLAGS += -DUSE_LOCAL_GRALLOC=1
+endif
 VIVANTE_ANDROID_MK_DEF := 1
 endif
 

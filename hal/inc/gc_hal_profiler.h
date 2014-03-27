@@ -14,6 +14,10 @@
 #ifndef __gc_hal_profiler_h_
 #define __gc_hal_profiler_h_
 
+#if VIVANTE_PROFILER_NEW
+#include "gc_hal_engine.h"
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -181,6 +185,7 @@ extern "C" {
 #define VPG_FRAME       0x190000
 #define VPG_ES11_DRAW   0x200000
 #define VPG_ES30_DRAW   0x210000
+#define VPG_VG11_TIME   0x220000
 #define VPG_END         0xff0000
 
 /* Info. */
@@ -408,6 +413,10 @@ typedef struct _gcsPROFILER_COUNTERS
 }
 gcsPROFILER_COUNTERS;
 
+#if VIVANTE_PROFILER_NEW
+#define NumOfDrawBuf 64
+#endif
+
 /* HAL profile information. */
 typedef struct _gcsPROFILER
 {
@@ -467,6 +476,11 @@ typedef struct _gcsPROFILER
     gctUINT32       prevPSBranchInstCount;
     gctUINT32       prevPSTexInstCount;
     gctUINT32       prevPSPixelCount;
+
+#if VIVANTE_PROFILER_NEW
+    gcoBUFOBJ       newCounterBuf[NumOfDrawBuf];
+    gctUINT32       curBufId;
+#endif
 
 }
 gcsPROFILER;

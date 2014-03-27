@@ -39,49 +39,15 @@
 #define MRVL_VIDEO_MEMORY_USE_PMEM              0
 #endif
 
-#ifdef CONFIG_CPU_MMP2
-#define MRVL_PLATFORM_MMP2                      1
-#else
-#define MRVL_PLATFORM_MMP2                      0
-#endif
-
-#ifdef CONFIG_CPU_MMP3
-#define MRVL_PLATFORM_MMP3                      1
-#else
-#define MRVL_PLATFORM_MMP3                      0
-#endif
-
-#ifdef  CONFIG_CPU_PXA978
-#define MRVL_PLATFORM_NEVO                      1
-#else
-#define MRVL_PLATFORM_NEVO                      0
-#endif
-
-#ifdef CONFIG_CPU_MMP3FPGA
-#define MRVL_PLATFORM_988_FPGA                  1
-#else
-#define MRVL_PLATFORM_988_FPGA                  0
-#endif
-
-/* Emei/Kunlun */
+/*
+  This marco is for PXA988 series platforms
+    support platforms:   HelanLTE, Helan2
+    no longer support:   Emei, Helan
+*/
 #ifdef CONFIG_CPU_PXA988
-#define MRVL_PLATFORM_988                       1
+#define MRVL_PLATFORM_PXA988_FAMILY             1
 #else
-#define MRVL_PLATFORM_988                       0
-#endif
-
-/* Helan */
-#if (defined CONFIG_CPU_PXA1088) && !(defined CONFIG_CPU_PXA1L88)
-#define MRVL_PLATFORM_PXA1088                   1
-#else
-#define MRVL_PLATFORM_PXA1088                   0
-#endif
-
-/* HelanLTE */
-#ifdef CONFIG_CPU_PXA1L88
-#define MRVL_PLATFORM_PXA1L88                   1
-#else
-#define MRVL_PLATFORM_PXA1L88                   0
+#define MRVL_PLATFORM_PXA988_FAMILY             0
 #endif
 
 /* Eden/TTD2 */
@@ -117,7 +83,7 @@
 /*
  * Use common power/clock framework
  */
-#if (MRVL_PLATFORM_PXA1L88) || (MRVL_PLATFORM_TTD2)
+#if (MRVL_PLATFORM_PXA988_FAMILY) || (MRVL_PLATFORM_TTD2)
 #define MRVL_ENABLE_COMMON_PWRCLK_FRAMEWORK     1
 #else
 #define MRVL_ENABLE_COMMON_PWRCLK_FRAMEWORK     0
@@ -130,28 +96,15 @@
 #define MRVL_2D_POWER_DYNAMIC_ONOFF             1
 #endif
 
-#if (defined ANDROID) && ((MRVL_PLATFORM_NEVO))
-#define MRVL_PROFILE_THREAD                     1
-#else
-#define MRVL_PROFILE_THREAD                     0
-#endif
-
-#if MRVL_PLATFORM_NEVO
-#define MRVL_CONFIG_AXICLK_CONTROL              1
-#else
-#define MRVL_CONFIG_AXICLK_CONTROL              0
-#endif
-
-#if MRVL_PLATFORM_MMP3 || MRVL_PLATFORM_NEVO || MRVL_PLATFORM_988 || \
-    MRVL_PLATFORM_PXA1088 || MRVL_PLATFORM_PXA1L88 || MRVL_PLATFORM_TTD2 || \
-    MRVL_PLATFORM_ADIR
+#if MRVL_PLATFORM_PXA988_FAMILY || \
+    MRVL_PLATFORM_TTD2 || MRVL_PLATFORM_ADIR
 #define MRVL_CONFIG_POWER_CLOCK_SEPARATED       1
 #else
 #define MRVL_CONFIG_POWER_CLOCK_SEPARATED       0
 #endif
 
 #if (defined ANDROID) && (!VIVANTE_PROFILER) && \
-    (MRVL_PLATFORM_PXA1L88 || MRVL_PLATFORM_TTD2)
+    (MRVL_PLATFORM_PXA988_FAMILY || MRVL_PLATFORM_TTD2)
 #define MRVL_POLICY_CLKOFF_WHEN_IDLE            1
 #else
 #define MRVL_POLICY_CLKOFF_WHEN_IDLE            0
@@ -201,28 +154,28 @@
         -- reference count for 2D&3D combined *power* domains
 */
 
-#if MRVL_PLATFORM_PXA1088 || MRVL_PLATFORM_PXA1L88 || MRVL_PLATFORM_TTD2 || \
-    MRVL_PLATFORM_ADIR
+#if MRVL_PLATFORM_PXA988_FAMILY || \
+    MRVL_PLATFORM_TTD2 || MRVL_PLATFORM_ADIR
 #define MRVL_2D3D_CLOCK_SEPARATED               1
 #else
 #define MRVL_2D3D_CLOCK_SEPARATED               0
 #endif
 
-#if MRVL_PLATFORM_PXA1L88 || MRVL_PLATFORM_TTD2 || MRVL_PLATFORM_ADIR
+#if MRVL_PLATFORM_PXA988_FAMILY || MRVL_PLATFORM_TTD2 || MRVL_PLATFORM_ADIR
 #define MRVL_2D3D_POWER_SEPARATED               1
 #else
 #define MRVL_2D3D_POWER_SEPARATED               0
 #endif
 
 /* Dedicated for shader clock enable/disable */
-#if MRVL_PLATFORM_PXA1L88 || MRVL_PLATFORM_TTD2 || MRVL_PLATFORM_ADIR
+#if MRVL_PLATFORM_PXA988_FAMILY || MRVL_PLATFORM_TTD2 || MRVL_PLATFORM_ADIR
 #define MRVL_3D_CORE_SH_CLOCK_SEPARATED         1
 #else
 #define MRVL_3D_CORE_SH_CLOCK_SEPARATED         0
 #endif
 
 /* Dedicated for shader clock DFC */
-#if (MRVL_3D_CORE_SH_CLOCK_SEPARATED) && (MRVL_PLATFORM_PXA1L88)
+#if (MRVL_3D_CORE_SH_CLOCK_SEPARATED) && (MRVL_PLATFORM_PXA988_FAMILY)
 #define MRVL_CONFIG_SHADER_CLK_CONTROL          1
 #else
 #define MRVL_CONFIG_SHADER_CLK_CONTROL          0
@@ -234,17 +187,8 @@
 #define MRVL_2D3D_AXI_CLOCK_SEPARATED           0
 #endif
 
-#if (MRVL_PLATFORM_MMP3)
-#   define MRVL_MAX_CLOCK_DEPTH                 2
-#else  /* default */
-#   define MRVL_MAX_CLOCK_DEPTH                 1
-#endif
-
-#if (MRVL_PLATFORM_MMP3) || (MRVL_PLATFORM_PXA1088)
-#   define MRVL_MAX_POWER_DEPTH                 2
-#else  /* default */
-#   define MRVL_MAX_POWER_DEPTH                 1
-#endif
+#define MRVL_MAX_CLOCK_DEPTH                    1
+#define MRVL_MAX_POWER_DEPTH                    1
 
 #ifndef MRVL_ENABLE_DUMP_SURFACE
 #define MRVL_ENABLE_DUMP_SURFACE                1
@@ -271,14 +215,13 @@
         -- Marco for enabling GPUFREQ
 */
 #if (defined ANDROID || defined X11) && (USE_GPU_FREQ) && (MRVL_CONFIG_SYSFS) \
-    && ((MRVL_PLATFORM_NEVO) || (MRVL_PLATFORM_988) || (MRVL_PLATFORM_PXA1088) \
-    || (MRVL_PLATFORM_PXA1L88) || (MRVL_PLATFORM_TTD2))
+    && ((MRVL_PLATFORM_PXA988_FAMILY) || (MRVL_PLATFORM_TTD2))
 #define MRVL_CONFIG_ENABLE_GPUFREQ              1
 #else
 #define MRVL_CONFIG_ENABLE_GPUFREQ              0
 #endif
 
-#if (defined ANDROID) && (MRVL_PLATFORM_PXA1L88)
+#if (defined ANDROID) && (MRVL_PLATFORM_PXA988_FAMILY)
 #define MRVL_CONFIG_ENABLE_QOS_SUPPORT          1
 #else
 #define MRVL_CONFIG_ENABLE_QOS_SUPPORT          0
@@ -294,7 +237,7 @@
 #define MRVL_DFC_PROTECT_REG_ACCESS             0
 #endif
 
-#if (MRVL_PLATFORM_PXA1L88) || (MRVL_PLATFORM_TTD2) || (MRVL_PLATFORM_ADIR)
+#if (MRVL_PLATFORM_PXA988_FAMILY) || (MRVL_PLATFORM_TTD2) || (MRVL_PLATFORM_ADIR)
 #define MRVL_REDEFINE_KERNEL_MUTEX_INIT         1
 #else
 #define MRVL_REDEFINE_KERNEL_MUTEX_INIT         0
@@ -396,10 +339,12 @@
 #define MRVL_GC_FLUSHCACHE_PFN                1
 
 /*
-    MRVL_GFX_2D_ONLY
-        -- Only 2D hardware is avaible
+    MRVL_DISABLE_NEW_HZ
+        -- disable NEW_HZ since systemui hang when booting up after 5.0.11.pre2 on eden a0
 */
-#define MRVL_GFX_2D_ONLY                      0
+#ifndef MRVL_DISABLE_NEW_HZ
+#define MRVL_DISABLE_NEW_HZ 0
+#endif
 
 /*
 *  Definitions for vendor, renderer and version strings
@@ -410,7 +355,7 @@
 /* @Ziyi: If any change happened between these 2 comments please contact zyxu@marvell.com, Thanks. */
 /* #################### [START ==DO NOT CHANGE THIS MARCRO== START] #################### */
 
-#define _GC_VERSION_STRING_                     "GC version eden-kk44-bringup-fpga"
+#define _GC_VERSION_STRING_                     "GC version 5.0.11.17486"
 
 /* Do not align u/v stride to 16 */
 #define VIVANTE_ALIGN_UVSTRIDE                  0

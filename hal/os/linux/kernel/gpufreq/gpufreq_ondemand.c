@@ -22,13 +22,7 @@
 #define MIN_FREQUENCY_UP_THRESHOLD          (11)
 #define MAX_FREQUENCY_UP_THRESHOLD          (100)
 
-#if MRVL_PLATFORM_MMP3
-#define DEF_DESIRED_HIGH_FREQ               (HZ_TO_KHZ(355000000))
-#elif MRVL_PLATFORM_NEVO
 #define DEF_DESIRED_HIGH_FREQ               (HZ_TO_KHZ(312000000))
-#else
-#define DEF_DESIRED_HIGH_FREQ               (HZ_TO_KHZ(312000000))
-#endif
 #define USE_POLICY_POWER_BENCH              (1)
 
 static int gpufreq_governor_ondemand(struct gpufreq_policy *policy,

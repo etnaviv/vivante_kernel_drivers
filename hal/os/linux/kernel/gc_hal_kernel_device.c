@@ -650,100 +650,6 @@ static int threadRoutineVG(void *ctxt)
     }
 }
 
-#if MRVL_PROFILE_THREAD
-int profile_thread(void *context)
-{
-    gceSTATUS    status    = gcvSTATUS_OK;
-    gckGALDEVICE device    = (gckGALDEVICE) context;
-    gckKERNEL    kernel    = device->kernels[gcvCORE_MAJOR];
-#if MRVL_PLATFORM_MMP3
-    gckKERNEL    kernel2D  = device->kernels[gcvCORE_2D];
-    gctINT32     value2D = 0;
-#endif
-    gctUINT32    delayTime = 300; /* should be the max time of one draw */
-    gctINT32     value = 0;
-
-    while (1)
-    {
-//        delayTime = device->profileStep;
-        gcmkONERROR(gckOS_AtomGet(device->os, kernel->atomClients, &value));
-#if MRVL_PLATFORM_MMP3
-        gcmkONERROR(gckOS_AtomGet(device->os, kernel2D->atomClients, &value2D));
-#endif
-
-        /* FIXME: enhanced this condition */
-        if((device->os != gcvNULL)
-            && (value > 0
-#if MRVL_PLATFORM_MMP3
-                || value2D > 0
-#endif
-               )
-            && (device->currentPMode != gcvPM_NORMAL)
-        )
-        {
-            /* Try acquiring power semaphore to see if GC is off/suspend/idle */
-            status = gckOS_TryAcquireSemaphore(device->os, kernel->command->powerSemaphore);
-            if (gcmIS_SUCCESS(status))
-            {
-                gcmkVERIFY_OK(gckOS_ReleaseSemaphore(device->os, kernel->command->powerSemaphore));
-                goto OnSUCCESS;
-            }
-            else if (status == gcvSTATUS_TIMEOUT && kernel->hardware->chipPowerState != gcvPOWER_OFF)
-            {
-                /* 3D power semaphore is already acquired, but power
-                     is not off, hardware is in suspend/idle status,
-                     goto success to power off 3D.
-                  */
-                goto OnSUCCESS;
-            }
-
-            /* otherwise, time out to acquire 3D power semaphore, it shall mean 3D is powered off. */
-
-#if MRVL_PLATFORM_MMP3
-            status = gckOS_TryAcquireSemaphore(device->os, kernel2D->command->powerSemaphore);
-            if (gcmIS_SUCCESS(status))
-            {
-                gcmkVERIFY_OK(gckOS_ReleaseSemaphore(device->os, kernel2D->command->powerSemaphore));
-                goto OnSUCCESS;
-            }
-            else if (status == gcvSTATUS_TIMEOUT && kernel2D->hardware->chipPowerState != gcvPOWER_OFF)
-            {
-                /* 2D power semaphore is already acquired, but power
-                     is not off, hardware is in suspend/idle status,
-                     goto success to power off 2D.
-                  */
-                goto OnSUCCESS;
-            }
-#endif
-
-            /* otherwise, time out to acquire 2D power semaphore, it shall mean 2D is powered off. */
-            gcmkONERROR(gckOS_Delay(device->os, 1000));
-            goto OnBailOut;
-
-OnSUCCESS:
-            /* power off GC when idle */
-            if(device->powerOffWhenIdle)
-            {
-                gckOS_PowerOffWhenIdle(device->os, gcvTRUE);
-            }
-
-OnBailOut:
-            gcmkONERROR(gckOS_Delay(device->os, delayTime));
-        }
-        else
-        {
-            gcmkONERROR(gckOS_Delay(device->os, 10000));
-        }
-    }
-
-    return 0;
-
-OnError:
-    gcmkPRINT("%s(%d): thread has an exception!", __FUNCTION__, __LINE__);
-    return status;
-}
-#endif
-
 /******************************************************************************\
 ******************************* gckGALDEVICE Code ******************************
 \******************************************************************************/
@@ -2395,10 +2301,6 @@ gckGALDEVICE_Start(
         gcmkONERROR(gckGALDEVICE_Setup_ISR_VG(Device));
     }
 
-#if MRVL_PROFILE_THREAD
-    Device->profilethread = kthread_run(profile_thread, Device, "galcore profile thread");
-#endif
-
     gcmkFOOTER_NO();
     return gcvSTATUS_OK;
 
@@ -2437,10 +2339,6 @@ gckGALDEVICE_Stop(
     gcmkHEADER_ARG("Device=0x%x", Device);
 
     gcmkVERIFY_ARGUMENT(Device != NULL);
-
-#if MRVL_PROFILE_THREAD
-    kthread_stop(Device->profilethread);
-#endif
 
     if (Device->kernels[gcvCORE_MAJOR] != gcvNULL)
     {

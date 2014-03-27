@@ -11,22 +11,16 @@
 *****************************************************************************/
 
 
+extern gceSTATUS
+_DefaultAlloctorInit(
+    IN gckOS Os,
+    OUT gckALLOCATOR * Allocator
+    );
 
-#ifndef __gc_hal_version_h_
-#define __gc_hal_version_h_
+gcsALLOCATOR_DESC allocatorArray[] =
+{
+    /* Default allocator. */
+    gcmkDEFINE_ALLOCATOR_DESC("default", _DefaultAlloctorInit),
+};
 
-#define gcvVERSION_MAJOR        5
 
-#define gcvVERSION_MINOR        0
-
-#define gcvVERSION_PATCH        11
-
-#define gcvVERSION_BUILD     17486
-
-#define gcvVERSION_STRING    "5.0.11.14786"
-
-#define gcvVERSION_DATE      __DATE__
-
-#define gcvVERSION_TIME      __TIME__
-
-#endif /* __gc_hal_version_h_ */

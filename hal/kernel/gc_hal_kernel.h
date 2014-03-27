@@ -23,6 +23,7 @@
 #include "gc_hal_kernel_vg.h"
 #endif
 
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -83,6 +84,9 @@ extern "C" {
 #define gcdSECURE_CACHE_LINEAR      2
 #define gcdSECURE_CACHE_HASH        3
 #define gcdSECURE_CACHE_TABLE       4
+
+#define gcvPAGE_TABLE_DIRTY_BIT_OTHER   (1 << 0)
+#define gcvPAGE_TABLE_DIRTY_BIT_FE      (1 << 1)
 
 typedef struct _gcskLOGICAL_CACHE * gcskLOGICAL_CACHE_PTR;
 typedef struct _gcskLOGICAL_CACHE   gcskLOGICAL_CACHE;
@@ -547,11 +551,9 @@ struct _gckKERNEL
     gctBOOL                     dbCreated;
     gctBOOL                     dbflag;
 
-#if gcdENABLE_RECOVERY
     gctPOINTER                  resetFlagClearTimer;
     gctPOINTER                  resetAtom;
     gctUINT64                   resetTimeStamp;
-#endif
 
     /* Pointer to gckEVENT object. */
     gcsTIMER                    timers[8];
@@ -585,6 +587,7 @@ struct _gckKERNEL
 
     /* Level of dump information after stuck. */
     gctUINT                     stuckDump;
+
 };
 
 struct _FrequencyHistory
@@ -618,7 +621,7 @@ struct _gckCOMMAND
     gckOS                       os;
 
     /* Number of bytes per page. */
-    gctSIZE_T                   pageSize;
+    gctUINT32                   pageSize;
 
     /* Current pipe select. */
     gcePIPE_SELECT              pipeSelect;
@@ -650,11 +653,13 @@ struct _gckCOMMAND
         gctSIGNAL               signal;
         gctPHYS_ADDR            physical;
         gctPOINTER              logical;
+        gctUINT32               address;
     }
     queues[gcdCOMMAND_QUEUES];
 
     gctPHYS_ADDR                physical;
     gctPOINTER                  logical;
+    gctUINT32                   address;
     gctUINT32                   offset;
     gctINT                      index;
 #if gcmIS_DEBUG(gcdDEBUG_TRACE)
@@ -670,12 +675,12 @@ struct _gckCOMMAND
     /* Pointer to last WAIT command. */
     gctPHYS_ADDR                waitPhysical;
     gctPOINTER                  waitLogical;
-    gctSIZE_T                   waitSize;
+    gctUINT32                   waitSize;
 
     /* Command buffer alignment. */
-    gctSIZE_T                   alignment;
-    gctSIZE_T                   reservedHead;
-    gctSIZE_T                   reservedTail;
+    gctUINT32                   alignment;
+    gctUINT32                   reservedHead;
+    gctUINT32                   reservedTail;
 
     /* Commit counter. */
     gctPOINTER                  atomCommit;
@@ -695,8 +700,8 @@ struct _gckCOMMAND
 
 #if gcdPROCESS_ADDRESS_SPACE
     gckMMU                      currentMmu;
-    struct _gckENTRYQUEUE       queue;
 #endif
+    struct _gckENTRYQUEUE       queue;
 };
 
 typedef struct _gcsEVENT *      gcsEVENT_PTR;
@@ -731,6 +736,11 @@ typedef struct _gcsEVENT_QUEUE
 
     /* Source of the event. */
     gceKERNEL_WHERE             source;
+
+#if gcdMULTI_GPU
+    /* Which chip(s) of the event */
+    gceCORE_3D_MASK             chipEnable;
+#endif
 
     /* Pointer to head of event queue. */
     gcsEVENT_PTR                head;
@@ -775,11 +785,7 @@ struct _gckEVENT
     gctPOINTER                  eventQueueMutex;
 
     /* Array of event queues. */
-#if gcdPROCESS_ADDRESS_SPACE
     gcsEVENT_QUEUE              queues[29];
-#else
-    gcsEVENT_QUEUE              queues[30];
-#endif
     gctUINT8                    lastID;
     gctPOINTER                  freeAtom;
 
@@ -787,12 +793,14 @@ struct _gckEVENT
 #if gcdSMP
 #if gcdMULTI_GPU
     gctPOINTER                  pending3D[gcdMULTI_GPU];
+    gctPOINTER                  pending3DMask[gcdMULTI_GPU];
     gctPOINTER                  pendingMask;
 #endif
     gctPOINTER                  pending;
 #else
 #if gcdMULTI_GPU
     volatile gctUINT            pending3D[gcdMULTI_GPU];
+    volatile gctUINT            pending3DMask[gcdMULTI_GPU];
     volatile gctUINT            pendingMask;
 #endif
     volatile gctUINT            pending;
@@ -834,7 +842,7 @@ gckEVENT_Stop(
     IN gctPHYS_ADDR Handle,
     IN gctPOINTER Logical,
     IN gctSIGNAL Signal,
-    IN OUT gctSIZE_T * waitSize
+    IN OUT gctUINT32 * waitSize
     );
 
 typedef struct _gcsLOCK_INFO * gcsLOCK_INFO_PTR;
@@ -876,12 +884,12 @@ typedef union _gcuVIDMEM_NODE
         gcuVIDMEM_NODE_PTR      prevFree;
 
         /* Information for this node. */
-        gctUINT32               offset;
+        gctSIZE_T               offset;
         gctSIZE_T               bytes;
         gctUINT32               alignment;
 
 #ifdef __QNXNTO__
-        /* Client/server vaddr (mapped using mmap_join). */
+        /* Client virtual address. */
         gctPOINTER              logical;
 #endif
 
@@ -1143,16 +1151,36 @@ struct _gckMMU
 
 gceSTATUS
 gckOS_CreateKernelVirtualMapping(
+    IN gckOS Os,
     IN gctPHYS_ADDR Physical,
     IN gctSIZE_T Bytes,
-    OUT gctSIZE_T * PageCount,
-    OUT gctPOINTER * Logical
+    OUT gctPOINTER * Logical,
+    OUT gctSIZE_T * PageCount
     );
 
 gceSTATUS
 gckOS_DestroyKernelVirtualMapping(
-    IN gctPOINTER Logical,
-    IN gctSIZE_T Bytes
+    IN gckOS Os,
+    IN gctPHYS_ADDR Physical,
+    IN gctSIZE_T Bytes,
+    IN gctPOINTER Logical
+    );
+
+gceSTATUS
+gckOS_CreateUserVirtualMapping(
+    IN gckOS Os,
+    IN gctPHYS_ADDR Physical,
+    IN gctSIZE_T Bytes,
+    OUT gctPOINTER * Logical,
+    OUT gctSIZE_T * PageCount
+    );
+
+gceSTATUS
+gckOS_DestroyUserVirtualMapping(
+    IN gckOS Os,
+    IN gctPHYS_ADDR Physical,
+    IN gctSIZE_T Bytes,
+    IN gctPOINTER Logical
     );
 
 gceSTATUS
@@ -1176,6 +1204,7 @@ gceSTATUS
 gckKERNEL_GetGPUAddress(
     IN gckKERNEL Kernel,
     IN gctPOINTER Logical,
+    IN gctBOOL InUserSpace,
     OUT gctUINT32 * Address
     );
 
@@ -1278,26 +1307,19 @@ gckLINKQUEUE_GetData(
     );
 #endif
 
-#if gcdPROCESS_ADDRESS_SPACE
-void
+gceSTATUS
 gckENTRYQUEUE_Enqueue(
+    IN gckKERNEL Kernel,
     IN gckENTRYQUEUE Queue,
     IN gctUINT32 physical,
     IN gctUINT32 bytes
     );
 
-void
-gckENTRYQUEUE_GetData(
+gceSTATUS
+gckENTRYQUEUE_Dequeue(
     IN gckENTRYQUEUE Queue,
-    IN gctUINT32 Index,
     OUT gckENTRYDATA * Data
     );
-
-void
-gckENTRYQUEUE_Dequeue(
-    IN gckENTRYQUEUE Queue
-    );
-#endif
 
 #if MRVL_REDEFINE_KERNEL_MUTEX_INIT
 #include <linux/mutex.h>

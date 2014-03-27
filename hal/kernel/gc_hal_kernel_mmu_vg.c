@@ -39,7 +39,7 @@
 */
 gceSTATUS gckVGMMU_Construct(
     IN gckVGKERNEL Kernel,
-    IN gctSIZE_T MmuSize,
+    IN gctUINT32 MmuSize,
     OUT gckVGMMU * Mmu
     )
 {
@@ -100,7 +100,7 @@ gceSTATUS gckVGMMU_Construct(
     }
 
     /* Allocate the page table. */
-    mmu->pageTableSize = MmuSize;
+    mmu->pageTableSize = (gctUINT32)MmuSize;
     status = gckOS_AllocateContiguous(os,
                                       gcvFALSE,
                                       &mmu->pageTableSize,
@@ -126,7 +126,7 @@ gceSTATUS gckVGMMU_Construct(
     }
 
     /* Compute number of entries in page table. */
-    mmu->entryCount = mmu->pageTableSize / sizeof(gctUINT32);
+    mmu->entryCount = (gctUINT32)mmu->pageTableSize / sizeof(gctUINT32);
     mmu->entry = 0;
 
     /* Mark the entire page table as available. */
@@ -306,7 +306,7 @@ gceSTATUS gckVGMMU_AllocatePages(
     }
 
     /* Compute the tail for this allocation. */
-    tail = Mmu->entryCount - PageCount;
+    tail = Mmu->entryCount - (gctUINT32)PageCount;
 
     /* Walk all entries until we find enough slots. */
     for (index = Mmu->entry; index <= tail;)
@@ -388,7 +388,7 @@ gceSTATUS gckVGMMU_AllocatePages(
         if (status >= 0)
         {
             /* Update current entry into page table. */
-            Mmu->entry = index + PageCount;
+            Mmu->entry = index + (gctUINT32)PageCount;
 
             /* Return pointer to page table. */
             *PageTable = (gctUINT32 *)  Mmu->pageTableLogical + index;

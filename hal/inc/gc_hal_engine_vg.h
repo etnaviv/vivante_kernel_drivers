@@ -560,7 +560,7 @@ gcoHAL_ReserveTask(
     IN gcoHAL Hal,
     IN gceBLOCK Block,
     IN gctUINT TaskCount,
-    IN gctSIZE_T Bytes,
+    IN gctUINT32 Bytes,
     OUT gctPOINTER * Memory
     );
 /******************************************************************************\

@@ -19,10 +19,6 @@
 #include <linux/slab.h>
 #include <linux/cpufreq.h>
 
-#if MRVL_PLATFORM_NEVO
-#include <mach/hardware.h>
-#endif
-
 unsigned int log_level = GPUFREQ_LOG_DEFAULT;
 /* variables declaration  */
 static LIST_HEAD(gpufreq_governor_list);
@@ -819,10 +815,6 @@ static int gpufreq_cpu_notifier_trans(struct notifier_block * nb,
 {
     struct cpufreq_freqs *freq = data;
 
-    /* Only enable this workaround for NevoD0 */
-#if MRVL_PLATFORM_NEVO
-    if(!cpu_is_pxa978_Dx())
-#endif
         return 0;
 
     debug_log(GPUFREQ_LOG_INFO, "[%lu] [%8u] -> [%8u]\n",

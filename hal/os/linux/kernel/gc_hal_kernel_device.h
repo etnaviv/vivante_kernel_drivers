@@ -82,10 +82,6 @@ typedef struct _gckGALDEVICE
     gctBOOL             threadInitializeds[gcdMAX_GPU_COUNT];
     gctBOOL             killThread;
 
-#if MRVL_PROFILE_THREAD
-    /* The profile thread */
-    struct task_struct  *profilethread;
-#endif
     gctBOOL             powerOffWhenIdle;
     gctBOOL             needPowerOff;
     gctUINT32           profileStep;

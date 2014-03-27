@@ -31,6 +31,8 @@ endif
 HAL_KERNEL_DIR  := hal/kernel
 GPUFREQ_DIR     := $(OS_KERNEL_DIR)/gpufreq
 
+CUSTOMER_ALLOCATOR_OBJS :=
+
 EXTRA_CFLAGS += -Werror
 EXTRA_CFLAGS += -fno-pic
 
@@ -45,23 +47,19 @@ OBJS := $(OS_KERNEL_DIR)/gc_hal_kernel_device.o \
         $(OS_KERNEL_DIR)/gc_hal_kernel_os.o \
         $(OS_KERNEL_DIR)/gc_hal_kernel_sysfs.o \
         $(OS_KERNEL_DIR)/gc_hal_kernel_sysfs_test.o \
-        $(OS_KERNEL_DIR)/gc_hal_kernel_debugfs.o
+        $(OS_KERNEL_DIR)/gc_hal_kernel_debugfs.o \
+        $(OS_KERNEL_DIR)/gc_hal_kernel_allocator.o \
 
 OBJS += $(OS_KERNEL_DIR)/gc_hal_kernel_plat.o \
         $(OS_KERNEL_DIR)/gc_hal_kernel_plat_common.o \
         $(OS_KERNEL_DIR)/gc_hal_kernel_plat_adir.o \
         $(OS_KERNEL_DIR)/gc_hal_kernel_plat_eden.o \
-        $(OS_KERNEL_DIR)/gc_hal_kernel_plat_helan.o \
-        $(OS_KERNEL_DIR)/gc_hal_kernel_plat_helan2.o \
-        $(OS_KERNEL_DIR)/gc_hal_kernel_plat_helanlte.o
+        $(OS_KERNEL_DIR)/gc_hal_kernel_plat_pxa988.o \
 
 ifeq ($(USE_GPU_FREQ), 1)
 
 OBJS += $(GPUFREQ_DIR)/gpufreq.o \
-        $(GPUFREQ_DIR)/gpufreq-nevo.o \
-        $(GPUFREQ_DIR)/gpufreq-emei.o \
-        $(GPUFREQ_DIR)/gpufreq-helen.o \
-        $(GPUFREQ_DIR)/gpufreq-helanlte.o \
+        $(GPUFREQ_DIR)/gpufreq-pxa988.o \
         $(GPUFREQ_DIR)/gpufreq-eden.o \
         $(GPUFREQ_DIR)/gpufreq_ondemand.o \
         $(GPUFREQ_DIR)/gpufreq_conservative.o \
@@ -105,6 +103,11 @@ ifneq ($(CONFIG_SYNC),)
 OBJS += $(OS_KERNEL_DIR)/gc_hal_kernel_sync.o
 endif
 
+
+ifneq ($(CUSTOMER_ALLOCATOR_OBJS),)
+OBJS += $(CUSTOMER_ALLOCATOR_OBJS)
+endif
+
 ifeq ($(KERNELRELEASE), )
 
 .PHONY: all clean install
@@ -128,12 +131,6 @@ else
 
 
 EXTRA_CFLAGS += -DLINUX -DDRIVER
-
-ifeq ($(ENUM_WORKAROUND), 1)
-EXTRA_CFLAGS += -DENUM_WORKAROUND=1
-else
-EXTRA_CFLAGS += -DENUM_WORKAROUND=0
-endif
 
 ifeq ($(FLAREON),1)
 EXTRA_CFLAGS += -DFLAREON
@@ -248,6 +245,7 @@ EXTRA_CFLAGS += -DgcdFPGA_BUILD=1
 else
 EXTRA_CFLAGS += -DgcdFPGA_BUILD=0
 endif
+
 
 EXTRA_CFLAGS += -I$(AQROOT)/hal/inc
 EXTRA_CFLAGS += -I$(AQROOT)/hal/kernel

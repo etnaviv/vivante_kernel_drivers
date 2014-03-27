@@ -246,7 +246,7 @@ gckVGKERNEL_AllocateLinearMemory(
     IN gckKERNEL Kernel,
     IN OUT gcePOOL * Pool,
     IN gctSIZE_T Bytes,
-    IN gctSIZE_T Alignment,
+    IN gctUINT32 Alignment,
     IN gceSURF_TYPE Type,
     OUT gcuVIDMEM_NODE_PTR * Node
     )
@@ -302,6 +302,7 @@ gckVGKERNEL_AllocateLinearMemory(
                                                   Bytes,
                                                   Alignment,
                                                   Type,
+                                                  (*Pool == gcvPOOL_SYSTEM),
                                                   Node);
 
                 if (status == gcvSTATUS_OK)
@@ -425,7 +426,7 @@ gceSTATUS gckVGKERNEL_Dispatch(
     case gcvHAL_ALLOCATE_NON_PAGED_MEMORY:
         bytes = (gctSIZE_T) kernelInterface->u.AllocateNonPagedMemory.bytes;
         /* Allocate non-paged memory. */
-        gcmkERR_BREAK(gckOS_AllocateContiguous(
+        gcmkERR_BREAK(gckOS_AllocateNonPagedMemory(
             Kernel->os,
             gcvTRUE,
             &bytes,

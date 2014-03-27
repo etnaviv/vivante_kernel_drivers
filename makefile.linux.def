@@ -19,6 +19,14 @@
 # Select prebuilt binary types.
 FIXED_ARCH_TYPE ?=
 
+# Indicator as compile with correct gralloc in android project when
+# there are two versions of gralloc exsit in one repo, e.g. pxa988-kk44
+# Then this value must be set to 5x in order to pass build for helan2,
+# while it keeps *none* for other projects, that is to say, for 4x driver
+# or 5x driver but only has one gralloc project in its android repo, this
+# value no need to be set.
+BOARD_GFX_DRIVER_VERSION ?=
+
 ################################################################
 # Arch.
 
@@ -38,7 +46,6 @@ USE_SW_FB       ?= 0
 USE_3D_VG       ?= 1
 ABI             ?= 0
 ANDROID         ?= 0
-ENUM_WORKAROUND ?= 0
 ENDIANNESS		?=
 LINUX_OABI		?= 0
 USE_ARMCC		?= 0
@@ -50,6 +57,7 @@ BANK_BIT_START  ?= 0
 BANK_BIT_END    ?= 0
 BANK_CHANNEL_BIT     ?= 0
 USE_LOADTIME_OPT     ?= 1
+YOCTO_BUILD     ?= 0
 
 ifeq ($(gcdSTATIC_LINK), 1)
 
@@ -158,27 +166,36 @@ endif
 
 ifeq ($(ANDROID), 1)
     USE_VDK = 0
-    CFLAGS += -DANDROID=1
+    CFLAGS += -DANDROID=1 -DANDROID_SDK_VERSION=$(PLATFORM_SDK_VERSION)
+    CFLAGS += -I $(ANDROID_HOME)/libnativehelper/include/nativehelper -isystem $(ANDROID_HOME)/system/core/include -isystem $(ANDROID_HOME)/hardware/libhardware/include -isystem $(ANDROID_HOME)/hardware/libhardware_legacy/include -isystem $(ANDROID_HOME)/hardware/ril/include -isystem $(ANDROID_HOME)/libnativehelper/include -isystem $(ANDROID_HOME)/frameworks/native/include -isystem $(ANDROID_HOME)/frameworks/native/opengl/include -isystem $(ANDROID_HOME)/frameworks/av/include -isystem $(ANDROID_HOME)/frameworks/base/include -isystem $(ANDROID_HOME)/frameworks/base/opengl/include -isystem $(ANDROID_HOME)/external/skia/include -isystem $(ANDROID_PRODUCT_OUT)/obj/include -isystem $(ANDROID_HOME)/bionic/libc/include -isystem $(ANDROID_HOME)/bionic/libstdc++/include -isystem $(ANDROID_HOME)/bionic/libm/include -isystem $(ANDROID_HOME)/bionic/libthread_db/include
+    CFLAGS += -fno-exceptions -Wno-multichar -fpic -fPIE -ffunction-sections -fdata-sections -funwind-tables -Wa,--noexecstack -Werror=format-security -D_FORTIFY_SOURCE=1 -fno-short-enums -fno-builtin-sin -Wno-psabi -fmessage-length=0 -W -Wall -Wno-unused -Winit-self -Wpointer-arith -Werror=return-type -Werror=non-virtual-dtor -Werror=address -Werror=sequence-point -DNDEBUG -g -Wstrict-aliasing=2 -fgcse-after-reload -frerun-cse-after-loop -frename-registers -UDEBUG -Os -fomit-frame-pointer -fno-strict-aliasing -Wno-missing-field-initializers -Wno-unused-parameter -Wextra -MD
+
+    ifeq ($(shell expr $(PLATFORM_SDK_VERSION) ">=" 16),1)
+        CFLAGS += -Wno-unused-but-set-variable -fno-strict-volatile-bitfields
+    endif
+
+    ifeq ($(USE_LOCAL_GRALLOC), 1)
+        CFLAGS += -DUSE_LOCAL_GRALLOC=1 -I $(AQROOT)/driver/android/gralloc
+    else
+        ifeq ($(BOARD_GFX_DRIVER_VERSION), 5x)
+            CFLAGS += -DUSE_LOCAL_GRALLOC=0 -I $(ANDROID_HOME)/vendor/marvell/generic/marvell-gralloc5x
+        else
+            CFLAGS += -DUSE_LOCAL_GRALLOC=0 -I $(ANDROID_HOME)/vendor/marvell/generic/marvell-gralloc
+        endif
+    endif
+
     ifeq ($(ARCH_TYPE), arm)
         ifeq ($(shell expr $(PLATFORM_SDK_VERSION) ">=" 17),1)
             CFLAGS += -I $(ANDROID_HOME) -include build/core/combo/include/arch/linux-arm/AndroidConfig.h
         endif
-        CFLAGS += -I $(ANDROID_HOME)/vendor/marvell/generic/marvell-gralloc -I $(ANDROID_HOME)/libnativehelper/include/nativehelper -isystem $(ANDROID_HOME)/system/core/include -isystem $(ANDROID_HOME)/hardware/libhardware/include -isystem $(ANDROID_HOME)/hardware/libhardware_legacy/include -isystem $(ANDROID_HOME)/hardware/ril/include -isystem $(ANDROID_HOME)/libnativehelper/include -isystem $(ANDROID_HOME)/frameworks/native/include -isystem $(ANDROID_HOME)/frameworks/native/opengl/include -isystem $(ANDROID_HOME)/frameworks/av/include -isystem $(ANDROID_HOME)/frameworks/base/include -isystem $(ANDROID_HOME)/frameworks/base/opengl/include -isystem $(ANDROID_HOME)/external/skia/include -isystem $(ANDROID_PRODUCT_OUT)/obj/include -isystem $(ANDROID_HOME)/bionic/libc/arch-arm/include -isystem $(ANDROID_HOME)/bionic/libc/include -isystem $(ANDROID_HOME)/bionic/libstdc++/include -isystem $(ANDROID_HOME)/bionic/libc/kernel/common -isystem $(ANDROID_HOME)/bionic/libc/kernel/arch-arm -isystem $(ANDROID_HOME)/bionic/libm/include -isystem $(ANDROID_HOME)/bionic/libm/include/arm -isystem $(ANDROID_HOME)/bionic/libthread_db/include -fno-exceptions -Wno-multichar -msoft-float -fpic -fPIE -ffunction-sections -fdata-sections -funwind-tables -fstack-protector -Wa,--noexecstack -Werror=format-security -D_FORTIFY_SOURCE=1 -fno-short-enums -march=armv7-a -mfloat-abi=softfp -mfpu=neon -I $(ANDROID_HOME)/build/core/combo/include/arch/linux-arm/ -fno-builtin-sin -Wno-psabi -mthumb-interwork -fmessage-length=0 -W -Wall -Wno-unused -Winit-self -Wpointer-arith -Werror=return-type -Werror=non-virtual-dtor -Werror=address -Werror=sequence-point -DNDEBUG -g -Wstrict-aliasing=2 -fgcse-after-reload -frerun-cse-after-loop -frename-registers -UDEBUG  -mthumb -Os -fomit-frame-pointer -fno-strict-aliasing -Wno-missing-field-initializers -Wno-unused-parameter -Wextra -DINTEGRATED_WITH_MARVELL -MD
-        ifeq ($(shell expr $(PLATFORM_SDK_VERSION) ">=" 16),1)
-            CFLAGS += -Wno-unused-but-set-variable -fno-strict-volatile-bitfields
-        endif
-    endif
-    ifeq ($(ARCH_TYPE), arm64)
+        CFLAGS += -isystem $(ANDROID_HOME)/bionic/libc/arch-arm/include -I $(ANDROID_HOME)/build/core/combo/include/arch/linux-arm/ -isystem $(ANDROID_HOME)/bionic/libc/kernel/common -isystem $(ANDROID_HOME)/bionic/libc/kernel/arch-arm -isystem $(ANDROID_HOME)/bionic/libm/include/arm
+        CFLAGS += -msoft-float -fstack-protector -march=armv7-a -mfloat-abi=softfp -mfpu=neon -mthumb-interwork -mthumb
+    else ifeq ($(ARCH_TYPE), arm64)
         ifeq ($(shell expr $(PLATFORM_SDK_VERSION) ">=" 17),1)
-            CFLAGS += -I $(ANDROID_HOME) -include build/core/combo/include/arch/linux-arm/AndroidConfig.h
+            CFLAGS += -I $(ANDROID_HOME) -include build/core/combo/include/arch/linux-aarch64/AndroidConfig.h
         endif
-        CFLAGS += -I $(ANDROID_HOME)/vendor/marvell/generic/marvell-gralloc -I $(ANDROID_HOME)/libnativehelper/include/nativehelper -isystem $(ANDROID_HOME)/system/core/include -isystem $(ANDROID_HOME)/hardware/libhardware/include -isystem $(ANDROID_HOME)/hardware/libhardware_legacy/include -isystem $(ANDROID_HOME)/hardware/ril/include -isystem $(ANDROID_HOME)/libnativehelper/include -isystem $(ANDROID_HOME)/frameworks/native/include -isystem $(ANDROID_HOME)/frameworks/native/opengl/include -isystem $(ANDROID_HOME)/frameworks/av/include -isystem $(ANDROID_HOME)/frameworks/base/include -isystem $(ANDROID_HOME)/frameworks/base/opengl/include -isystem $(ANDROID_HOME)/external/skia/include -isystem $(ANDROID_PRODUCT_OUT)/obj/include -isystem $(ANDROID_HOME)/bionic/libc/arch-aarch64/include -isystem $(ANDROID_HOME)/bionic/libc/include -isystem $(ANDROID_HOME)/bionic/libstdc++/include -isystem $(ANDROID_HOME)/bionic/libc/kernel/common -isystem $(ANDROID_HOME)/bionic/libc/kernel/arch-arm -isystem $(ANDROID_HOME)/bionic/libm/include -isystem $(ANDROID_HOME)/bionic/libm/include/arm -isystem $(ANDROID_HOME)/bionic/libthread_db/include -fno-exceptions -Wno-multichar -fpic -fPIE -ffunction-sections -fdata-sections -funwind-tables -Wa,--noexecstack -Werror=format-security -D_FORTIFY_SOURCE=1 -fno-short-enums -I $(ANDROID_HOME)/build/core/combo/include/arch/linux-aarch64/ -fno-builtin-sin -Wno-psabi -fmessage-length=0 -W -Wall -Wno-unused -Winit-self -Wpointer-arith -Werror=return-type -Werror=non-virtual-dtor -Werror=address -Werror=sequence-point -DNDEBUG -g -Wstrict-aliasing=2 -fgcse-after-reload -frerun-cse-after-loop -frename-registers -UDEBUG -Os -fomit-frame-pointer -fno-strict-aliasing -Wno-missing-field-initializers -Wno-unused-parameter -Wextra -DINTEGRATED_WITH_MARVELL -MD
-        ifeq ($(shell expr $(PLATFORM_SDK_VERSION) ">=" 16),1)
-            CFLAGS += -Wno-unused-but-set-variable -fno-strict-volatile-bitfields
-        endif
+        CFLAGS += -isystem $(ANDROID_HOME)/bionic/libc/arch-aarch64/include -I $(ANDROID_HOME)/build/core/combo/include/arch/linux-aarch64/ -isystem $(ANDROID_HOME)/bionic/libc/kernel/uapi -isystem $(ANDROID_HOME)/bionic/libc/kernel/uapi/asm-aarch64 -isystem $(ANDROID_HOME)/bionic/libc/kernel/common -isystem $(ANDROID_HOME)/bionic/libm/include/aarch64
     endif
-
-    CFLAGS += -DANDROID_SDK_VERSION=$(PLATFORM_SDK_VERSION)
 endif
 
 ifneq ($(USE_ARMCC),1)
@@ -248,16 +265,8 @@ ifeq ($(EGL_API_WL), 1)
 endif
 
 ifeq ($(EGL_API_DRI), 1)
-
-    ifeq ($(DRI_PIXMAPRENDER_ASYNC), 1)
-    	CFLAGS += -DDRI_PIXMAPRENDER_ASYNC
-    endif
-
-    ifeq ($(DRI_PIXMAPRENDER), 1)
-	CFLAGS += -DDRI_PIXMAPRENDER
-    endif
-
-    ifeq ($(DRI_PIXMAPRENDER_GL), 1)
+    ifeq ($(YOCTO_BUILD), 1)
+   	CFLAGS += -DDRI_PIXMAPRENDER_ASYNC
    	CFLAGS += -DDRI_PIXMAPRENDER_GL
     endif
 
@@ -397,13 +406,14 @@ EGL_DIR         := $(AQROOT)/driver/khronos/libEGL
 GLES2X_DIR      := $(AQROOT)/driver/khronos/libGLESv3
 
 
-VG113D_DIR       := $(AQROOT)/driver/khronos/libOpenVG_3D/vg11/driver
-VG112D_DIR       := $(AQROOT)/driver/khronos/libOpenVG
+VG113D_DIR      := $(AQROOT)/driver/khronos/libOpenVG_3D/vg11/driver
+VG112D_DIR      := $(AQROOT)/driver/khronos/libOpenVG
 
 GL21_DIR        := $(AQROOT)/driver/khronos/libGL2
 
 GFX_DIR         := $(AQROOT)/driver/dfb
 CL11_DIR        := $(AQROOT)/driver/khronos/libCL
+CL11_ICD_DIR    := $(AQROOT)/driver/khronos/libCL/icdloader
 CLC_DIR         := $(AQROOT)/compiler/libCLC
 CLICD_DIR       := $(AQROOT)/driver/khronos/libCL/icd
 

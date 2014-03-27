@@ -101,6 +101,8 @@ struct _gckHARDWARE
     gctBOOL                     powerManagement;
     gctBOOL                     gpuProfiler;
 
+    gctBOOL                     endAfterFlushMmuCache;
+
 #if MRVL_CONFIG_ENABLE_GPUFREQ
     struct gcsDEVOBJECT         devObj;
 
