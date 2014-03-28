@@ -2225,7 +2225,7 @@ gckEVENT_Interrupt(
             /* Make sure FE is idle. */
             do
             {
-                gcmkVERIFY_OK(gckOS_ReadRegisterEx(
+                gcmkVERIFY_OK(gckOS_DirectReadRegister(
                     Event->os,
                     Event->kernel->core,
                     0x4,
@@ -2237,7 +2237,8 @@ gckEVENT_Interrupt(
             gcmkVERIFY_OK(gckHARDWARE_Execute(
                 Event->kernel->hardware,
                 data->physical,
-                data->bytes
+                data->bytes,
+                gcvTRUE
                 ));
         }
     }

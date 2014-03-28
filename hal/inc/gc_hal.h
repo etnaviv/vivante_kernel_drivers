@@ -557,6 +557,14 @@ gckOS_WriteRegisterEx(
     IN gctUINT32 Data
     );
 
+gceSTATUS
+gckOS_DirectWriteRegister(
+    IN gckOS Os,
+    IN gceCORE Core,
+    IN gctUINT32 Address,
+    IN gctUINT32 Data
+    );
+
 #if gcdMULTI_GPU
 gceSTATUS
 gckOS_ReadRegisterByCoreId(
@@ -2251,7 +2259,8 @@ gceSTATUS
 gckHARDWARE_Execute(
     IN gckHARDWARE Hardware,
     IN gctUINT32 Address,
-    IN gctSIZE_T Bytes
+    IN gctSIZE_T Bytes,
+    IN gctBOOL FromIsr
     );
 
 /* Add an END command in the command queue. */

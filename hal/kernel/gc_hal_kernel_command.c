@@ -995,7 +995,8 @@ gckCOMMAND_Start(
     gcmkONERROR(gckHARDWARE_Execute(
         hardware,
         Command->address,
-        waitLinkBytes
+        waitLinkBytes,
+        gcvFALSE
         ));
 
     /* Command queue is running. */

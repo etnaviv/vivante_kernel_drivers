@@ -2095,7 +2095,8 @@ gceSTATUS
 gckHARDWARE_Execute(
     IN gckHARDWARE Hardware,
     IN gctUINT32 Address,
-    IN gctSIZE_T Bytes
+    IN gctSIZE_T Bytes,
+    IN gctBOOL FromIsr
     )
 {
     gceSTATUS status;
@@ -2107,13 +2108,27 @@ gckHARDWARE_Execute(
     /* Verify the arguments. */
     gcmkVERIFY_OBJECT(Hardware, gcvOBJ_HARDWARE);
 
-    /* Enable all events. */
-    gcmkONERROR(
-        gckOS_WriteRegisterEx(Hardware->os, Hardware->core, 0x00014, ~0U));
 
-    /* Write address register. */
-    gcmkONERROR(
-        gckOS_WriteRegisterEx(Hardware->os, Hardware->core, 0x00654, Address));
+    if (FromIsr == gcvTRUE)
+    {
+        /* Enable all events. */
+        gcmkONERROR(
+            gckOS_DirectWriteRegister(Hardware->os, Hardware->core, 0x00014, ~0U));
+
+        /* Write address register. */
+        gcmkONERROR(
+            gckOS_DirectWriteRegister(Hardware->os, Hardware->core, 0x00654, Address));
+    }
+    else
+    {
+        /* Enable all events. */
+        gcmkONERROR(
+            gckOS_WriteRegisterEx(Hardware->os, Hardware->core, 0x00014, ~0U));
+
+        /* Write address register. */
+        gcmkONERROR(
+            gckOS_WriteRegisterEx(Hardware->os, Hardware->core, 0x00654, Address));
+    }
 
     /* Build control register. */
 	control = ((((gctUINT32)(0)) & ~(((gctUINT32)(((gctUINT32) ((((1 ? 16:16) - (0 ? 16:16) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 16:16) - (0 ? 16:16) + 1))))))) << (0 ? 16:16))) | (((gctUINT32)(0x1 & ((gctUINT32) ((((1 ? 16:16) - (0 ? 16:16) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 16:16) - (0 ? 16:16) + 1))))))) << (0 ? 16:16)))
@@ -2125,9 +2140,18 @@ gckHARDWARE_Execute(
 	control |= ((((gctUINT32)(0)) & ~(((gctUINT32)(((gctUINT32) ((((1 ? 21:20) - (0 ? 21:20) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 21:20) - (0 ? 21:20) + 1))))))) << (0 ? 21:20))) | (((gctUINT32)(0x2 & ((gctUINT32) ((((1 ? 21:20) - (0 ? 21:20) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 21:20) - (0 ? 21:20) + 1))))))) << (0 ? 21:20)));
 	    }
 
-    /* Write control register. */
-    gcmkONERROR(
-        gckOS_WriteRegisterEx(Hardware->os, Hardware->core, 0x00658, control));
+    if (FromIsr == gcvTRUE)
+    {
+        /* Write control register. */
+        gcmkONERROR(
+            gckOS_DirectWriteRegister(Hardware->os, Hardware->core, 0x00658, control));
+    }
+    else
+    {
+        /* Write control register. */
+        gcmkONERROR(
+            gckOS_WriteRegisterEx(Hardware->os, Hardware->core, 0x00658, control));
+    }
 
     gcmkTRACE_ZONE(gcvLEVEL_INFO, gcvZONE_HARDWARE,
                   "Started command buffer @ 0x%08x",

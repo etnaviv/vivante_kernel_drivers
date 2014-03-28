@@ -2535,6 +2535,67 @@ gckOS_WriteRegisterEx(
     return gcvSTATUS_OK;
 }
 
+gceSTATUS
+gckOS_DirectWriteRegister(
+    IN gckOS Os,
+    IN gceCORE Core,
+    IN gctUINT32 Address,
+    IN gctUINT32 Data
+    )
+{
+#if MRVL_DFC_PROTECT_REG_ACCESS
+    unsigned long flags;
+#endif
+
+    gcmkHEADER_ARG("Os=0x%X Core=%d Address=0x%X Data=0x%08x", Os, Core, Address, Data);
+
+#if !gcdMULTI_GPU
+    gcmkVERIFY_ARGUMENT(Address < Os->device->requestedRegisterMemSizes[Core]);
+#endif
+
+    gcmkVERIFY_OBJECT(Os, gcvOBJ_OS);
+
+#if MRVL_DFC_PROTECT_REG_ACCESS
+    if (Core == gcvCORE_MAJOR)
+    {
+        get_gc3d_reg_lock(gcvTRUE, &flags);
+    }
+    else if (Core == gcvCORE_2D)
+    {
+        get_gc2d_reg_lock(gcvTRUE, &flags);
+    }
+#endif
+
+#if gcdMULTI_GPU
+    if (Core == gcvCORE_MAJOR)
+    {
+        writel(Data, (gctUINT8 *)Os->device->registerBase3D[gcvCORE_3D_0_ID] + Address);
+#if gcdMULTI_GPU > 1
+        writel(Data, (gctUINT8 *)Os->device->registerBase3D[gcvCORE_3D_1_ID] + Address);
+#endif
+    }
+    else
+#endif
+    {
+        writel(Data, (gctUINT8 *)Os->device->registerBases[Core] + Address);
+    }
+
+#if MRVL_DFC_PROTECT_REG_ACCESS
+    if (Core == gcvCORE_MAJOR)
+    {
+        get_gc3d_reg_lock(gcvFALSE, &flags);
+    }
+    else if (Core == gcvCORE_2D)
+    {
+        get_gc2d_reg_lock(gcvFALSE, &flags);
+    }
+#endif
+
+    /* Success. */
+    gcmkFOOTER_NO();
+    return gcvSTATUS_OK;
+}
+
 #if gcdMULTI_GPU
 gceSTATUS
 gckOS_WriteRegisterByCoreId(
