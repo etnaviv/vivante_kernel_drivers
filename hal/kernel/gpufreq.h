@@ -306,8 +306,8 @@ int gpufreq_get_gpu_load(unsigned int gpu, unsigned int t);
 /*********************************************************************
  *                       gpufreq default governor                    *
  *********************************************************************/
-extern struct gpufreq_governor gpufreq_gov_userspace;
-#define GPUFREQ_DEFAULT_GOVERNOR    (&gpufreq_gov_userspace)
+extern struct gpufreq_governor gpufreq_gov_ondemand;
+#define GPUFREQ_DEFAULT_GOVERNOR    (&gpufreq_gov_ondemand)
 
 /*********************************************************************
  *                            frequency table                        *
