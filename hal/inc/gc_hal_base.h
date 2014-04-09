@@ -235,6 +235,8 @@ typedef struct _gcsPLS
     /* Game patch for F18CarrierLanding to force it choose suitable EGL config. */
     gctBOOL                     bF18;
 
+    gctBOOL                     bLandscapeGame;
+
     gctPLS_DESTRUCTOR           destructor;
     /* Mutex to guard PLS access. currently it's for EGL.
     ** We can use this mutex for every PLS access.
@@ -308,6 +310,7 @@ extern gcsPLS gcPLS;
     gcvFALSE,        /* bBypassMode */ \
     gcvFALSE,        /* bChrome */ \
     gcvFALSE,        /* bF18 */ \
+    gcvFALSE,        /* bLandscapeGame */ \
     gcvNULL,         /* destructor        */ \
     gcvNULL,         /* accessLock        */ \
 }

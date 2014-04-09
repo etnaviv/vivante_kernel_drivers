@@ -111,9 +111,9 @@ WAYLAND_DIR  ?= $(TOOL_DIR)/wayland
 # Target directory.
 
 ifeq ($(DEBUG), 1)
-OBJ_DIR	?= bin_d
+OBJ_DIR	?= bin_d/$(ARCH_TYPE)
 else
-OBJ_DIR	?= bin_r
+OBJ_DIR	?= bin_r/$(ARCH_TYPE)
 endif
 
 ################################################################
@@ -170,6 +170,23 @@ ifeq ($(ANDROID), 1)
     CFLAGS += -I $(ANDROID_HOME)/libnativehelper/include/nativehelper -isystem $(ANDROID_HOME)/system/core/include -isystem $(ANDROID_HOME)/hardware/libhardware/include -isystem $(ANDROID_HOME)/hardware/libhardware_legacy/include -isystem $(ANDROID_HOME)/hardware/ril/include -isystem $(ANDROID_HOME)/libnativehelper/include -isystem $(ANDROID_HOME)/frameworks/native/include -isystem $(ANDROID_HOME)/frameworks/native/opengl/include -isystem $(ANDROID_HOME)/frameworks/av/include -isystem $(ANDROID_HOME)/frameworks/base/include -isystem $(ANDROID_HOME)/frameworks/base/opengl/include -isystem $(ANDROID_HOME)/external/skia/include -isystem $(ANDROID_PRODUCT_OUT)/obj/include -isystem $(ANDROID_HOME)/bionic/libc/include -isystem $(ANDROID_HOME)/bionic/libstdc++/include -isystem $(ANDROID_HOME)/bionic/libm/include -isystem $(ANDROID_HOME)/bionic/libthread_db/include
     CFLAGS += -fno-exceptions -Wno-multichar -fpic -fPIE -ffunction-sections -fdata-sections -funwind-tables -Wa,--noexecstack -Werror=format-security -D_FORTIFY_SOURCE=1 -fno-short-enums -fno-builtin-sin -Wno-psabi -fmessage-length=0 -W -Wall -Wno-unused -Winit-self -Wpointer-arith -Werror=return-type -Werror=non-virtual-dtor -Werror=address -Werror=sequence-point -DNDEBUG -g -Wstrict-aliasing=2 -fgcse-after-reload -frerun-cse-after-loop -frename-registers -UDEBUG -Os -fomit-frame-pointer -fno-strict-aliasing -Wno-missing-field-initializers -Wno-unused-parameter -Wextra -MD
 
+    # TODO: This works on current AOSP master, need to check sdk version and include path after a new formal Android release
+    ifeq ($(shell expr $(PLATFORM_SDK_VERSION) ">=" 20),1)
+        CFLAGS += -isystem $(ANDROID_HOME)/system/core/libsync/include -isystem $(ANDROID_HOME)/bionic/libc/arch-$(ARCH_TYPE)/include -isystem $(ANDROID_HOME)/bionic/libc/kernel/uapi -isystem $(ANDROID_HOME)/bionic/libc/kernel/uapi/asm-$(ARCH_TYPE) -isystem $(ANDROID_HOME)/bionic/libm/include/$(ARCH_TYPE) -I $(ANDROID_HOME) -include build/core/combo/include/arch/linux-$(ARCH_TYPE)/AndroidConfig.h -I $(ANDROID_HOME)/build/core/combo/include/arch/linux-$(ARCH_TYPE)/
+    else
+        ifeq ($(ARCH_TYPE), arm)
+            ifeq ($(shell expr $(PLATFORM_SDK_VERSION) ">=" 17),1)
+                CFLAGS += -I $(ANDROID_HOME) -include build/core/combo/include/arch/linux-arm/AndroidConfig.h
+            endif
+            CFLAGS += -isystem $(ANDROID_HOME)/bionic/libc/arch-arm/include -I $(ANDROID_HOME)/build/core/combo/include/arch/linux-arm/ -isystem $(ANDROID_HOME)/bionic/libc/kernel/common -isystem $(ANDROID_HOME)/bionic/libc/kernel/arch-arm -isystem $(ANDROID_HOME)/bionic/libm/include/arm
+        else ifeq ($(ARCH_TYPE), arm64)
+            ifeq ($(shell expr $(PLATFORM_SDK_VERSION) ">=" 17),1)
+                CFLAGS += -I $(ANDROID_HOME) -include build/core/combo/include/arch/linux-aarch64/AndroidConfig.h
+            endif
+            CFLAGS += -isystem $(ANDROID_HOME)/bionic/libc/arch-aarch64/include -I $(ANDROID_HOME)/build/core/combo/include/arch/linux-aarch64/ -isystem $(ANDROID_HOME)/bionic/libc/kernel/uapi -isystem $(ANDROID_HOME)/bionic/libc/kernel/uapi/asm-aarch64 -isystem $(ANDROID_HOME)/bionic/libc/kernel/common -isystem $(ANDROID_HOME)/bionic/libm/include/aarch64
+        endif
+    endif
+
     ifeq ($(shell expr $(PLATFORM_SDK_VERSION) ">=" 16),1)
         CFLAGS += -Wno-unused-but-set-variable -fno-strict-volatile-bitfields
     endif
@@ -185,16 +202,11 @@ ifeq ($(ANDROID), 1)
     endif
 
     ifeq ($(ARCH_TYPE), arm)
-        ifeq ($(shell expr $(PLATFORM_SDK_VERSION) ">=" 17),1)
-            CFLAGS += -I $(ANDROID_HOME) -include build/core/combo/include/arch/linux-arm/AndroidConfig.h
-        endif
-        CFLAGS += -isystem $(ANDROID_HOME)/bionic/libc/arch-arm/include -I $(ANDROID_HOME)/build/core/combo/include/arch/linux-arm/ -isystem $(ANDROID_HOME)/bionic/libc/kernel/common -isystem $(ANDROID_HOME)/bionic/libc/kernel/arch-arm -isystem $(ANDROID_HOME)/bionic/libm/include/arm
         CFLAGS += -msoft-float -fstack-protector -march=armv7-a -mfloat-abi=softfp -mfpu=neon -mthumb-interwork -mthumb
     else ifeq ($(ARCH_TYPE), arm64)
-        ifeq ($(shell expr $(PLATFORM_SDK_VERSION) ">=" 17),1)
-            CFLAGS += -I $(ANDROID_HOME) -include build/core/combo/include/arch/linux-aarch64/AndroidConfig.h
-        endif
-        CFLAGS += -isystem $(ANDROID_HOME)/bionic/libc/arch-aarch64/include -I $(ANDROID_HOME)/build/core/combo/include/arch/linux-aarch64/ -isystem $(ANDROID_HOME)/bionic/libc/kernel/uapi -isystem $(ANDROID_HOME)/bionic/libc/kernel/uapi/asm-aarch64 -isystem $(ANDROID_HOME)/bionic/libc/kernel/common -isystem $(ANDROID_HOME)/bionic/libm/include/aarch64
+        # TODO: these flags are added by Android toolchain on 64bit master by default, usefull to check int/ptr cast errors.
+        #       But VSC_NEW will fail to compile, so turn off these flags until VSC is on use!
+        #CFLAGS += -Werror=pointer-to-int-cast -Werror=int-to-pointer-cast
     endif
 endif
 

@@ -122,6 +122,9 @@ clean:
 	@rm -rf $(DRIVER_OUT_DIR)
 	@rm -rf modules.order Module.symvers
 	@find $(AQROOT) -name ".gc_*.cmd" | xargs rm -f
+	@find $(OS_KERNEL_DIR) -name ".gc_*.cmd" | xargs rm -f
+	@find $(HAL_KERNEL_DIR) -name ".gc_*.cmd" | xargs rm -f
+	@find $(GPUFREQ_DIR) -name ".gpufreq*.cmd" | xargs rm -f
 
 install: all
 	@mkdir -p $(SDK_DIR)/drivers

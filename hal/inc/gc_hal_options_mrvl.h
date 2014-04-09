@@ -221,7 +221,7 @@
 #define MRVL_CONFIG_ENABLE_GPUFREQ              0
 #endif
 
-#if (defined ANDROID) && (MRVL_PLATFORM_PXA988_FAMILY)
+#if (defined ANDROID) && ((MRVL_PLATFORM_PXA988_FAMILY) || (MRVL_PLATFORM_TTD2))
 #define MRVL_CONFIG_ENABLE_QOS_SUPPORT          1
 #else
 #define MRVL_CONFIG_ENABLE_QOS_SUPPORT          0
@@ -231,7 +231,7 @@
     MRVL_DFC_PROTECT_REG_ACCESS
         -- Protect register access when DFC to workaround Eden Z1 GC DFC issue
 */
-#if MRVL_CONFIG_ENABLE_GPUFREQ && (MRVL_PLATFORM_TTD2)
+#if MRVL_CONFIG_ENABLE_GPUFREQ && ((MRVL_PLATFORM_TTD2) && !defined(CONFIG_ARM64))
 #define MRVL_DFC_PROTECT_REG_ACCESS             1
 #else
 #define MRVL_DFC_PROTECT_REG_ACCESS             0
@@ -355,7 +355,7 @@
 /* @Ziyi: If any change happened between these 2 comments please contact zyxu@marvell.com, Thanks. */
 /* #################### [START ==DO NOT CHANGE THIS MARCRO== START] #################### */
 
-#define _GC_VERSION_STRING_                     "GC version rls-pxa1928-prealpha1-r2"
+#define _GC_VERSION_STRING_                     "GC version rls-pxa1928-prealpha1-r3"
 
 /* Do not align u/v stride to 16 */
 #define VIVANTE_ALIGN_UVSTRIDE                  0
@@ -371,7 +371,7 @@
 
 /* Enable NEON memcpy to replace default memcpy */
 #if (!defined MRVL_ENABLE_GPUTEX_MEMCPY) && (defined ANDROID) \
-    && (!gcdFPGA_BUILD)
+    && (!gcdFPGA_BUILD) && (MRVL_ENABLE_GPUTEX)
 #define MRVL_ENABLE_GPUTEX_MEMCPY               1
 #else
 #define MRVL_ENABLE_GPUTEX_MEMCPY               0

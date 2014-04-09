@@ -16,6 +16,9 @@
 #if MRVL_PLATFORM_TTD2
 #include <linux/clk.h>
 #include <linux/err.h>
+#if MRVL_CONFIG_ENABLE_QOS_SUPPORT
+#include <linux/pm_qos.h>
+#endif
 
 #define GPUFREQ_FREQ_TABLE_MAX_NUM  10
 
@@ -94,7 +97,12 @@ OnError:
 }
 #endif
 
+#if defined(CONFIG_ARM64)
+/* No need to restrict max freq to 600MHz for pxa1928 A0. */
 #define RESTRICT_MAX_FREQ_600M        0
+#else
+#define RESTRICT_MAX_FREQ_600M        1
+#endif
 
 static int gpufreq_frequency_table_get(unsigned int gpu,
     struct gpufreq_frequency_table *core_table,
@@ -290,6 +298,26 @@ static int eden_gpufreq_target (struct gpufreq_policy *policy, unsigned int targ
 static int eden_gpufreq_set(unsigned int gpu, struct gpufreq_freqs *freq, struct gpufreq_freqs *freq_sh);
 static unsigned int eden_gpufreq_get (unsigned int chip);
 
+#if MRVL_CONFIG_ENABLE_QOS_SUPPORT
+static unsigned int is_qos_inited = 0;
+
+DECLARE_META_REQUEST(3d, min);
+IMPLEMENT_META_NOTIFIER(0, 3d, min, GPUFREQ_RELATION_L);
+DECLARE_META_REQUEST(3d, max);
+IMPLEMENT_META_NOTIFIER(0, 3d, max, GPUFREQ_RELATION_H);
+
+DECLARE_META_REQUEST(2d, min);
+IMPLEMENT_META_NOTIFIER(1, 2d, min, GPUFREQ_RELATION_L);
+DECLARE_META_REQUEST(2d, max);
+IMPLEMENT_META_NOTIFIER(1, 2d, max, GPUFREQ_RELATION_H);
+
+static struct _gc_qos gc_qos[] = {
+    DECLARE_META_GC_QOS_3D,
+    DECLARE_META_GC_QOS_2D,
+};
+
+#endif /* MRVL_CONFIG_ENABLE_QOS_SUPPORT */
+
 static struct gpufreq_driver eden_gpufreq_driver = {
     .init   = eden_gpufreq_init,
     .verify = eden_gpufreq_verify,
@@ -370,6 +398,19 @@ static int eden_gpufreq_init (struct gpufreq_policy *policy)
 
     policy->cur = eden_gpufreq_get(policy->gpu);
 
+#if MRVL_CONFIG_ENABLE_QOS_SUPPORT
+    if(unlikely(!(is_qos_inited & (1 << gpu))))
+    {
+        pm_qos_add_request(gc_qos[gpu].pm_qos_req_min,
+                           gc_qos[gpu].pm_qos_class_min,
+                           policy->gpuinfo.min_freq);
+        pm_qos_add_request(gc_qos[gpu].pm_qos_req_max,
+                           gc_qos[gpu].pm_qos_class_max,
+                           policy->gpuinfo.max_freq);
+        is_qos_inited |= (1 << gpu);
+    }
+#endif
+
     debug_log(GPUFREQ_LOG_INFO, "GPUFreq for Eden gpu %d initialized, cur_freq %u\n", gpu, policy->cur);
 
     return 0;
@@ -392,6 +433,13 @@ static int eden_gpufreq_target (struct gpufreq_policy *policy, unsigned int targ
     struct gpufreq_frequency_table *freq_table = gpu_eden[gpu].freq_table;
     static int old_major_index = -1;
     static struct gpufreq_policy * old_major_policy = gcvNULL;
+
+#if MRVL_CONFIG_ENABLE_QOS_SUPPORT
+    target_freq = max((unsigned int)pm_qos_request(gc_qos[gpu].pm_qos_class_min),
+                     target_freq);
+    target_freq = min((unsigned int)pm_qos_request(gc_qos[gpu].pm_qos_class_max),
+                     target_freq);
+#endif
 
     /* find a nearest freq in freq_table for target_freq */
     ret = gpufreq_frequency_table_target(policy, freq_table, target_freq, relation, &index);
@@ -448,6 +496,14 @@ static int eden_gpufreq_target (struct gpufreq_policy *policy, unsigned int targ
 
         old_major_index = index;
     }
+
+#if MRVL_CONFIG_ENABLE_QOS_SUPPORT
+    debug_log(GPUFREQ_LOG_DEBUG, "[%d] Qos_min: %d, Qos_max: %d, Target: %d (KHZ)\n",
+            gpu,
+            pm_qos_request(gc_qos[gpu].pm_qos_class_min),
+            pm_qos_request(gc_qos[gpu].pm_qos_class_max),
+            freq.new_freq);
+#endif
 
     if(((gpu == gcvCORE_2D) && (freq.old_freq == freq.new_freq))
         || ((gpu == gcvCORE_MAJOR) && (freq.old_freq == freq.new_freq) && (freq_sh.old_freq == freq_sh.new_freq)))
@@ -641,12 +697,34 @@ int __GPUFREQ_EXPORT_TO_GC gpufreq_init(gckOS Os)
     WARN_ON(!gpu_os);
 
     gpufreq_early_init();
+#if MRVL_CONFIG_ENABLE_QOS_SUPPORT
+    {
+        unsigned int gpu = 0;
+        for_each_gpu(gpu)
+        {
+            pm_qos_add_notifier(gc_qos[gpu].pm_qos_class_min, gc_qos[gpu].notifier_min);
+            pm_qos_add_notifier(gc_qos[gpu].pm_qos_class_max, gc_qos[gpu].notifier_max);
+        }
+    }
+#endif
+
     gpufreq_register_driver(Os, &eden_gpufreq_driver);
     return 0;
 }
 
 void __GPUFREQ_EXPORT_TO_GC gpufreq_exit(gckOS Os)
 {
+#if MRVL_CONFIG_ENABLE_QOS_SUPPORT
+    {
+        unsigned int gpu = 0;
+        for_each_gpu(gpu)
+        {
+            pm_qos_remove_notifier(gc_qos[gpu].pm_qos_class_min, gc_qos[gpu].notifier_min);
+            pm_qos_remove_notifier(gc_qos[gpu].pm_qos_class_max, gc_qos[gpu].notifier_max);
+        }
+    }
+#endif
+
     gpufreq_unregister_driver(Os, &eden_gpufreq_driver);
     gpufreq_late_exit();
 }
