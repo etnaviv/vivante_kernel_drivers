@@ -34,6 +34,12 @@ static struct srcu_notifier_head gpufreq_trans_notifier_list[GPUFREQ_GPU_NUMS];
 static gckOS gpu_os = NULL;
 unsigned int freq_constraint = 0;
 
+static const char* const _gpu_type[] = {
+    [gcvCORE_MAJOR]     = "3D",
+    [gcvCORE_2D]        = "2D",
+    [gcvCORE_SH]        = "Shader"
+};
+
 extern struct gpufreq_governor gpufreq_gov_ondemand;
 extern struct gpufreq_governor gpufreq_gov_conservative;
 extern struct gpufreq_governor gpufreq_gov_userspace;
@@ -146,6 +152,12 @@ show_attr(gpuinfo_min_freq, gpuinfo.min_freq);
 gpufreq_freq_attr_ro(gpuinfo_max_freq);
 gpufreq_freq_attr_ro(gpuinfo_min_freq);
 
+static ssize_t show_gputype(struct gpufreq_policy *policy, char *buf)
+{
+    return sprintf(buf, "%s\n", _gpu_type[policy->gpu]);
+}
+gpufreq_freq_attr_ro(gputype);
+
 static ssize_t show_scaling_cur_freq(struct gpufreq_policy *policy, char *buf)
 {
     unsigned int freq = ~0, gpu = 0;
@@ -216,13 +228,13 @@ err_out:
 
 gpufreq_freq_attr_rw(scaling_min_freq);
 
-/* [RW] attr: scaling_cur_governor */
-static ssize_t show_scaling_cur_governor(struct gpufreq_policy *policy, char *buf)
+/* [RW] attr: scaling_governor */
+static ssize_t show_scaling_governor(struct gpufreq_policy *policy, char *buf)
 {
     return scnprintf(buf, GPUFREQ_NAME_LEN, "%s\n", policy->governor->name);
 }
 
-static ssize_t store_scaling_cur_governor(struct gpufreq_policy *policy, const char *buf, size_t count)
+static ssize_t store_scaling_governor(struct gpufreq_policy *policy, const char *buf, size_t count)
 {
     int ret = -EINVAL;
     char gov_str[GPUFREQ_NAME_LEN];
@@ -267,7 +279,7 @@ static ssize_t store_scaling_cur_governor(struct gpufreq_policy *policy, const c
 err_out:
     return ret;
 }
-gpufreq_freq_attr_rw(scaling_cur_governor);
+gpufreq_freq_attr_rw(scaling_governor);
 
 /* [RO] attr: scaling_available_governor */
 static ssize_t show_scaling_available_governors(struct gpufreq_policy *policy, char *buf)
@@ -295,8 +307,9 @@ static struct attribute *default_attrs[] = {
     &scaling_cur_freq.attr,
     &scaling_max_freq.attr,
     &scaling_min_freq.attr,
-    &scaling_cur_governor.attr,
+    &scaling_governor.attr,
     &scaling_available_governors.attr,
+    &gputype.attr,
     NULL
 };
 

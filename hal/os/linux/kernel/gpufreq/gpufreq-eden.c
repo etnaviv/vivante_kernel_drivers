@@ -256,8 +256,8 @@ static int gpufreq_frequency_table_get(unsigned int gpu,
     return 0;
 }
 
-/* [RO] attr: scaling_available_freqs */
-static ssize_t show_scaling_available_freqs(struct gpufreq_policy *policy, char *buf)
+/* [RO] attr: scaling_available_frequencies */
+static ssize_t show_scaling_available_frequencies(struct gpufreq_policy *policy, char *buf)
 {
     unsigned int i;
     unsigned int gpu = policy->gpu;
@@ -285,10 +285,10 @@ static ssize_t show_scaling_available_freqs(struct gpufreq_policy *policy, char 
     return count;
 }
 
-gpufreq_freq_attr_ro(scaling_available_freqs);
+gpufreq_freq_attr_ro(scaling_available_frequencies);
 
 static struct gpufreq_freq_attr *driver_attrs[] = {
-    &scaling_available_freqs,
+    &scaling_available_frequencies,
     NULL
 };
 
