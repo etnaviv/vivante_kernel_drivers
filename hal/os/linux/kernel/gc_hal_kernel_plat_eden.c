@@ -19,7 +19,15 @@ extern void gc3d_pwr(PARAM_TYPE_PWR);
 extern void gc2d_pwr(PARAM_TYPE_PWR);
 #define GC2D_PWR    gc2d_pwr
 
+#if MRVL_DFC_JUMP_HI_INDIRECT
+static struct _clk_restore {
+    unsigned int power_enabled;
+    unsigned long clk_rate;
+}clk_restore[3];
+
 int eden_gpu_clk_setrate(struct gc_iface *iface, unsigned long rate_khz);
+unsigned long eden_gpu_clk_getrate(struct gc_iface *iface);
+#endif
 
 /**
  * gc3d shader definition
@@ -28,8 +36,13 @@ static struct gc_ops gc3dsh_ops = {
     .init       = gpu_lock_init_dft,
     .enableclk  = gpu_clk_enable_dft,
     .disableclk = gpu_clk_disable_dft,
+#if MRVL_DFC_JUMP_HI_INDIRECT
     .setclkrate = eden_gpu_clk_setrate,
+    .getclkrate = eden_gpu_clk_getrate,
+#else
+    .setclkrate = gpu_clk_setrate_dft,
     .getclkrate = gpu_clk_getrate_dft,
+#endif
 };
 
 static struct gc_iface gc3dsh_iface = {
@@ -48,11 +61,20 @@ static void __PLAT_APINAME(gc3d_pwr_ops)(struct gc_iface *iface, PARAM_TYPE_PWR 
     {
         unsigned int count = iface->chains_count;
 
+        clk_restore[gcvCORE_MAJOR].power_enabled = enabled;
+        clk_restore[gcvCORE_SH].power_enabled = enabled;
+
+        if (!enabled)
+        {
+            clk_restore[gcvCORE_MAJOR].clk_rate = gpu_clk_getrate_dft(iface);
+            clk_restore[gcvCORE_SH].clk_rate = gpu_clk_getrate_dft(&gc3dsh_iface);
+        }
+
         /* Make it safe to do power operations */
-        gpu_clk_setrate(iface, 156000);
+        gpu_clk_setrate_dft(iface, 156000);
 
         while(count-- != 0)
-            gpu_clk_setrate(iface->chains_clk[count], 156000);
+            gpu_clk_setrate_dft(iface->chains_clk[count], 156000);
     }
 #endif
     GC3D_PWR(enabled);
@@ -62,8 +84,13 @@ static struct gc_ops gc3d_ops = {
     .init       = gpu_lock_init_dft,
     .enableclk  = gpu_clk_enable_dft,
     .disableclk = gpu_clk_disable_dft,
+#if MRVL_DFC_JUMP_HI_INDIRECT
     .setclkrate = eden_gpu_clk_setrate,
+    .getclkrate = eden_gpu_clk_getrate,
+#else
+    .setclkrate = gpu_clk_setrate_dft,
     .getclkrate = gpu_clk_getrate_dft,
+#endif
     .pwrops     = __PLAT_APINAME(gc3d_pwr_ops),
 };
 
@@ -87,8 +114,15 @@ static void __PLAT_APINAME(gc2d_pwr_ops)(struct gc_iface *iface, PARAM_TYPE_PWR 
     PR_DEBUG("[%6s] %s %d\n", iface->name, __func__, enabled);
 #if MRVL_DFC_JUMP_HI_INDIRECT
     {
+        clk_restore[gcvCORE_2D].power_enabled = enabled;
+
+        if (!enabled)
+        {
+            clk_restore[gcvCORE_2D].clk_rate = gpu_clk_getrate_dft(iface);
+        }
+
         /* make it safe to do Power operation */
-        gpu_clk_setrate(iface, 156000);
+        gpu_clk_setrate_dft(iface, 156000);
     }
 #endif
     GC2D_PWR(enabled);
@@ -98,8 +132,13 @@ static struct gc_ops gc2d_ops = {
     .init       = gpu_lock_init_dft,
     .enableclk  = gpu_clk_enable_dft,
     .disableclk = gpu_clk_disable_dft,
+#if MRVL_DFC_JUMP_HI_INDIRECT
     .setclkrate = eden_gpu_clk_setrate,
+    .getclkrate = eden_gpu_clk_getrate,
+#else
+    .setclkrate = gpu_clk_setrate_dft,
     .getclkrate = gpu_clk_getrate_dft,
+#endif
     .pwrops     = __PLAT_APINAME(gc2d_pwr_ops),
 };
 
@@ -116,20 +155,81 @@ struct gc_iface *gc_ifaces[] = {
     gcvNULL,
 };
 
+#if MRVL_DFC_JUMP_HI_INDIRECT
 int eden_gpu_clk_setrate(struct gc_iface *iface, unsigned long rate_khz)
 {
     int ret = 0;
+    gceCORE core;
 
-#if MRVL_DFC_JUMP_HI_INDIRECT
+    if (iface == gpu_get_iface_mapping(gcvCORE_MAJOR))
+    {
+        core = gcvCORE_MAJOR;
+    }
+    else if (iface == gpu_get_iface_mapping(gcvCORE_2D))
+    {
+        core = gcvCORE_2D;
+    }
+    else if (iface == gpu_get_iface_mapping(gcvCORE_SH))
+    {
+        core = gcvCORE_SH;
+    }
+    else
+    {
+        goto OnError;
+    }
+
+    if (!clk_restore[core].power_enabled)
+    {
+        clk_restore[core].clk_rate = rate_khz;
+    }
+
     if(rate_khz > 312000)
     {
         gpu_clk_setrate_dft(iface, 312000);
     }
-#endif
 
     ret = gpu_clk_setrate_dft(iface, rate_khz);
 
     return ret;
+OnError:
+    return 0;
 }
 
+unsigned long eden_gpu_clk_getrate(struct gc_iface *iface)
+{
+    unsigned long rate;
+    gceCORE core;
+
+    if (iface == gpu_get_iface_mapping(gcvCORE_MAJOR))
+    {
+        core = gcvCORE_MAJOR;
+    }
+    else if (iface == gpu_get_iface_mapping(gcvCORE_2D))
+    {
+        core = gcvCORE_2D;
+    }
+    else if (iface == gpu_get_iface_mapping(gcvCORE_SH))
+    {
+        core = gcvCORE_SH;
+    }
+    else
+    {
+        goto OnError;
+    }
+
+    if (!clk_restore[core].power_enabled)
+    {
+        rate = clk_restore[core].clk_rate;
+    }
+    else
+    {
+        rate = gpu_clk_getrate_dft(iface);
+    }
+
+    return rate;
+
+OnError:
+    return 0;
+}
+#endif
 #endif

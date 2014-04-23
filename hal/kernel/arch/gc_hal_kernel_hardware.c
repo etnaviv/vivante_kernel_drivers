@@ -371,7 +371,17 @@ _IdentifyHardware(
         gckOS_Print("[galcore] Print out %s chip informations:\n",
                     (Core == gcvCORE_MAJOR) ? "3D" :
                     ((Core == gcvCORE_2D) ? "2D" : "VG"));
-        gckOS_Print("  chipModel              = 0x%08X\n", Identity->chipModel);
+#if MRVL_PLATFORM_TTD2
+        if(Identity->chipModel == gcv5000)
+        {
+            gckOS_Print("  chipModel              = PXA1926 GPU\n");
+        }
+        else
+
+#endif
+        {
+            gckOS_Print("  chipModel              = 0x%08X\n", Identity->chipModel);
+        }
         gckOS_Print("  chipRevision           = 0x%08X\n", Identity->chipRevision);
         gckOS_Print("  chipFeatures           = 0x%08X\n", Identity->chipFeatures);
         gckOS_Print("  chipMinorFeatures      = 0x%08X\n", Identity->chipMinorFeatures);
@@ -1230,6 +1240,7 @@ gckHARDWARE_Construct(
     gcmkONERROR(gckOS_AtomSet(Os, hardware->powerState, gcvTRUE));
 
     hardware->lastWaitLink    = ~0U;
+    hardware->lastEnd         = ~0U;
     hardware->recMutexPower   = gcvNULL;
     hardware->clk2D3D_Enable  = gcvTRUE;
     hardware->refExtClock     = 1;
@@ -2389,6 +2400,7 @@ gckHARDWARE_End(
     )
 {
     gctUINT32_PTR logical = (gctUINT32_PTR) Logical;
+    gctUINT32 address;
     gceSTATUS status;
 
     gcmkHEADER_ARG("Hardware=0x%x Logical=0x%x *Bytes=%lu",
@@ -2415,6 +2427,10 @@ gckHARDWARE_End(
         /* Make sure the CPU writes out the data to memory. */
         gcmkONERROR(
             gckOS_MemoryBarrier(Hardware->os, Logical));
+
+        gcmkONERROR(gckHARDWARE_ConvertLogical(Hardware, logical, gcvFALSE, &address));
+
+        Hardware->lastEnd = address;
     }
 
     if (Bytes != gcvNULL)
@@ -4228,6 +4244,7 @@ gckHARDWARE_GetIdle(
     gceSTATUS status;
     gctUINT32 idle = 0;
     gctINT retry, poll, pollCount;
+    gctUINT32 address;
 
     gcmkHEADER_ARG("Hardware=0x%x Wait=%d", Hardware, Wait);
 
@@ -4249,8 +4266,15 @@ gckHARDWARE_GetIdle(
             gcmkONERROR(
                 gckOS_ReadRegisterEx(Hardware->os, Hardware->core, 0x00004, &idle));
 
+            /* Read the current FE address. */
+            gcmkONERROR(gckOS_ReadRegisterEx(Hardware->os,
+                                             Hardware->core,
+                                             0x00664,
+                                             &address));
+
+
             /* See if we have to wait for FE idle. */
-	if ((((((gctUINT32)(idle)) >> (0 ? 0:0)) &((gctUINT32) ((((1 ? 0:0) - (0 ? 0:0) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 0:0) - (0 ? 0:0) + 1))))))))
+	if ((((((gctUINT32)(idle)) >> (0 ? 0:0)) &((gctUINT32) ((((1 ? 0:0) - (0 ? 0:0) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 0:0) - (0 ? 0:0) + 1)))))))&& (address == Hardware->lastEnd + 8))
 	            {
                 /* FE is idle. */
                 break;
@@ -7082,7 +7106,7 @@ OnError:
     if (mutexAcquired)
     {
         gcmkVERIFY_OK(
-            gckOS_ReleaseMutex(Hardware->os, Hardware->recMutexPower));
+            gckOS_ReleaseRecMutex(Hardware->os, Hardware->recMutexPower));
     }
 
     /* Return the error. */

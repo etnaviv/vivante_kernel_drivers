@@ -59,6 +59,7 @@ struct _gckHARDWARE
     gctUINT32                   powerThread;
     gceCHIPPOWERSTATE           chipPowerState;
     gctUINT32                   lastWaitLink;
+    gctUINT32                   lastEnd;
     gctPOINTER                  clockState;
     gctPOINTER                  powerState;
 #if 0
