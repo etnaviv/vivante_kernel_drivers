@@ -376,6 +376,10 @@ _IdentifyHardware(
         {
             gckOS_Print("  chipModel              = PXA1926 GPU\n");
         }
+        else if(Identity->chipModel == gcv420)
+        {
+            gckOS_Print("  chipModel              = PXA1926 2D GPU\n");
+        }
         else
 
 #endif

@@ -237,6 +237,9 @@ typedef struct _gcsPLS
 
     gctBOOL                     bLandscapeGame;
 
+    /*Game patch for SS CTS media test.*/
+    gctBOOL                     bCtsMedia;
+
     gctPLS_DESTRUCTOR           destructor;
     /* Mutex to guard PLS access. currently it's for EGL.
     ** We can use this mutex for every PLS access.
@@ -273,6 +276,19 @@ extern gcsPLS gcPLS;
     0,               /* threadID           */ \
     gcvFALSE,        /* exiting            */ \
     gcvFALSE,        /* Special flag for NP2 texture. */ \
+    gcvNULL,         /* Fps Bench Head*/ \
+    gcvNULL,         /* Fps Bench Current*/ \
+    gcvNULL,         /* Fps Customize Head*/ \
+    gcvNULL,         /* Fps Customize Current*/ \
+    0,               /* The Flag - Enable White List*/ \
+    gcvFALSE,        /* bBasemarkGUI */ \
+    gcvFALSE,        /* bGLBenchmark */ \
+    gcvFALSE,        /* bDungeonDefenders */ \
+    gcvFALSE,        /* bBypassMode */ \
+    gcvFALSE,        /* bChrome */ \
+    gcvFALSE,        /* bF18 */ \
+    gcvFALSE,        /* bLandscapeGame */ \
+    gcvFALSE,        /* bCtsMedia */ \
     gcvNULL,         /* destructor        */ \
     gcvNULL,         /* accessLock        */ \
     gcvPATCH_INVALID,/* global patchID    */ \
@@ -311,6 +327,7 @@ extern gcsPLS gcPLS;
     gcvFALSE,        /* bChrome */ \
     gcvFALSE,        /* bF18 */ \
     gcvFALSE,        /* bLandscapeGame */ \
+    gcvFALSE,        /* bCtsMedia */ \
     gcvNULL,         /* destructor        */ \
     gcvNULL,         /* accessLock        */ \
 }
