@@ -94,6 +94,7 @@ gctCONST_STRING _DispatchText[] =
 };
 #endif
 
+#if gcdENABLE_RECOVERY
 void
 _ResetFinishFunction(
     gctPOINTER Data
@@ -103,6 +104,7 @@ _ResetFinishFunction(
 
     gckOS_AtomSet(kernel->os, kernel->resetAtom, 0);
 }
+#endif
 
 #if gcdPROCESS_ADDRESS_SPACE
 gceSTATUS
@@ -370,6 +372,7 @@ gckKERNEL_Construct(
         gcmkONERROR(
             gckMMU_Construct(kernel, gcdMMU_SIZE, &kernel->mmu));
 
+#if gcdENABLE_RECOVERY
         gcmkONERROR(
             gckOS_AtomConstruct(Os, &kernel->resetAtom));
 
@@ -380,6 +383,7 @@ gckKERNEL_Construct(
                               &kernel->resetFlagClearTimer));
 
         gcmkVERIFY_OK(gckOS_GetTime(&kernel->resetTimeStamp));
+#endif
 
 #if gcdDVFS
         if (gckHARDWARE_IsFeatureAvailable(kernel->hardware,
@@ -453,6 +457,7 @@ OnError:
             gcmkVERIFY_OK(gckOS_AtomDestroy(Os, kernel->atomClients));
         }
 
+#if gcdENABLE_RECOVERY
         if (kernel->resetAtom != gcvNULL)
         {
             gcmkVERIFY_OK(gckOS_AtomDestroy(Os, kernel->resetAtom));
@@ -463,6 +468,7 @@ OnError:
             gcmkVERIFY_OK(gckOS_StopTimer(Os, kernel->resetFlagClearTimer));
             gcmkVERIFY_OK(gckOS_DestroyTimer(Os, kernel->resetFlagClearTimer));
         }
+#endif
 
         if (kernel->dbCreated && kernel->db != gcvNULL)
         {
@@ -619,6 +625,7 @@ gckKERNEL_Destroy(
         /* Destroy the gckHARDWARE object. */
         gcmkVERIFY_OK(gckHARDWARE_Destroy(Kernel->hardware));
 
+#if gcdENABLE_RECOVERY
         gcmkVERIFY_OK(gckOS_AtomDestroy(Kernel->os, Kernel->resetAtom));
 
         if (Kernel->resetFlagClearTimer)
@@ -626,6 +633,7 @@ gckKERNEL_Destroy(
             gcmkVERIFY_OK(gckOS_StopTimer(Kernel->os, Kernel->resetFlagClearTimer));
             gcmkVERIFY_OK(gckOS_DestroyTimer(Kernel->os, Kernel->resetFlagClearTimer));
         }
+#endif
     }
 
     /* Detsroy the client atom. */
@@ -2446,7 +2454,11 @@ gckKERNEL_Dispatch(
         break;
 
     case gcvHAL_QUERY_RESET_TIME_STAMP:
+#if gcdENABLE_RECOVERY
         Interface->u.QueryResetTimeStamp.timeStamp = Kernel->resetTimeStamp;
+#else
+        Interface->u.QueryResetTimeStamp.timeStamp = 0;
+#endif
         break;
 
     case gcvHAL_FREE_VIRTUAL_COMMAND_BUFFER:
@@ -3246,6 +3258,7 @@ gckKERNEL_Recovery(
     IN gckKERNEL Kernel
     )
 {
+#if gcdENABLE_RECOVERY
 #define gcdEVENT_MASK 0x3FFFFFFF
     gceSTATUS status;
     gckEVENT eventObj;
@@ -3414,6 +3427,9 @@ OnError:
     /* Return the status. */
     gcmkFOOTER();
     return status;
+#else
+    return gcvSTATUS_OK;
+#endif
 }
 
 /*******************************************************************************

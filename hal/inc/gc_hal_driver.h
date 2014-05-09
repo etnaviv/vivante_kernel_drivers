@@ -271,6 +271,8 @@ typedef struct _gcsHAL_QUERY_CHIP_IDENTITY
 
     /* Special control bits for 2D chip. */
     gctUINT32                   chip2DControl;
+
+    gctCHAR                     chipName[32];
 }
 gcsHAL_QUERY_CHIP_IDENTITY;
 

@@ -302,6 +302,11 @@ gckOS_Destroy(
     IN gckOS Os
     );
 
+gceSTATUS gckOS_QueryPlatPerformance(
+    IN  gckOS Os,
+    OUT gctBOOL* isHighPerfPlat
+    );
+
 /* Query the video memory. */
 gceSTATUS
 gckOS_QueryVideoMemory(

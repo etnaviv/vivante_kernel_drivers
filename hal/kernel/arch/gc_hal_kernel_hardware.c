@@ -19,6 +19,8 @@
 
 #endif
 
+#include <linux/string.h>
+
 #define gcdDISABLE_FE_L2    0
 
 #define _GC_OBJ_ZONE    gcvZONE_HARDWARE
@@ -78,6 +80,51 @@ _ResetGPU(
     IN gceCORE Core
     );
 
+static gctBOOL
+_RenameChip(
+    IN gceCHIPMODEL ChipModel,
+    IN gctUINT32 ChipRevision,
+    IN gctBOOL HighPerfPlat,
+    IN gctSIZE_T Length,
+    OUT gctSTRING ChipName
+    )
+{
+    struct _chipNames {
+        gceCHIPMODEL chipModel;
+        gctUINT32 chipRevision;
+        gctSTRING highPerfName;
+        gctSTRING lowPerfName;
+        }chipNames[] = {
+            {gcv5000, 0x5434, "PXA1928 GPU", "PXA1926 GPU"},
+            {gcv420, 0x5336, "PXA1928 2D GPU", "PXA1926 2D GPU"},};
+
+    int i;
+    gctBOOL needRename = gcvFALSE;
+    gctSTRING newName = gcvNULL;
+
+    for(i = 0; i < gcmCOUNTOF(chipNames); i++)
+    {
+        if((ChipModel == chipNames[i].chipModel) &&
+           (ChipRevision == chipNames[i].chipRevision))
+        {
+            if(HighPerfPlat)
+            {
+                newName = chipNames[i].highPerfName;
+            }
+            else
+            {
+                newName = chipNames[i].lowPerfName;
+            }
+
+            strncpy(ChipName, newName, Length);
+            needRename = gcvTRUE;
+            break;
+        }
+    }
+
+    return needRename;
+}
+
 static gceSTATUS
 _IdentifyHardware(
     IN gckOS Os,
@@ -109,7 +156,10 @@ _IdentifyHardware(
     static gctBOOL printedChipInfoVG = gcvFALSE;
     gctBOOL printingChipInfo = (Core == gcvCORE_MAJOR) ? !printedChipInfo3D :
         ((Core == gcvCORE_2D) ? !printedChipInfo2D  : !printedChipInfoVG );
+#if MRVL_PLATFORM_TTD2
+    gctBOOL isHighPerfPlat = gcvTRUE;
 
+#endif
     gcmkHEADER_ARG("Os=0x%x", Os);
 
     /***************************************************************************
@@ -308,6 +358,16 @@ _IdentifyHardware(
         }
     }
 
+#if MRVL_DISABLE_SMALL_MSAA
+	Identity->chipMinorFeatures4 = ((((gctUINT32)(Identity->chipMinorFeatures4)) & ~(((gctUINT32)(((gctUINT32) ((((1 ? 18:18) - (0 ? 18:18) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 18:18) - (0 ? 18:18) + 1))))))) << (0 ? 18:18))) | (((gctUINT32)(0x0 & ((gctUINT32) ((((1 ? 18:18) - (0 ? 18:18) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 18:18) - (0 ? 18:18) + 1))))))) << (0 ? 18:18)));
+	
+#endif
+
+#if MRVL_DISABLE_SINGLE_BUFFER
+	Identity->chipMinorFeatures4 = ((((gctUINT32)(Identity->chipMinorFeatures4)) & ~(((gctUINT32)(((gctUINT32) ((((1 ? 6:6) - (0 ? 6:6) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 6:6) - (0 ? 6:6) + 1))))))) << (0 ? 6:6))) | (((gctUINT32)(0x0 & ((gctUINT32) ((((1 ? 6:6) - (0 ? 6:6) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 6:6) - (0 ? 6:6) + 1))))))) << (0 ? 6:6)));
+	
+#endif
+
     /* Get the Supertile layout in the hardware. */
     if (	((((gctUINT32) (Identity->chipMinorFeatures3)) >> (0 ? 26:26) & ((gctUINT32) ((((1 ? 26:26) - (0 ? 26:26) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 26:26) - (0 ? 26:26) + 1)))))) == (0x1 & ((gctUINT32) ((((1 ? 26:26) - (0 ? 26:26) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 26:26) - (0 ? 26:26) + 1)))))))
 		|| ((((gctUINT32) (Identity->chipMinorFeatures3)) >> (0 ? 8:8) & ((gctUINT32) ((((1 ? 8:8) - (0 ? 8:8) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 8:8) - (0 ? 8:8) + 1)))))) == (0x1 & ((gctUINT32) ((((1 ? 8:8) - (0 ? 8:8) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 8:8) - (0 ? 8:8) + 1))))))))
@@ -371,14 +431,16 @@ _IdentifyHardware(
         gckOS_Print("[galcore] Print out %s chip informations:\n",
                     (Core == gcvCORE_MAJOR) ? "3D" :
                     ((Core == gcvCORE_2D) ? "2D" : "VG"));
+
 #if MRVL_PLATFORM_TTD2
-        if(Identity->chipModel == gcv5000)
+        gckOS_QueryPlatPerformance(Os, &isHighPerfPlat);
+        if(_RenameChip(Identity->chipModel,
+                       Identity->chipRevision,
+                       isHighPerfPlat,
+                       gcmCOUNTOF(Identity->chipName),
+                       Identity->chipName))
         {
-            gckOS_Print("  chipModel              = PXA1926 GPU\n");
-        }
-        else if(Identity->chipModel == gcv420)
-        {
-            gckOS_Print("  chipModel              = PXA1926 2D GPU\n");
+            gckOS_Print("  chipModel              = %s\n", Identity->chipName);
         }
         else
 
@@ -2006,6 +2068,7 @@ gckHARDWARE_QueryChipIdentity(
 
 #endif
     Identity->chip2DControl          = Hardware->identity.chip2DControl;
+    strncpy(Identity->chipName, Hardware->identity.chipName, gcmCOUNTOF(Identity->chipName));
 
     /* Success. */
     gcmkFOOTER_NO();

@@ -201,6 +201,16 @@
 #define MRVL_CONFIG_SYSFS                       1
 
 /*
+    MRVL_CONFIG_ENABLE_GC_TRACE
+        -- enable GC trace support
+*/
+#if (defined ANDROID) && (MRVL_PLATFORM_PXA988_FAMILY || MRVL_PLATFORM_TTD2)
+#define MRVL_CONFIG_ENABLE_GC_TRACE             1
+#else
+#define MRVL_CONFIG_ENABLE_GC_TRACE             0
+#endif
+
+/*
     MRVL_CONFIG_POWER_VALIDATION
         -- Marco for power validation
 */
@@ -347,6 +357,22 @@
 #endif
 
 /*
+    MRVL_DISABLE_SMALL_MSAA
+        -- disable SMALL_MSAA since system hang when running oes20 javasft TRasTex_007 after 5.0.11.pre2 on eden a0
+*/
+#ifndef MRVL_DISABLE_SMALL_MSAA
+#define MRVL_DISABLE_SMALL_MSAA 1
+#endif
+
+/*
+    MRVL_DISABLE_SINGLE_BUFFER
+        -- disable SINGLE_BUFFER since system hang when running oes20 javasft TFBFBO_001 after 5.0.11.pre2 on eden a0
+*/
+#ifndef MRVL_DISABLE_SINGLE_BUFFER
+#define MRVL_DISABLE_SINGLE_BUFFER 1
+#endif
+
+/*
 *  Definitions for vendor, renderer and version strings
 */
 /* #################### [START ==DO NOT CHANGE THIS MARCRO== START] #################### */
@@ -355,7 +381,7 @@
 /* @Ziyi: If any change happened between these 2 comments please contact zyxu@marvell.com, Thanks. */
 /* #################### [START ==DO NOT CHANGE THIS MARCRO== START] #################### */
 
-#define _GC_VERSION_STRING_                     "GC version rls-pxa1928-kk44-alpha1-r5"
+#define _GC_VERSION_STRING_                     "GC version rls-pxa1928-kk44-alpha2-r1"
 
 /* Do not align u/v stride to 16 */
 #define VIVANTE_ALIGN_UVSTRIDE                  0

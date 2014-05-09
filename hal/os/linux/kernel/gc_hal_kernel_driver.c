@@ -155,7 +155,7 @@ module_param(showArgs, int, 0644);
 #elif MRVL_PLATFORM_ADIR
     unsigned long coreClock = 624;
 #elif MRVL_PLATFORM_TTD2
-    unsigned long coreClock = 531;
+    unsigned long coreClock = 624;
 #else
     unsigned long coreClock = 533;
 #endif

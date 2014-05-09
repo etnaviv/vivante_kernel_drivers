@@ -774,6 +774,15 @@
 #endif
 
 /*
+    gcdENABLE_RECOVERY
+
+        This define enables the recovery code.
+*/
+#ifndef gcdENABLE_RECOVERY
+#   define gcdENABLE_RECOVERY                   0
+#endif
+
+/*
     gcdRENDER_THREADS
 
         Number of render threads. Make it zero, and there will be no render

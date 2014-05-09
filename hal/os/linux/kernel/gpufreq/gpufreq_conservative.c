@@ -14,6 +14,8 @@
 #include <linux/kernel.h>
 #include <linux/atomic.h>
 
+#include "gc_trace.h"
+
 #define DEF_SAMPLING_DOWN_FACTOR            (1)
 #define MAX_SAMPLING_DOWN_FACTOR            (100000)
 #define DEF_MIN_SAMPLING_RATE               (100)
@@ -280,6 +282,8 @@ static void gov_policy_dfc(struct gpufreq_conservative_info_s *conservative_info
         debug_log(GPUFREQ_LOG_WARNING, "fail to get gpu work load\n");
         return;
     }
+
+    trace_gc_workload(cur_policy->gpu, cur_policy->cur, load);
 
     if(conserv_tuners_ins->freq_step == 0)
         return;

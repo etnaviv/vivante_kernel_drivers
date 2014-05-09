@@ -700,6 +700,12 @@ gcoHAL_QueryChipIdentity(
     OUT gctUINT32* ChipMinorFeatures
     );
 
+gceSTATUS gcoHAL_QueryChipName(
+    IN gcoHAL Hal,
+    IN gctSIZE_T Length,
+    OUT gctSTRING ChipName
+    );
+
 /* Query the minor features of the hardware. */
 gceSTATUS gcoHAL_QueryChipMinorFeatures(
     IN gcoHAL Hal,

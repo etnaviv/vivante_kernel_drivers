@@ -551,9 +551,11 @@ struct _gckKERNEL
     gctBOOL                     dbCreated;
     gctBOOL                     dbflag;
 
+#if gcdENABLE_RECOVERY
     gctPOINTER                  resetFlagClearTimer;
     gctPOINTER                  resetAtom;
     gctUINT64                   resetTimeStamp;
+#endif
 
     /* Pointer to gckEVENT object. */
     gcsTIMER                    timers[8];

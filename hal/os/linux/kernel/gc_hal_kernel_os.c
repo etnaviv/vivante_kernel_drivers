@@ -13,6 +13,7 @@
 
 
 #include "gc_hal_kernel_linux.h"
+#include "gc_trace.h"
 
 #include <linux/pagemap.h>
 #include <linux/seq_file.h>
@@ -42,6 +43,11 @@
 #if MRVL_DFC_PROTECT_REG_ACCESS
 extern void get_gc3d_reg_lock(unsigned int lock, unsigned long *flags);
 extern void get_gc2d_reg_lock(unsigned int lock, unsigned long *flags);
+#endif
+
+#if MRVL_PLATFORM_TTD2
+extern int get_gc3d_freqs_table(unsigned long *gcu3d_freqs_table,
+                        unsigned int *item_counts, unsigned int max_item_counts);
 #endif
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0))
@@ -2179,6 +2185,7 @@ gckOS_ReadRegisterEx(
         if ((Os->clockDepth != 0 && clockStateValue == gcvTRUE)
            )
         {
+            trace_gc_reg_acc(TRACE_LOG_ENTRY, TRACE_REG_READ, Address, 0);
 #if MRVL_DFC_PROTECT_REG_ACCESS
             if (Core == gcvCORE_MAJOR)
             {
@@ -2211,6 +2218,7 @@ gckOS_ReadRegisterEx(
                 get_gc2d_reg_lock(gcvFALSE, &flags);
             }
 #endif
+            trace_gc_reg_acc(TRACE_LOG_EXIT, TRACE_REG_READ, Address, *Data);
         }
         else
         {
@@ -2221,6 +2229,7 @@ gckOS_ReadRegisterEx(
     }
     else
     {
+        trace_gc_reg_acc(TRACE_LOG_ENTRY, TRACE_REG_READ, Address, 0);
 #if gcdMULTI_GPU
         if (Core == gcvCORE_MAJOR)
         {
@@ -2231,6 +2240,7 @@ gckOS_ReadRegisterEx(
         {
             *Data = readl((gctUINT8 *)Os->device->registerBases[Core] + Address);
         }
+        trace_gc_reg_acc(TRACE_LOG_EXIT, TRACE_REG_READ, Address, *Data);
     }
 
     up_read(&Os->rwsem_clk_pwr);
@@ -2337,6 +2347,7 @@ gckOS_ReadRegisterByCoreId(
 
         if ((Os->clockDepth != 0) && (clockStateValue == gcvTRUE))
         {
+            trace_gc_reg_acc(TRACE_LOG_ENTRY, TRACE_REG_READ, Address, 0);
 #if MRVL_DFC_PROTECT_REG_ACCESS
             get_gc3d_reg_lock(gcvTRUE, &flags);
 #endif
@@ -2345,6 +2356,7 @@ gckOS_ReadRegisterByCoreId(
 #if MRVL_DFC_PROTECT_REG_ACCESS
             get_gc3d_reg_lock(gcvFALSE, &flags);
 #endif
+            trace_gc_reg_acc(TRACE_LOG_EXIT, TRACE_REG_READ, Address, *Data);
         }
         else
         {
@@ -2355,7 +2367,9 @@ gckOS_ReadRegisterByCoreId(
     }
     else
     {
+        trace_gc_reg_acc(TRACE_LOG_ENTRY, TRACE_REG_READ, Address, 0);
        *Data = readl((gctUINT8 *)Os->device->registerBase3D[CoreId] + Address);
+        trace_gc_reg_acc(TRACE_LOG_EXIT, TRACE_REG_READ, Address, *Data);
     }
 
     up_read(&Os->rwsem_clk_pwr);
@@ -2469,6 +2483,7 @@ gckOS_WriteRegisterEx(
             (Os->clockDepth != 0 && clockStateValue == gcvTRUE)
            )
         {
+            trace_gc_reg_acc(TRACE_LOG_ENTRY, TRACE_REG_WRITE, Address, Data);
 #if MRVL_DFC_PROTECT_REG_ACCESS
             if (Core == gcvCORE_MAJOR)
             {
@@ -2504,6 +2519,7 @@ gckOS_WriteRegisterEx(
                 get_gc2d_reg_lock(gcvFALSE, &flags);
             }
 #endif
+            trace_gc_reg_acc(TRACE_LOG_EXIT, TRACE_REG_WRITE, Address, 0);
         }
         else
         {
@@ -2513,6 +2529,7 @@ gckOS_WriteRegisterEx(
     }
     else
     {
+        trace_gc_reg_acc(TRACE_LOG_ENTRY, TRACE_REG_WRITE, Address, Data);
 #if gcdMULTI_GPU
         if (Core == gcvCORE_MAJOR)
         {
@@ -2526,6 +2543,7 @@ gckOS_WriteRegisterEx(
         {
             writel(Data, (gctUINT8 *)Os->device->registerBases[Core] + Address);
         }
+        trace_gc_reg_acc(TRACE_LOG_EXIT, TRACE_REG_WRITE, Address, 0);
     }
 
     up_write(&Os->rwsem_clk_pwr);
@@ -2609,7 +2627,9 @@ gckOS_WriteRegisterByCoreId(
     gcmkHEADER_ARG("Os=0x%X Core=%d CoreId=%d Address=0x%X Data=0x%08x",
                    Os, Core, CoreId, Address, Data);
 
+    trace_gc_reg_acc(TRACE_LOG_ENTRY, TRACE_REG_WRITE, Address, Data);
     writel(Data, (gctUINT8 *)Os->device->registerBase3D[CoreId] + Address);
+    trace_gc_reg_acc(TRACE_LOG_EXIT, TRACE_REG_WRITE, Address, 0);
 
     /* Success. */
     gcmkFOOTER_NO();
@@ -7417,6 +7437,9 @@ gckOS_Broadcast(
 
     case gcvBROADCAST_GPU_STUCK:
         gcmkTRACE_N(gcvLEVEL_ERROR, 0, "gcvBROADCAST_GPU_STUCK\n");
+#if !gcdENABLE_RECOVERY
+        gcmkONERROR(gckHARDWARE_DumpGPUState(Hardware));
+#endif
         gcmkONERROR(gckKERNEL_Recovery(Hardware->kernel));
         break;
 
@@ -11596,4 +11619,39 @@ OnError:
 }
 #endif
 
+#if MRVL_PLATFORM_TTD2
+#define HIGH_PERFORMANCE_FREQ   797333
+gceSTATUS gckOS_QueryPlatPerformance(
+    IN  gckOS Os,
+    OUT gctBOOL* isHighPerfPlat
+    )
+{
+    unsigned long freqs[10];
+    unsigned int freqItemCount = 0;
+    unsigned long maxFreq = 0;
+    unsigned int idx;
+
+    /*Get max freq in Hz.*/
+    get_gc3d_freqs_table(freqs, &freqItemCount, 10);
+
+    for ( idx = 0; idx < freqItemCount; idx++)
+    {
+        if (maxFreq < freqs[idx])
+        {
+            maxFreq = freqs[idx];
+        }
+    }
+
+    if (maxFreq < HIGH_PERFORMANCE_FREQ * 1000)
+    {
+        *isHighPerfPlat = gcvFALSE;
+    }
+    else
+    {
+        *isHighPerfPlat = gcvTRUE;
+    }
+
+    return gcvSTATUS_OK;
+}
+#endif
 

@@ -14,6 +14,9 @@
 #include <linux/kernel.h>
 #include <linux/atomic.h>
 
+#define CREATE_TRACE_POINTS
+#include "gc_trace.h"
+
 #define DEF_SAMPLING_DOWN_FACTOR            (1)
 #define MAX_SAMPLING_DOWN_FACTOR            (100000)
 #define DEF_MIN_SAMPLING_RATE               (100)
@@ -199,6 +202,8 @@ static void gov_policy_gpubench(struct gpufreq_ondemand_info_s *ondemand_info)
         debug_log(GPUFREQ_LOG_WARNING, "fail to get gpu work load\n");
         return;
     }
+
+    trace_gc_workload(cur_policy->gpu, cur_policy->cur, load);
 
     /**************************************
      * check for frequency INCREASE
