@@ -369,7 +369,7 @@
         -- disable SINGLE_BUFFER since system hang when running oes20 javasft TFBFBO_001 after 5.0.11.pre2 on eden a0
 */
 #ifndef MRVL_DISABLE_SINGLE_BUFFER
-#define MRVL_DISABLE_SINGLE_BUFFER 1
+#define MRVL_DISABLE_SINGLE_BUFFER 0
 #endif
 
 /*
@@ -381,7 +381,7 @@
 /* @Ziyi: If any change happened between these 2 comments please contact zyxu@marvell.com, Thanks. */
 /* #################### [START ==DO NOT CHANGE THIS MARCRO== START] #################### */
 
-#define _GC_VERSION_STRING_                     "GC version rls-pxa1928-kk44-alpha2-r1"
+#define _GC_VERSION_STRING_                     "GC version rls-pxa1928-kk44-alpha2-r2"
 
 /* Do not align u/v stride to 16 */
 #define VIVANTE_ALIGN_UVSTRIDE                  0
