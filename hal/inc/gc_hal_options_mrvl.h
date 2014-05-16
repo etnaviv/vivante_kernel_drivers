@@ -361,7 +361,7 @@
         -- disable SMALL_MSAA since system hang when running oes20 javasft TRasTex_007 after 5.0.11.pre2 on eden a0
 */
 #ifndef MRVL_DISABLE_SMALL_MSAA
-#define MRVL_DISABLE_SMALL_MSAA 1
+#define MRVL_DISABLE_SMALL_MSAA 0
 #endif
 
 /*
@@ -381,7 +381,7 @@
 /* @Ziyi: If any change happened between these 2 comments please contact zyxu@marvell.com, Thanks. */
 /* #################### [START ==DO NOT CHANGE THIS MARCRO== START] #################### */
 
-#define _GC_VERSION_STRING_                     "GC version rls-pxa1928-kk44-alpha2-r2"
+#define _GC_VERSION_STRING_                     "GC version rls-pxa1928-kk44-alpha2-r3"
 
 /* Do not align u/v stride to 16 */
 #define VIVANTE_ALIGN_UVSTRIDE                  0
@@ -393,7 +393,7 @@
     Disable 2D block size setting
         for adir get bad performance with this on.
 */
-#define DISABLE_2D_BLOCK_SIZE_SETTING           1
+#define DISABLE_2D_BLOCK_SIZE_SETTING           0
 
 /* Enable NEON memcpy to replace default memcpy */
 #if (!defined MRVL_ENABLE_GPUTEX_MEMCPY) && (defined ANDROID) \
