@@ -98,6 +98,7 @@ typedef struct _gcsPLS * gcsPLS_PTR;
 *******************************************************************************/
 typedef enum _gcePATCH_ID
 {
+    gcvPATCH_NOTINIT = -1,
     gcvPATCH_INVALID = 0,
 
 #if gcdDEBUG_OPTION
@@ -291,7 +292,7 @@ extern gcsPLS gcPLS;
     gcvFALSE,        /* bCtsMedia */ \
     gcvNULL,         /* destructor        */ \
     gcvNULL,         /* accessLock        */ \
-    gcvPATCH_INVALID,/* global patchID    */ \
+    gcvPATCH_NOTINIT,/* global patchID    */ \
 }
 #else
 #define gcPLS_INITIALIZER \
@@ -330,6 +331,7 @@ extern gcsPLS gcPLS;
     gcvFALSE,        /* bCtsMedia */ \
     gcvNULL,         /* destructor        */ \
     gcvNULL,         /* accessLock        */ \
+    gcvPATCH_NOTINIT,/* global patchID    */ \
 }
 #endif
 
