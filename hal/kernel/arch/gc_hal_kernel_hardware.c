@@ -80,6 +80,8 @@ _ResetGPU(
     IN gceCORE Core
     );
 
+#if MRVL_PLATFORM_TTD2
+
 static gctBOOL
 _RenameChip(
     IN gceCHIPMODEL ChipModel,
@@ -124,6 +126,9 @@ _RenameChip(
 
     return needRename;
 }
+
+
+#endif
 
 static gceSTATUS
 _IdentifyHardware(
