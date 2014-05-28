@@ -429,6 +429,7 @@ gcoCL_UnlockSurface(
 */
 gceSTATUS
 gcoCL_CreateTexture(
+    IN gctBOOL              Maped,
     IN gctUINT              Width,
     IN gctUINT              Height,
     IN gctUINT              Depth,
@@ -441,7 +442,8 @@ gcoCL_CreateTexture(
     OUT gcoSURF *           Surface,
     OUT gctPHYS_ADDR *      Physical,
     OUT gctPOINTER *        Logical,
-    OUT gctSIZE_T *         RowPitch
+    OUT gctSIZE_T *         RowPitch,
+    OUT gctPOINTER*         MapInfo
     );
 
 /*******************************************************************************

@@ -32,6 +32,10 @@
 #   include <mach/pxa3xx_dvfm.h>
 #endif
 
+#if MRVL_GPU_RESOURCE_DT
+#include <linux/of.h>
+#include <linux/of_device.h>
+#endif
 
 /* Zone used for header/footer. */
 #define _GC_OBJ_ZONE    gcvZONE_DRIVER
@@ -1296,6 +1300,31 @@ static int __disable_gpufreq(gckGALDEVICE device)
 }
 #endif
 
+#if MRVL_GPU_RESOURCE_DT
+static int gpu_dt_probe(struct platform_device *pdev)
+{
+    struct device_node *np = pdev->dev.of_node;
+    gctUINT32 memBase = 0;
+    gctUINT32 memSize = 0;
+
+    if (of_property_read_u32(np, "gpu-mem-base", &memBase))
+    {
+        gcmkPRINT("continuous memory base address missing");
+        return -EINVAL;
+    }
+    contiguousBase = memBase;
+
+    if (of_property_read_u32(np, "gpu-mem-size", &memSize))
+    {
+        gcmkPRINT("continuous memory size missing");
+        return -EINVAL;
+    }
+    contiguousSize = memSize;
+
+    return 0;
+}
+#endif
+
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 8, 0)
 static int gpu_probe(struct platform_device *pdev)
 #else
@@ -1303,10 +1332,20 @@ static int __devinit gpu_probe(struct platform_device *pdev)
 #endif
 {
     int ret = -ENODEV;
+#if !MRVL_GPU_RESOURCE_DT
     struct resource* res;
+#endif
 
     gcmkHEADER();
 
+#if MRVL_GPU_RESOURCE_DT
+    gcmkPRINT(KERN_INFO "[galcore] info: GC use DT to reserve video memory.\n");
+    if (gpu_dt_probe(pdev))
+    {
+        gcmkPRINT(KERN_ERR "%s: No continuous memory supplied in Device Tree.\n",__FUNCTION__);
+        goto gpu_probe_fail;
+    }
+#else
     res = platform_get_resource_byname(pdev, IORESOURCE_IRQ, "gpu_irq");
 
     if (!res)
@@ -1350,9 +1389,11 @@ static int __devinit gpu_probe(struct platform_device *pdev)
     contiguousBase = res->start;
     contiguousSize = res->end - res->start + 1;
 #endif
+#endif
 
     printk("\n[galcore] GC Version: %s\n", _GC_VERSION_STRING_);
-    printk("\ncontiguousBase:%08x, contiguousSize:%08x\n", (gctUINT32)contiguousBase, (gctUINT32)contiguousSize);
+    printk("\ncontiguousBase: 0x%08x, contiguousSize: 0x%08x\n",
+        (gctUINT32)contiguousBase, (gctUINT32)contiguousSize);
 
     ret = drv_init();
 
@@ -1535,6 +1576,13 @@ static int gpu_resume(struct platform_device *dev)
     return 0;
 }
 
+#if MRVL_GPU_RESOURCE_DT
+static struct of_device_id gpu_dt_ids[] = {
+    { .compatible = "marvell,gpu", },
+    {}
+};
+#endif
+
 static struct platform_driver gpu_driver = {
     .probe      = gpu_probe,
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 8, 0)
@@ -1548,6 +1596,9 @@ static struct platform_driver gpu_driver = {
 
     .driver     = {
         .name   = DEVICE_NAME,
+#if MRVL_GPU_RESOURCE_DT
+        .of_match_table = of_match_ptr(gpu_dt_ids),
+#endif
     }
 };
 

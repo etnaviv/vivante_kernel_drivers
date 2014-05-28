@@ -110,8 +110,17 @@
 #define MRVL_POLICY_CLKOFF_WHEN_IDLE            0
 #endif
 
+/*
+    Reserve GPU memory resource by device tree.
+*/
+#if (defined CONFIG_OF) && (defined CONFIG_ARM64)
+#define MRVL_GPU_RESOURCE_DT                    1
+#else
+#define MRVL_GPU_RESOURCE_DT                    0
+#endif
+
 /* Reserve memory by using memblock when board inits */
-#if (defined CONFIG_GPU_RESERVE_MEM) || (defined CONFIG_ARM64)
+#if (MRVL_GPU_RESOURCE_DT) || (defined CONFIG_GPU_RESERVE_MEM)
 #define MRVL_USE_GPU_RESERVE_MEM                1
 #else
 #define MRVL_USE_GPU_RESERVE_MEM                0
@@ -381,7 +390,7 @@
 /* @Ziyi: If any change happened between these 2 comments please contact zyxu@marvell.com, Thanks. */
 /* #################### [START ==DO NOT CHANGE THIS MARCRO== START] #################### */
 
-#define _GC_VERSION_STRING_                     "GC version rls-pxa1928-kk44-alpha2-r5"
+#define _GC_VERSION_STRING_                     "GC version rls-pxa1928-kk44-alpha2-rc1-p6"
 
 /* Do not align u/v stride to 16 */
 #define VIVANTE_ALIGN_UVSTRIDE                  0
