@@ -80,8 +80,6 @@ _ResetGPU(
     IN gceCORE Core
     );
 
-#if MRVL_PLATFORM_TTD2
-
 static gctBOOL
 _RenameChip(
     IN gceCHIPMODEL ChipModel,
@@ -127,9 +125,6 @@ _RenameChip(
     return needRename;
 }
 
-
-#endif
-
 static gceSTATUS
 _IdentifyHardware(
     IN gckOS Os,
@@ -161,10 +156,8 @@ _IdentifyHardware(
     static gctBOOL printedChipInfoVG = gcvFALSE;
     gctBOOL printingChipInfo = (Core == gcvCORE_MAJOR) ? !printedChipInfo3D :
         ((Core == gcvCORE_2D) ? !printedChipInfo2D  : !printedChipInfoVG );
-#if MRVL_PLATFORM_TTD2
     gctBOOL isHighPerfPlat = gcvTRUE;
 
-#endif
     gcmkHEADER_ARG("Os=0x%x", Os);
 
     /***************************************************************************
@@ -437,19 +430,18 @@ _IdentifyHardware(
                     (Core == gcvCORE_MAJOR) ? "3D" :
                     ((Core == gcvCORE_2D) ? "2D" : "VG"));
 
-#if MRVL_PLATFORM_TTD2
         gckOS_QueryPlatPerformance(Os, &isHighPerfPlat);
-        if(_RenameChip(Identity->chipModel,
+        if(cpu_is_pxa1928_a0() &&
+            (_RenameChip(Identity->chipModel,
                        Identity->chipRevision,
                        isHighPerfPlat,
                        gcmCOUNTOF(Identity->chipName),
                        Identity->chipName))
+            )
         {
             gckOS_Print("  chipModel              = %s\n", Identity->chipName);
         }
         else
-
-#endif
         {
             gckOS_Print("  chipModel              = 0x%08X\n", Identity->chipModel);
         }
@@ -1325,11 +1317,8 @@ gckHARDWARE_Construct(
     hardware->startIsr = gcvNULL;
     hardware->stopIsr = gcvNULL;
 
-#if MRVL_DFC_PROTECT_CLK_OPERATION
     hardware->clockMutex      = gcvNULL;
     gcmkONERROR(gckOS_CreateMutex(Os, &hardware->clockMutex));
-
-#endif
 
 #if gcdPOWEROFF_TIMEOUT
     hardware->powerOffTimeout = gcdPOWEROFF_TIMEOUT;
@@ -1391,13 +1380,10 @@ OnError:
         /* Turn off the power. */
         gcmkVERIFY_OK(gckOS_SetGPUPower(Os, Core, gcvFALSE, gcvFALSE));
 
-#if MRVL_DFC_PROTECT_CLK_OPERATION
         if (hardware->clockMutex != gcvNULL)
         {
             gcmkVERIFY_OK(gckOS_DeleteMutex(Os, hardware->clockMutex));
         }
-
-#endif
 
         if (hardware->recMutexPower != gcvNULL)
         {
@@ -1464,10 +1450,7 @@ gckHARDWARE_Destroy(
     /* Verify the arguments. */
     gcmkVERIFY_OBJECT(Hardware, gcvOBJ_HARDWARE);
 
-#if MRVL_DFC_PROTECT_CLK_OPERATION
     gcmkVERIFY_OK(gckOS_DeleteMutex(Hardware->os, Hardware->clockMutex));
-
-#endif
 
     /* Destroy the recursive mutex. */
     gcmkVERIFY_OK(gckOS_DeleteRecMutex(Hardware->os, Hardware->recMutexPower));
@@ -4736,6 +4719,7 @@ gckHARDWARE_SetPowerManagementState(
     gctBOOL configMmu = gcvFALSE;
     gctINT32 clockStateValue = gcvFALSE;
     gctINT32 powerStateValue = gcvFALSE;
+    gctBOOL setPower = gcvFALSE;
 
     /* State transition flags. */
     static const gctUINT flags[4][4] =
@@ -5064,14 +5048,18 @@ gckHARDWARE_SetPowerManagementState(
 #if MRVL_ENABLE_GC_POWER_CLOCK
         /* gcvPOWER_FLAG_INITIALIZE --> power+clock [on] [off    ->on] [off    ->idle]
            gcvPOWER_FLAG_CLOCK_ON   --> power       [on] [suspend->on] [suspend->idle] */
+
+        setPower = (flag & gcvPOWER_FLAG_CLOCK_ON) ? gcvFALSE : gcvTRUE;
+        if (!has_feat_2d_power_onoff()
+            && (Hardware->core == gcvCORE_2D))
+        {
+            setPower = gcvFALSE;
+        }
+
         gcmkONERROR(gckOS_SetGPUPowerOnMRVL(os,
                                             Hardware->core,
                                             gcvTRUE,
-#if !MRVL_2D_POWER_DYNAMIC_ONOFF
-                                            Hardware->core == gcvCORE_2D ? gcvFALSE :
-
-#endif
-                                            ((flag & gcvPOWER_FLAG_CLOCK_ON) ? gcvFALSE : gcvTRUE)
+                                            setPower
                                             ));
 
 #else
@@ -5379,17 +5367,19 @@ gckHARDWARE_SetPowerManagementState(
 
         /* Turn off the GPU power. */
 #if MRVL_ENABLE_GC_POWER_CLOCK
+        setPower = (flag & gcvPOWER_FLAG_POWER_OFF) ? gcvTRUE : gcvFALSE;
+        if (!has_feat_2d_power_onoff()
+            && (Hardware->core == gcvCORE_2D))
+        {
+            setPower = gcvFALSE;
+        }
+
         gcmkONERROR(
             gckOS_SetGPUPowerOffMRVL(os,
                                      Hardware->core,
                                      (flag & gcvPOWER_FLAG_CLOCK_OFF) ? gcvTRUE
                                                                       : gcvFALSE,
-#if !MRVL_2D_POWER_DYNAMIC_ONOFF
-                                     Hardware->core == gcvCORE_2D ? gcvFALSE :
-
-#endif
-                                     ((flag & gcvPOWER_FLAG_POWER_OFF) ? gcvTRUE
-                                                                      : gcvFALSE)
+                                     setPower
                                      ));
 #else
          gcmkONERROR(

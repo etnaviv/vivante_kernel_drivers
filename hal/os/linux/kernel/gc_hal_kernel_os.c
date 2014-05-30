@@ -13,6 +13,7 @@
 
 
 #include "gc_hal_kernel_linux.h"
+#define CREATE_TRACE_POINTS
 #include "gc_trace.h"
 
 #include <linux/pagemap.h>
@@ -43,11 +44,6 @@
 #if MRVL_DFC_PROTECT_REG_ACCESS
 extern void get_gc3d_reg_lock(unsigned int lock, unsigned long *flags);
 extern void get_gc2d_reg_lock(unsigned int lock, unsigned long *flags);
-#endif
-
-#if MRVL_PLATFORM_TTD2
-extern int get_gc3d_freqs_table(unsigned long *gcu3d_freqs_table,
-                        unsigned int *item_counts, unsigned int max_item_counts);
 #endif
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0))
@@ -862,9 +858,7 @@ gckOS_Construct(
     os->clockDepth  = MRVL_MAX_CLOCK_DEPTH;
     os->powerDepth  = MRVL_MAX_POWER_DEPTH;
 
-#if MRVL_POLICY_CLKOFF_WHEN_IDLE
     os->clkOffWhenIdle  = gcvTRUE;
-#endif
 
     init_rwsem(&os->rwsem_clk_pwr);
 
@@ -3650,7 +3644,6 @@ gceSTATUS gckOS_ReleaseRecMutex(
     return gcvSTATUS_OK;
 }
 
-#if MRVL_DFC_PROTECT_CLK_OPERATION
 gceSTATUS
 gckOS_AcquireClockMutex(
     IN gckOS Os,
@@ -3698,7 +3691,6 @@ gckOS_ReleaseClockMutex(
     gcmkFOOTER_NO();
     return gcvSTATUS_OK;
 }
-#endif
 
 /*******************************************************************************
 **
@@ -7392,27 +7384,21 @@ gckOS_Broadcast(
     case gcvBROADCAST_GPU_IDLE:
         gcmkTRACE_ZONE(gcvLEVEL_INFO, gcvZONE_OS, "GPU idle.");
 
-#if MRVL_POLICY_CLKOFF_WHEN_IDLE
-                if(Os->clkOffWhenIdle == gcvTRUE)
-                {
-                    /* Put GPU SUSPEND. */
-                    gcmkONERROR(
-                        gckHARDWARE_SetPowerManagementState(Hardware,
-                                                            gcvPOWER_SUSPEND_BROADCAST));
-                }
-                else
-                {
-                    /* Put GPU IDLE. */
-                    gcmkONERROR(
-                        gckHARDWARE_SetPowerManagementState(Hardware,
-                                                            gcvPOWER_IDLE_BROADCAST));
-                }
-#else
-        /* Put GPU IDLE. */
-        gcmkONERROR(
-            gckHARDWARE_SetPowerManagementState(Hardware,
-                                                gcvPOWER_IDLE_BROADCAST));
-#endif
+        if(has_feat_policy_clock_off_when_idle()
+           && (Os->clkOffWhenIdle == gcvTRUE))
+        {
+            /* Put GPU SUSPEND. */
+            gcmkONERROR(
+                gckHARDWARE_SetPowerManagementState(Hardware,
+                                                    gcvPOWER_SUSPEND_BROADCAST));
+        }
+        else
+        {
+            /* Put GPU IDLE. */
+            gcmkONERROR(
+                gckHARDWARE_SetPowerManagementState(Hardware,
+                                                    gcvPOWER_IDLE_BROADCAST));
+        }
 
         /* Add idle process DB. */
         gcmkONERROR(gckKERNEL_AddProcessDB(Hardware->kernel,
@@ -7866,7 +7852,6 @@ gckOS_SetGPUPower(
     return gcvSTATUS_OK;
 }
 
-#if MRVL_POLICY_CLKOFF_WHEN_IDLE
 static gceSTATUS
 _TryToClkOffGPU(
     IN gckOS Os
@@ -7948,7 +7933,6 @@ gckOS_SetClkOffWhenIdle(
     gcmkFOOTER_NO();
     return gcvSTATUS_OK;
 }
-#endif
 
 /*******************************************************************************
 **
@@ -9167,7 +9151,6 @@ gckOS_VerifyThread(
 /******************************************************************************\
 **************************** Power Management **********************************
 \******************************************************************************/
-# if MRVL_ENABLE_COMMON_PWRCLK_FRAMEWORK /* == 1 */
 
 gceSTATUS
 gckOS_GetIfaceMapping(
@@ -9264,13 +9247,12 @@ gckOS_SetGPUPowerOnBeforeInit(
     {
         gpu_clk_setrate(iface, clkRate);
 
-#if MRVL_3D_CORE_SH_CLOCK_SEPARATED
-        if (Core == gcvCORE_MAJOR)
+        if (has_feat_3d_shader_clock()
+            && (Core == gcvCORE_MAJOR))
         {
             gcmkONERROR(gckOS_GetIfaceMapping(NULL, gcvCORE_SH, (gctPOINTER *)&ifaceShader));
             gpu_clk_setrate(ifaceShader, clkRate);
         }
-#endif
     }
 
 OnError:
@@ -9295,9 +9277,8 @@ gckOS_SetGPUPowerOnMRVL(
 
     down_write(&Os->rwsem_clk_pwr);
 
-#if MRVL_DFC_PROTECT_CLK_OPERATION
-    gckOS_AcquireClockMutex(Os, Core);
-#endif
+    if (has_feat_dfc_protect_clk_op())
+        gckOS_AcquireClockMutex(Os, Core);
 
     if(EnablePwr)
     {
@@ -9311,9 +9292,8 @@ gckOS_SetGPUPowerOnMRVL(
         gpu_clk_enable(iface);
     }
 
-#if MRVL_DFC_PROTECT_CLK_OPERATION
-    gckOS_ReleaseClockMutex(Os, Core);
-#endif
+    if (has_feat_dfc_protect_clk_op())
+        gckOS_ReleaseClockMutex(Os, Core);
 
     up_write(&Os->rwsem_clk_pwr);
 
@@ -9339,9 +9319,8 @@ gckOS_SetGPUPowerOffMRVL(
 
     down_write(&Os->rwsem_clk_pwr);
 
-#if MRVL_DFC_PROTECT_CLK_OPERATION
-    gckOS_AcquireClockMutex(Os, Core);
-#endif
+    if (has_feat_dfc_protect_clk_op())
+        gckOS_AcquireClockMutex(Os, Core);
 
     if (DisableClk)
     {
@@ -9355,9 +9334,8 @@ gckOS_SetGPUPowerOffMRVL(
         gpu_pwr_disable_unprepare(iface);
     }
 
-#if MRVL_DFC_PROTECT_CLK_OPERATION
-    gckOS_ReleaseClockMutex(Os, Core);
-#endif
+    if (has_feat_dfc_protect_clk_op())
+        gckOS_ReleaseClockMutex(Os, Core);
 
     up_write(&Os->rwsem_clk_pwr);
 
@@ -9365,906 +9343,6 @@ OnError:
     gcmkFOOTER_NO();
     return gcvSTATUS_OK;
 }
-
-# else /* MRVL_ENABLE_COMMON_PWRCLK_FRAMEWORK == 0 */
-
-/*###### Power Declaration ##############################*/
-#if MRVL_2D3D_POWER_SEPARATED && (MRVL_PLATFORM_TTD2)
-extern void gc3d_pwr(unsigned int);
-    #define GC3D_PWR    gc3d_pwr
-#elif MRVL_2D3D_POWER_SEPARATED && (MRVL_PLATFORM_ADIR)
-
-    #if gcdMULTI_GPU > 1
-        extern void gc3d_pwr(unsigned int);
-            #define GC3D_PWR    gc3d_pwr
-    #else
-        extern void gc3d1_pwr(unsigned int);
-            #define GC3D_PWR    gc3d1_pwr
-    #endif
-
-#else
-extern void gc_pwr(int);
-    #define GC3D_PWR    gc_pwr
-#endif
-
-#if MRVL_2D3D_POWER_SEPARATED
-#  if MRVL_PLATFORM_TTD2 || MRVL_PLATFORM_ADIR
-extern void gc2d_pwr(unsigned int);
-#  else
-extern void gc2d_pwr(int);
-#  endif
-    #define GC2D_PWR    gc2d_pwr
-#else
-    #define GC2D_PWR    gc_pwr
-#endif
-
-/*###### Clock Declaration ##############################*/
-#if MRVL_2D3D_CLOCK_SEPARATED
-/* if enable 3d clock */
-#   if MRVL_PLATFORM_TTD2
-        #define GC3D_CLK_NAME   "GC3D_CLK1X"
-#   elif MRVL_PLATFORM_ADIR
-        #if gcdMULTI_GPU > 1
-            #define GC3D_CLK_NAME   "GC3D_CLK"
-        #else
-            #define GC3D_CLK_NAME   "GC3D1_CLK"
-        #endif
-#   else
-        #define GC3D_CLK_NAME   "GCCLK"
-#   endif
-
-/* if enable 2d clock */
-#   if MRVL_PLATFORM_TTD2 || MRVL_PLATFORM_ADIR
-        #define GC2D_CLK_NAME   "GC2D_CLK"
-#   else
-        #define GC2D_CLK_NAME   "GC2DCLK"
-#   endif
-
-/* if enable 3d shader clock */
-# if MRVL_3D_CORE_SH_CLOCK_SEPARATED
-#   if MRVL_PLATFORM_TTD2
-        #define GCSH_CLK_NAME   "GC3D_CLK2X"
-#   elif MRVL_PLATFORM_ADIR
-        #if gcdMULTI_GPU > 1
-            #define GCSH_CLK_NAME   "GC3D_SHADER_CLK"
-        #else
-            #define GCSH_CLK_NAME   "GC3D1_SHADER_CLK"
-        #endif
-#   elif MRVL_PLATFORM_PXA988_FAMILY
-        #define GCSH_CLK_NAME   "GC_SHADER_CLK"
-#   endif
-# endif
-
-#else
-    #define GC3D_CLK_NAME   "GCCLK"
-#endif
-/*###### END of Declaration #############################*/
-
-static gceSTATUS
-_GetGcClock(
-    IN gceCORE Core,
-#if MRVL_3D_CORE_SH_CLOCK_SEPARATED
-    IN gctBOOL isShaderClk,
-#endif
-    OUT struct clk** Clk
-    )
-{
-#if MRVL_3D_CORE_SH_CLOCK_SEPARATED
-    /* TD2(Eden) has seperate 1x(core) and 2x(shader) clock.
-    * clkGC[0] = GC3D_CLK1X; clkGC[1] = GC3D_CLK2X; clkGC[2] = GC2D_CLK
-    */
-    static struct clk * clkGC[gcdMAX_GPU_COUNT + 1] = {gcvNULL, gcvNULL, gcvNULL, gcvNULL};
-#else
-    static struct clk * clkGC[gcdMAX_GPU_COUNT] = {gcvNULL, gcvNULL, gcvNULL};
-#endif
-    gctUINT32 clkIndex = 0;
-
-#if MRVL_3D_CORE_SH_CLOCK_SEPARATED
-    if(Core == gcvCORE_MAJOR)
-    {
-        if(!isShaderClk)
-        {
-            clkIndex = 0;
-        }
-        else
-        {
-            clkIndex = 1;
-        }
-    }
-    else if(Core == gcvCORE_2D)
-    {
-        clkIndex = 2;
-    }
-    else
-    {
-        gcmkPRINT("%4d: clk get error: Invalid Argument\n", __LINE__);
-        return gcvSTATUS_INVALID_ARGUMENT;
-    }
-#else
-    clkIndex = Core;
-#endif
-
-    if(clkGC[clkIndex] == gcvNULL)
-    {
-        struct clk * tmp = gcvNULL;
-        *Clk = gcvNULL;
-
-#if MRVL_3D_CORE_SH_CLOCK_SEPARATED
-
-        if(Core == gcvCORE_MAJOR)
-        {
-            if(!isShaderClk)
-            {
-                tmp = clk_get(gcvNULL, GC3D_CLK_NAME);
-            }
-            else
-            {
-                tmp = clk_get(gcvNULL, GCSH_CLK_NAME);
-            }
-        }
-        else if(Core == gcvCORE_2D)
-        {
-            tmp = clk_get(gcvNULL, GC2D_CLK_NAME);
-        }
-
-#else
-        tmp = clk_get(gcvNULL, GC3D_CLK_NAME);
-#endif
-
-        if (IS_ERR(tmp))
-        {
-            gcmkPRINT("%4dL: clk get error: %ld\n", __LINE__, PTR_ERR(tmp));
-            return gcvSTATUS_GENERIC_IO;
-        }
-
-        clkGC[clkIndex] = tmp;
-    }
-
-    *Clk = clkGC[clkIndex];
-    return gcvSTATUS_OK;
-}
-
-#if MRVL_CONFIG_SHADER_CLK_CONTROL
-gceSTATUS
-gckOS_QueryShClkRate(
-    IN gckOS Os,
-    IN gceCORE Core,
-    OUT gctUINT32_PTR Rate
-    )
-{
-    gceSTATUS status;
-    gctUINT32 rate = 0;
-    struct clk * clkGC = gcvNULL;
-
-    gcmkHEADER_ARG("Os=0x%X Rate=0x%X", Os, Os, Rate);
-    gcmkVERIFY_OBJECT(Os, gcvOBJ_OS);
-    gcmkVERIFY_ARGUMENT(Rate != gcvNULL);
-
-    gcmkONERROR(_GetGcClock(Core,
-#if MRVL_3D_CORE_SH_CLOCK_SEPARATED
-                            gcvTRUE,
-#endif
-                            &clkGC));
-    rate = clk_get_rate(clkGC);
-
-    if(rate == (unsigned long)-1)
-    {
-        *Rate = 0;
-        status = gcvSTATUS_INVALID_DATA;
-        goto OnError;
-    }
-
-    *Rate = rate;
-    gcmkFOOTER_NO();
-    return gcvSTATUS_OK;
-OnError:
-    gcmkFOOTER();
-    return status;
-}
-
-gceSTATUS
-gckOS_SetShClkRate(
-    IN gckOS Os,
-    IN gceCORE Core,
-    IN gctUINT32 Rate
-    )
-{
-    gceSTATUS status;
-    struct clk * clkGC = gcvNULL;
-
-    gcmkHEADER_ARG("Os=0x%X Rate=0x%X", Os, Os, Rate);
-    gcmkVERIFY_OBJECT(Os, gcvOBJ_OS);
-
-    gcmkONERROR(_GetGcClock(Core,
-#if MRVL_3D_CORE_SH_CLOCK_SEPARATED
-                            gcvTRUE,
-#endif
-                            &clkGC));
-    clk_set_rate(clkGC, Rate);
-
-    gcmkFOOTER_NO();
-    return gcvSTATUS_OK;
-OnError:
-    gcmkFOOTER();
-    return status;
-}
-#endif
-
-gceSTATUS
-gckOS_QueryClkRate(
-    IN gckOS Os,
-    IN gceCORE Core,
-    OUT gctUINT32_PTR Rate
-    )
-{
-    gceSTATUS status;
-    gctUINT32 rate = 0;
-    struct clk * clkGC = gcvNULL;
-
-    gcmkHEADER_ARG("Os=0x%X Rate=0x%X", Os, Os, Rate);
-    gcmkVERIFY_OBJECT(Os, gcvOBJ_OS);
-    gcmkVERIFY_ARGUMENT(Rate != gcvNULL);
-
-#if MRVL_3D_CORE_SH_CLOCK_SEPARATED
-    if (Core == gcvCORE_SH)
-    {
-        gcmkONERROR(_GetGcClock(gcvCORE_MAJOR,
-                                gcvTRUE,
-                                &clkGC));
-
-    }
-    else
-    {
-        gcmkONERROR(_GetGcClock(Core,
-                                gcvFALSE,
-                                &clkGC));
-    }
-#else
-    gcmkONERROR(_GetGcClock(Core, &clkGC));
-#endif
-    rate = clk_get_rate(clkGC);
-
-    if(rate == (unsigned long)-1)
-    {
-        *Rate = 0;
-        status = gcvSTATUS_INVALID_DATA;
-        goto OnError;
-    }
-
-    *Rate = rate;
-    gcmkFOOTER_NO();
-    return gcvSTATUS_OK;
-OnError:
-    gcmkFOOTER();
-    return status;
-}
-
-gceSTATUS
-gckOS_SetClkRate(
-    IN gckOS Os,
-    IN gceCORE Core,
-    IN gctUINT32 Rate
-    )
-{
-    gceSTATUS status;
-    struct clk * clkGC = gcvNULL;
-
-    gcmkHEADER_ARG("Os=0x%X Rate=0x%X", Os, Os, Rate);
-    gcmkVERIFY_OBJECT(Os, gcvOBJ_OS);
-
-#if MRVL_3D_CORE_SH_CLOCK_SEPARATED
-    if (Core == gcvCORE_SH)
-    {
-        gcmkONERROR(_GetGcClock(gcvCORE_MAJOR,
-                                gcvTRUE,
-                                &clkGC));
-    }
-    else
-    {
-        gcmkONERROR(_GetGcClock(Core,
-                                gcvFALSE,
-                                &clkGC));
-    }
-#else
-    gcmkONERROR(_GetGcClock(Core, &clkGC));
-#endif
-    clk_set_rate(clkGC, Rate);
-
-    gcmkFOOTER_NO();
-    return gcvSTATUS_OK;
-OnError:
-    gcmkFOOTER();
-    return status;
-}
-
-static gceSTATUS
-_EnableGpuPower(
-    IN gceCORE Core,
-    IN gctBOOL enable
-    )
-{
-    switch(Core)
-    {
-    case gcvCORE_MAJOR:
-        GC3D_PWR(enable);
-        break;
-    case gcvCORE_2D:
-        GC2D_PWR(enable);
-        break;
-    default:
-        gcmkPRINT("%s: invalid core %d val %d\n", __func__, Core, enable);
-    }
-
-    /* Delay 10 us to wait for chip stable. */
-    gckOS_Udelay(gcvNULL, 10);
-
-    return gcvSTATUS_OK;
-}
-
-gceSTATUS
-gckOS_GpuPowerEnable(
-    IN gckOS Os,
-    IN gceCORE Core,
-    IN gctBOOL enableClk,
-    IN gctBOOL enablePwr,
-    IN gctUINT32 Frequency
-    )
-{
-    gceSTATUS status;
-#if MRVL_DFC_PROTECT_CLK_OPERATION
-    gctBOOL clockMutexAcquired = gcvFALSE;
-#endif
-
-#if MRVL_CONFIG_POWER_CLOCK_SEPARATED
-    /* 3. enable GC power */
-    if(enablePwr)
-    {
-#if MRVL_DFC_PROTECT_CLK_OPERATION
-        gckOS_AcquireClockMutex(Os, Core);
-        clockMutexAcquired = gcvTRUE;
-#endif
-
-    /* Power on at 156MHz, because gc clock may also be set
-    to high freq when GC powered off. */
-#if MRVL_DFC_JUMP_HI_INDIRECT
-        {
-        struct clk * clkGC = gcvNULL;
-        unsigned int clkRate = ~0;
-
-#if MRVL_3D_CORE_SH_CLOCK_SEPARATED
-        if(gcvCORE_MAJOR == Core)
-        {
-            _GetGcClock(Core, gcvTRUE, &clkGC);
-            clkRate = clk_get_rate(clkGC);
-
-            /* Power on when clock <= 312MHz is safe. */
-            if(clkRate > 312000000)
-            {
-                clk_set_rate(clkGC, 156000000);
-            }
-        }
-#endif
-
-        _GetGcClock(Core,
-#if MRVL_3D_CORE_SH_CLOCK_SEPARATED
-                    gcvFALSE,
-#endif
-                    &clkGC);
-        clkRate = clk_get_rate(clkGC);
-
-        /* Power on when clock <= 312MHz is safe. */
-        if(clkRate > 312000000)
-        {
-            clk_set_rate(clkGC, 156000000);
-        }
-        }
-#endif
-        _EnableGpuPower(Core, 1);
-
-#if MRVL_DFC_PROTECT_CLK_OPERATION
-        gckOS_ReleaseClockMutex(Os, Core);
-        clockMutexAcquired = gcvFALSE;
-#endif
-    }
-#endif
-
-    if(enableClk)
-    {
-        struct clk * clkGC = gcvNULL;
-
-#if MRVL_DFC_PROTECT_CLK_OPERATION
-        gckOS_AcquireClockMutex(Os, Core);
-        clockMutexAcquired = gcvTRUE;
-#endif
-
-        /* 2. enable gc clock */
-        gcmkONERROR(_GetGcClock(Core,
-#if MRVL_3D_CORE_SH_CLOCK_SEPARATED
-                                gcvFALSE,
-#endif
-                                &clkGC));
-
-#if MRVL_PLATFORM_TTD2|| MRVL_PLATFORM_ADIR
-        if(Frequency != 0)
-        {
-            if (clk_set_rate(clkGC, Frequency))
-            {
-                gcmkPRINT("Set gpu core clock rate error.");
-                return -EAGAIN;
-            }
-        }
-#endif
-
-        GC_CLK_ENABLE(clkGC);
-
-        if(Frequency != 0)
-        {
-            gctUINT32 running_freq = 0;
-            running_freq = clk_get_rate(clkGC);
-            printk("\n[galcore] GC %d clk1x %p running at %d MHz\n\n", Core, clkGC, (gctUINT32)running_freq/1000/1000);
-        }
-
-#if MRVL_3D_CORE_SH_CLOCK_SEPARATED
-        if(gcvCORE_MAJOR == Core)
-        {
-            /* Enable Shader clock. */
-            gcmkONERROR(_GetGcClock(Core, gcvTRUE, &clkGC));
-
-#if MRVL_PLATFORM_TTD2 || MRVL_PLATFORM_ADIR
-            if(Frequency != 0)
-            {
-                if (clk_set_rate(clkGC, Frequency))
-                {
-                    gcmkPRINT("Set gpu core clock rate error.");
-                    return -EAGAIN;
-                }
-            }
-#endif
-
-            GC_CLK_ENABLE(clkGC);
-
-            if(Frequency != 0)
-            {
-                gctUINT32 running_freq = 0;
-                running_freq = clk_get_rate(clkGC);
-                printk("\n[galcore] GC %d clk2x %p running at %d MHz\n\n", Core, clkGC, (gctUINT32)running_freq/1000/1000);
-            }
-        }
-#endif
-
-#if MRVL_DFC_PROTECT_CLK_OPERATION
-        gckOS_ReleaseClockMutex(Os, Core);
-        clockMutexAcquired = gcvFALSE;
-#endif
-    }
-
-    return gcvSTATUS_OK;
-OnError:
-#if MRVL_DFC_PROTECT_CLK_OPERATION
-    if (clockMutexAcquired)
-    {
-        gckOS_ReleaseClockMutex(Os, Core);
-    }
-#endif
-
-    return status;
-}
-
-gceSTATUS
-gckOS_GpuPowerDisable(
-    IN gckOS Os,
-    IN gceCORE Core,
-    IN gctBOOL disableClk,
-    IN gctBOOL disablePwr
-    )
-{
-    gceSTATUS status;
-#if MRVL_DFC_PROTECT_CLK_OPERATION
-    gctBOOL clockMutexAcquired = gcvFALSE;
-#endif
-
-    if(disableClk)
-    {
-        /* 2. disable GC clock */
-        struct clk * clkGC = gcvNULL;
-
-#if MRVL_DFC_PROTECT_CLK_OPERATION
-        gckOS_AcquireClockMutex(Os, Core);
-        clockMutexAcquired = gcvTRUE;
-#endif
-
-#if MRVL_3D_CORE_SH_CLOCK_SEPARATED
-        if(gcvCORE_MAJOR == Core)
-        {
-            gcmkONERROR(_GetGcClock(Core, gcvTRUE, &clkGC)); /* Shader clock. */
-            GC_CLK_DISABLE(clkGC);
-        }
-#endif
-        gcmkONERROR(_GetGcClock(Core,
-#if MRVL_3D_CORE_SH_CLOCK_SEPARATED
-                                gcvFALSE,
-#endif
-                                &clkGC));
-        GC_CLK_DISABLE(clkGC);
-
-#if MRVL_DFC_PROTECT_CLK_OPERATION
-        gckOS_ReleaseClockMutex(Os, Core);
-        clockMutexAcquired = gcvFALSE;
-#endif
-    }
-
-#if MRVL_CONFIG_POWER_CLOCK_SEPARATED
-    /* 1. disable GC power */
-    if(disablePwr)
-    {
-#if MRVL_DFC_PROTECT_CLK_OPERATION
-        gckOS_AcquireClockMutex(Os, Core);
-        clockMutexAcquired = gcvTRUE;
-#endif
-
-#if MRVL_DFC_JUMP_HI_INDIRECT
-        {
-        struct clk * clkGC = gcvNULL;
-
-#if MRVL_3D_CORE_SH_CLOCK_SEPARATED
-        if(gcvCORE_MAJOR == Core)
-        {
-            _GetGcClock(Core, gcvTRUE, &clkGC);
-            clk_set_rate(clkGC, 156000000);
-        }
-#endif
-
-        _GetGcClock(Core,
-#if MRVL_3D_CORE_SH_CLOCK_SEPARATED
-                    gcvFALSE,
-#endif
-                    &clkGC);
-        clk_set_rate(clkGC, 156000000);
-        }
-#endif
-        _EnableGpuPower(Core, 0);
-
-#if MRVL_DFC_PROTECT_CLK_OPERATION
-        gckOS_ReleaseClockMutex(Os, Core);
-        clockMutexAcquired = gcvFALSE;
-#endif
-    }
-#endif
-
-    return gcvSTATUS_OK;
-OnError:
-#if MRVL_DFC_PROTECT_CLK_OPERATION
-    if (clockMutexAcquired)
-    {
-        gckOS_ReleaseClockMutex(Os, Core);
-    }
-#endif
-
-    return status;
-}
-
-static gceSTATUS inline
-_ToEnablePower(
-    IN gckOS Os,
-    IN gceCORE Core,
-    OUT gctBOOL * EnablePwr
-    )
-{
-    gctBOOL enablePwr = gcvFALSE;
-
-#if MRVL_2D3D_POWER_SEPARATED
-    gckHARDWARE hardware = Os->device->kernels[Core]->hardware;
-
-    switch(hardware->refExtPower)
-    {
-    case 0:
-        enablePwr = gcvTRUE;
-        /* fall through */
-    default:
-        hardware->refExtPower++;
-        if(Os->device->powerDebug)
-        {
-            gcmkPRINT("[%d]%s: ref_pwr %d, enable_pwr %d", Core, __func__,
-                      hardware->refExtPower, enablePwr);
-        }
-    }
-
-    if(hardware->refExtPower > 1)
-    {
-        hardware->refExtPower--;
-        gcmkPRINT("WARNING: too much enable for GPU %d power!", Core);
-    }
-#else
-    switch(Os->powerDepth)
-    {
-    case 0:
-        enablePwr = gcvTRUE;
-        /* fall through */
-    default:
-        Os->powerDepth++;
-        if(Os->device->powerDebug)
-        {
-            gcmkPRINT("[%d]%s: depth %d, enable_pwr %d", Core, __func__,
-                      Os->powerDepth, enablePwr);
-        }
-    }
-
-    if(Os->powerDepth > MRVL_MAX_POWER_DEPTH)
-    {
-        Os->powerDepth--;
-        gcmkPRINT("WARNING: too much enable for GPU power!");
-    }
-#endif
-
-    *EnablePwr = enablePwr;
-
-    return gcvSTATUS_OK;
-}
-
-static gceSTATUS inline
-_ToDisablePower(
-    IN gckOS Os,
-    IN gceCORE Core,
-    OUT gctBOOL * DisablePwr
-    )
-{
-    gctBOOL disablePwr = gcvFALSE;
-
-#if MRVL_2D3D_POWER_SEPARATED
-    gckHARDWARE hardware = Os->device->kernels[Core]->hardware;
-
-    switch(hardware->refExtPower)
-    {
-    case 0:
-        gcmkPRINT("WARNING: too much disable for GPU %d power!", Core);
-        break;
-    case 1:
-        disablePwr = gcvTRUE;
-        /* fall through */
-    default:
-        hardware->refExtPower--;
-        if(Os->device->powerDebug)
-        {
-            gcmkPRINT("[%d]%s: ref_pwr %d, disable_pwr %d", Core, __func__,
-                      hardware->refExtPower, disablePwr);
-        }
-    }
-#else
-    switch(Os->powerDepth)
-    {
-    case 0:
-        gcmkPRINT("WARNING: too much disable for GPU power!");
-        break;
-    case 1:
-        disablePwr = gcvTRUE;
-        /* fall through */
-    default:
-        Os->powerDepth--;
-        if(Os->device->powerDebug)
-        {
-            gcmkPRINT("[%d]%s: depth %d, disable_pwr %d", Core, __func__,
-                      Os->powerDepth, disablePwr);
-        }
-    }
-#endif
-
-    *DisablePwr = disablePwr;
-
-    return gcvSTATUS_OK;
-}
-
-static gceSTATUS inline
-_ToEnableClock(
-    IN gckOS Os,
-    IN gceCORE Core,
-    OUT gctBOOL * EnableClk
-    )
-{
-    gctBOOL enableClk = gcvFALSE;
-
-#if MRVL_2D3D_CLOCK_SEPARATED
-    gckHARDWARE hardware = Os->device->kernels[Core]->hardware;
-
-    switch(hardware->refExtClock)
-    {
-    case 0:
-        enableClk = gcvTRUE;
-        /* fall through */
-    default:
-        hardware->refExtClock++;
-        if(Os->device->powerDebug)
-        {
-            gcmkPRINT("[%d]%s: ref_clk %d, enable_clk %d", Core, __func__,
-                      hardware->refExtClock, enableClk);
-        }
-    }
-
-    if(hardware->refExtClock > 1)
-    {
-        hardware->refExtClock--;
-        gcmkPRINT("WARNING: too much enable for GPU %d clock!", Core);
-    }
-#else
-    /* 2D&3D clocks are combined */
-    switch(Os->clockDepth)
-    {
-    case 0:
-        enableClk = gcvTRUE;
-        /* fall through */
-    default:
-        Os->clockDepth++;
-        if(Os->device->powerDebug)
-        {
-            gcmkPRINT("[%d]%s: depth %d, enable_clk %d", Core, __func__,
-                      Os->clockDepth, enableClk);
-        }
-    }
-
-    if(Os->clockDepth > MRVL_MAX_CLOCK_DEPTH)
-    {
-        Os->clockDepth--;
-        gcmkPRINT("WARNING: too much enable for GPU clock!");
-    }
-#endif
-
-    *EnableClk = enableClk;
-
-    return gcvSTATUS_OK;
-}
-
-static gceSTATUS inline
-_ToDisableClock(
-    IN gckOS Os,
-    IN gceCORE Core,
-    OUT gctBOOL * DisableClk
-    )
-{
-    gctBOOL disableClk = gcvFALSE;
-
-#if MRVL_2D3D_CLOCK_SEPARATED
-    gckHARDWARE hardware = Os->device->kernels[Core]->hardware;
-
-    switch(hardware->refExtClock)
-    {
-    case 0:
-        gcmkPRINT("WARNING: too much disable for GPU %d clock!", Core);
-        break;
-    case 1:
-        disableClk = gcvTRUE;
-        /* fall through */
-    default:
-        hardware->refExtClock--;
-        if(Os->device->powerDebug)
-        {
-            gcmkPRINT("[%d]%s: ref_clk %d, disable_clk %d", Core, __func__,
-                      hardware->refExtClock, disableClk);
-        }
-    }
-#else
-    /* 2D&3D clocks are combined */
-    switch(Os->clockDepth)
-    {
-    case 0:
-        gcmkPRINT("WARNING: too much disable for GPU clock!");
-        break;
-    case 1:
-        disableClk = gcvTRUE;
-        /* fall through */
-    default:
-        Os->clockDepth--;
-        if(Os->device->powerDebug)
-        {
-            gcmkPRINT("[%d]%s: depth %d, disable_clk %d", Core, __func__,
-                      Os->clockDepth, disableClk);
-        }
-    }
-#endif
-
-    *DisableClk = disableClk;
-
-    return gcvSTATUS_OK;
-}
-
-gceSTATUS
-gckOS_SetGPUPowerOnMRVL(
-    IN gckOS Os,
-    IN gceCORE Core,
-    IN gctBOOL EnableClk,
-    IN gctBOOL EnablePwr
-    )
-{
-    gctBOOL enableClk = gcvFALSE;
-    gctBOOL enablePwr = gcvFALSE;
-    gcmkHEADER_ARG("Os=0x%X Core=%d EnableClk=%d EnablePwr=%d", Os, Core, EnableClk, EnablePwr);
-
-    gcmkVERIFY_OBJECT(Os, gcvOBJ_OS);
-
-    down_write(&Os->rwsem_clk_pwr);
-
-    if(EnableClk)
-    {
-        _ToEnableClock(Os, Core, &enableClk);
-    }
-
-    if(EnablePwr)
-    {
-        _ToEnablePower(Os, Core, &enablePwr);
-    }
-
-
-    if(enableClk || enablePwr)
-    {
-#if !MRVL_CONFIG_POWER_CLOCK_SEPARATED
-        if(enablePwr == gcvTRUE)
-#endif
-        {
-            gctUINT32 nextRate = 0;
-
-#if MRVL_CONFIG_POWER_CLOCK_SEPARATED
-            gckOS_GpuPowerEnable(Os, Core, enableClk, enablePwr, nextRate*1000*1000);
-#else
-            gckOS_GpuPowerEnable(Os, Core, gcvTRUE, gcvTRUE, nextRate*1000*1000);
-#endif
-        }
-    }
-
-    up_write(&Os->rwsem_clk_pwr);
-
-    gcmkFOOTER_NO();
-    return gcvSTATUS_OK;
-}
-
-gceSTATUS
-gckOS_SetGPUPowerOffMRVL(
-    IN gckOS Os,
-    IN gceCORE Core,
-    IN gctBOOL DisableClk,
-    IN gctBOOL DisablePwr
-    )
-{
-    gctBOOL disableClk = gcvFALSE;
-    gctBOOL disablePwr = gcvFALSE;
-    gcmkHEADER_ARG("Os=0x%X Core=%d DisableClk=%d DisablePwr=%d", Os, Core, DisableClk, DisablePwr);
-
-    gcmkVERIFY_OBJECT(Os, gcvOBJ_OS);
-
-    down_write(&Os->rwsem_clk_pwr);
-
-    if (DisableClk)
-    {
-        _ToDisableClock(Os, Core, &disableClk);
-    }
-
-    if (DisablePwr)
-    {
-        _ToDisablePower(Os, Core, &disablePwr);
-    }
-
-    if (disableClk || disablePwr)
-    {
-#if !MRVL_CONFIG_POWER_CLOCK_SEPARATED
-        /* both clock and power of 2D/3D is off, then call kernel function to power off.
-            since in current kernel implementation, clock and power is not separated, we
-            only need to cover power domain.
-        */
-        if (Os->clockDepth == 0 && Os->powerDepth == 0)
-#endif
-        {
-#if MRVL_CONFIG_POWER_CLOCK_SEPARATED
-            gckOS_GpuPowerDisable(Os, Core, disableClk, disablePwr);
-#else
-            gckOS_GpuPowerDisable(Os, Core, gcvTRUE, gcvTRUE);
-#endif
-        }
-    }
-
-    up_write(&Os->rwsem_clk_pwr);
-
-    gcmkFOOTER_NO();
-    return gcvSTATUS_OK;
-}
-
-# endif /* MRVL_ENABLE_COMMON_PWRCLK_FRAMEWORK */
 
 static gceSTATUS
 _IdleProfile(
@@ -10471,10 +9549,11 @@ gckOS_QueryRegisterStats(
         gcmkVERIFY_OK(gckOS_QueryClkRate(Os, gcvCORE_MAJOR, &clockRate));
         gcmkPRINT("3D clock rate: [%d] MHz\n", (gctUINT32)clockRate/1000/1000);
 
-#if MRVL_3D_CORE_SH_CLOCK_SEPARATED
-        gcmkVERIFY_OK(gckOS_QueryClkRate(Os, gcvCORE_SH, &clockRate));
-        gcmkPRINT("SH clock rate: [%d] MHz\n", (gctUINT32)clockRate/1000/1000);
-#endif
+        if (has_feat_3d_shader_clock())
+        {
+            gcmkVERIFY_OK(gckOS_QueryClkRate(Os, gcvCORE_SH, &clockRate));
+            gcmkPRINT("SH clock rate: [%d] MHz\n", (gctUINT32)clockRate/1000/1000);
+        }
 
         if (kernel[gcvCORE_2D] != gcvNULL)
         {
@@ -11619,7 +10698,7 @@ OnError:
 }
 #endif
 
-#if MRVL_PLATFORM_TTD2
+typedef int (*PFUNC_GET_FREQS_TBL)(unsigned long *, unsigned int *, unsigned int);
 #define HIGH_PERFORMANCE_FREQ   797333
 gceSTATUS gckOS_QueryPlatPerformance(
     IN  gckOS Os,
@@ -11630,21 +10709,42 @@ gceSTATUS gckOS_QueryPlatPerformance(
     unsigned int freqItemCount = 0;
     unsigned long maxFreq = 0;
     unsigned int idx;
+    PFUNC_GET_FREQS_TBL get_freq_table;
 
-    /*Get max freq in Hz.*/
-    get_gc3d_freqs_table(freqs, &freqItemCount, 10);
-
-    for ( idx = 0; idx < freqItemCount; idx++)
+    if (cpu_is_pxa1928_a0())
     {
-        if (maxFreq < freqs[idx])
+#if CONFIG_KALLSYMS
+        get_freq_table = (PFUNC_GET_FREQS_TBL)kallsyms_lookup_name("get_gc3d_freqs_table");
+
+#elif defined(CONFIG_ARM64)
+extern int get_gc3d_freqs_table(unsigned long *gcu3d_freqs_table,
+                        unsigned int *item_counts, unsigned int max_item_counts);
+
+        get_freq_table = get_gc3d_freqs_table;
+#else
+
+        *isHighPerfPlat = gcvTRUE;
+        return gcvSTATUS_OK;
+#endif
+        /*Get max freq in Hz.*/
+        get_freq_table(freqs, &freqItemCount, 10);
+
+        for ( idx = 0; idx < freqItemCount; idx++)
         {
-            maxFreq = freqs[idx];
+            if (maxFreq < freqs[idx])
+            {
+                maxFreq = freqs[idx];
+            }
         }
-    }
 
-    if (maxFreq < HIGH_PERFORMANCE_FREQ * 1000)
-    {
-        *isHighPerfPlat = gcvFALSE;
+        if (maxFreq < HIGH_PERFORMANCE_FREQ * 1000)
+        {
+            *isHighPerfPlat = gcvFALSE;
+        }
+        else
+        {
+            *isHighPerfPlat = gcvTRUE;
+        }
     }
     else
     {
@@ -11653,5 +10753,4 @@ gceSTATUS gckOS_QueryPlatPerformance(
 
     return gcvSTATUS_OK;
 }
-#endif
 

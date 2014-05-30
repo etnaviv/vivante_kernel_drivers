@@ -58,13 +58,6 @@
 #define MRVL_PLATFORM_TTD2_FPGA                 0
 #endif
 
-#if (defined CONFIG_CPU_TTD2) || (defined CONFIG_CPU_EDEN) || \
-    (defined CONFIG_CPU_PXA1928)
-#define MRVL_PLATFORM_TTD2                      1
-#else
-#define MRVL_PLATFORM_TTD2                      0
-#endif
-
 #ifdef CONFIG_CPU_PXA1986
 #define MRVL_PLATFORM_ADIR                      1
 #else
@@ -78,36 +71,6 @@
 #define MRVL_ENABLE_GC_POWER_CLOCK              1
 #else
 #define MRVL_ENABLE_GC_POWER_CLOCK              0
-#endif
-
-/*
- * Use common power/clock framework
- */
-#if (MRVL_PLATFORM_PXA988_FAMILY) || (MRVL_PLATFORM_TTD2)
-#define MRVL_ENABLE_COMMON_PWRCLK_FRAMEWORK     1
-#else
-#define MRVL_ENABLE_COMMON_PWRCLK_FRAMEWORK     0
-#endif
-
-/* FIXME: EDEN 2D could NOT be power off now, so hack it here */
-#if MRVL_PLATFORM_TTD2
-#define MRVL_2D_POWER_DYNAMIC_ONOFF             1
-#else
-#define MRVL_2D_POWER_DYNAMIC_ONOFF             1
-#endif
-
-#if MRVL_PLATFORM_PXA988_FAMILY || \
-    MRVL_PLATFORM_TTD2 || MRVL_PLATFORM_ADIR
-#define MRVL_CONFIG_POWER_CLOCK_SEPARATED       1
-#else
-#define MRVL_CONFIG_POWER_CLOCK_SEPARATED       0
-#endif
-
-#if (defined ANDROID) && (!VIVANTE_PROFILER) && \
-    (MRVL_PLATFORM_PXA988_FAMILY || MRVL_PLATFORM_TTD2)
-#define MRVL_POLICY_CLKOFF_WHEN_IDLE            1
-#else
-#define MRVL_POLICY_CLKOFF_WHEN_IDLE            0
 #endif
 
 /*
@@ -147,55 +110,6 @@
 #define MRVL_ENABLE_WHITE_LIST                  0
 #endif
 
-/*
-    Reference count for HW clock/power enable/disable:
-
-    MRVL_2D3D_CLOCK_SEPARATED
-        -- 2D & 3D has separated *clock* domains
-
-    MRVL_2D3D_POWER_SEPARATED
-        -- 2D & 3D has separated *power* domains
-
-    MRVL_MAX_CLOCK_DEPTH
-        -- reference count for 2D&3D combined *clock* domains
-
-    MRVL_MAX_POWER_DEPTH
-        -- reference count for 2D&3D combined *power* domains
-*/
-
-#if MRVL_PLATFORM_PXA988_FAMILY || \
-    MRVL_PLATFORM_TTD2 || MRVL_PLATFORM_ADIR
-#define MRVL_2D3D_CLOCK_SEPARATED               1
-#else
-#define MRVL_2D3D_CLOCK_SEPARATED               0
-#endif
-
-#if MRVL_PLATFORM_PXA988_FAMILY || MRVL_PLATFORM_TTD2 || MRVL_PLATFORM_ADIR
-#define MRVL_2D3D_POWER_SEPARATED               1
-#else
-#define MRVL_2D3D_POWER_SEPARATED               0
-#endif
-
-/* Dedicated for shader clock enable/disable */
-#if MRVL_PLATFORM_PXA988_FAMILY || MRVL_PLATFORM_TTD2 || MRVL_PLATFORM_ADIR
-#define MRVL_3D_CORE_SH_CLOCK_SEPARATED         1
-#else
-#define MRVL_3D_CORE_SH_CLOCK_SEPARATED         0
-#endif
-
-/* Dedicated for shader clock DFC */
-#if (MRVL_3D_CORE_SH_CLOCK_SEPARATED) && (MRVL_PLATFORM_PXA988_FAMILY)
-#define MRVL_CONFIG_SHADER_CLK_CONTROL          1
-#else
-#define MRVL_CONFIG_SHADER_CLK_CONTROL          0
-#endif
-
-#if MRVL_PLATFORM_TTD2
-#define MRVL_2D3D_AXI_CLOCK_SEPARATED           1
-#else
-#define MRVL_2D3D_AXI_CLOCK_SEPARATED           0
-#endif
-
 #define MRVL_MAX_CLOCK_DEPTH                    1
 #define MRVL_MAX_POWER_DEPTH                    1
 
@@ -213,11 +127,7 @@
     MRVL_CONFIG_ENABLE_GC_TRACE
         -- enable GC trace support
 */
-#if (defined ANDROID) && (MRVL_PLATFORM_PXA988_FAMILY || MRVL_PLATFORM_TTD2)
 #define MRVL_CONFIG_ENABLE_GC_TRACE             1
-#else
-#define MRVL_CONFIG_ENABLE_GC_TRACE             0
-#endif
 
 /*
     MRVL_CONFIG_POWER_VALIDATION
@@ -233,46 +143,26 @@
     MRVL_CONFIG_ENABLE_GPUFREQ
         -- Marco for enabling GPUFREQ
 */
-#if (defined ANDROID || defined X11) && (USE_GPU_FREQ) && (MRVL_CONFIG_SYSFS) \
-    && ((MRVL_PLATFORM_PXA988_FAMILY) || (MRVL_PLATFORM_TTD2))
+#if (defined ANDROID || defined X11) && (USE_GPU_FREQ) && (MRVL_CONFIG_SYSFS)
 #define MRVL_CONFIG_ENABLE_GPUFREQ              1
 #else
 #define MRVL_CONFIG_ENABLE_GPUFREQ              0
 #endif
 
-#if (defined ANDROID) && ((MRVL_PLATFORM_PXA988_FAMILY) || (MRVL_PLATFORM_TTD2))
 #define MRVL_CONFIG_ENABLE_QOS_SUPPORT          1
-#else
-#define MRVL_CONFIG_ENABLE_QOS_SUPPORT          0
-#endif
 
 /*
     MRVL_DFC_PROTECT_REG_ACCESS
         -- Protect register access when DFC to workaround Eden Z1 GC DFC issue
 */
-#if MRVL_CONFIG_ENABLE_GPUFREQ && ((MRVL_PLATFORM_TTD2) && !defined(CONFIG_ARM64))
+#if MRVL_CONFIG_ENABLE_GPUFREQ && \
+    ((defined CONFIG_CPU_PXA1928) && !defined(CONFIG_ARM64))
 #define MRVL_DFC_PROTECT_REG_ACCESS             1
 #else
 #define MRVL_DFC_PROTECT_REG_ACCESS             0
 #endif
 
-#if (MRVL_PLATFORM_PXA988_FAMILY) || (MRVL_PLATFORM_TTD2) || (MRVL_PLATFORM_ADIR)
 #define MRVL_REDEFINE_KERNEL_MUTEX_INIT         1
-#else
-#define MRVL_REDEFINE_KERNEL_MUTEX_INIT         0
-#endif
-
-#if MRVL_CONFIG_ENABLE_GPUFREQ && (MRVL_PLATFORM_TTD2)
-#define MRVL_DFC_JUMP_HI_INDIRECT               1
-#else
-#define MRVL_DFC_JUMP_HI_INDIRECT               0
-#endif
-
-#if MRVL_CONFIG_ENABLE_GPUFREQ && (MRVL_PLATFORM_TTD2)
-#define MRVL_DFC_PROTECT_CLK_OPERATION          1
-#else
-#define MRVL_DFC_PROTECT_CLK_OPERATION          0
-#endif
 
 /*
     MRVL_ENABLE_S3TC_TEXTURE
@@ -390,7 +280,7 @@
 /* @Ziyi: If any change happened between these 2 comments please contact zyxu@marvell.com, Thanks. */
 /* #################### [START ==DO NOT CHANGE THIS MARCRO== START] #################### */
 
-#define _GC_VERSION_STRING_                     "GC version rls-pxa1928-kk44-alpha2-rc1-p6"
+#define _GC_VERSION_STRING_                     "GC version rls-pxa1928-kk44-alpha2-rc2"
 
 /* Do not align u/v stride to 16 */
 #define VIVANTE_ALIGN_UVSTRIDE                  0

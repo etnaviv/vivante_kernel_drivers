@@ -180,7 +180,6 @@ static int gpufreq_governor_userspace(struct gpufreq_policy *policy,
         mutex_unlock(&userspace_mutex);
         break;
 
-#if MRVL_DFC_JUMP_HI_INDIRECT
     case GPUFREQ_GOV_EVENT_RESUME:
         mutex_lock_nested(&userspace_mutex, GPUFREQ_GOV_EVENT_RESUME);
 
@@ -189,7 +188,6 @@ static int gpufreq_governor_userspace(struct gpufreq_policy *policy,
 
         mutex_unlock(&userspace_mutex);
         break;
-#endif
     }
 
     return ret;

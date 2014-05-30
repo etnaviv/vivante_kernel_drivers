@@ -154,14 +154,10 @@ static int showArgs = 1;
 module_param(showArgs, int, 0644);
 
 #if ENABLE_GPU_CLOCK_BY_DRIVER
-#if MRVL_PLATFORM_TTD2_FPGA
-    unsigned long coreClock = 50;
-#elif MRVL_PLATFORM_ADIR
-    unsigned long coreClock = 624;
-#elif MRVL_PLATFORM_TTD2
+#if MRVL_PLATFORM_ADIR
     unsigned long coreClock = 624;
 #else
-    unsigned long coreClock = 533;
+    unsigned long coreClock = 624;
 #endif
     module_param(coreClock, ulong, 0644);
 
@@ -968,37 +964,25 @@ static int drv_init(void)
 
     gcmkHEADER();
 
-# if MRVL_ENABLE_COMMON_PWRCLK_FRAMEWORK /* == 1 */
-
 #if ENABLE_GPU_CLOCK_BY_DRIVER && LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,28)
     {
-        gcmkONERROR(gckOS_SetGPUPowerOnBeforeInit(gcvCORE_MAJOR, gcvTRUE, gcvTRUE, coreClock * 1000));
+        gcmkONERROR(gckOS_SetGPUPowerOnBeforeInit(gcvCORE_MAJOR,
+                                                  gcvTRUE,
+                                                  gcvTRUE,
+                                                  coreClock * 1000));
 
-#   if MRVL_2D3D_CLOCK_SEPARATED
-        gcmkONERROR(gckOS_SetGPUPowerOnBeforeInit(gcvCORE_2D, gcvTRUE, gcvTRUE, coreClock2D * 1000));
-#   endif
+        if (has_feat_separated_gc_clock())
+        {
+
+            gcmkONERROR(gckOS_SetGPUPowerOnBeforeInit(gcvCORE_2D,
+                                                       gcvTRUE,
+                                                       (has_feat_separated_gc_power()
+                                                         ? gcvTRUE
+                                                         : gcvFALSE),
+                                                       coreClock2D * 1000));
+        }
     }
 #endif
-
-# else /* MRVL_ENABLE_COMMON_PWRCLK_FRAMEWORK == 0 */
-
-#if ENABLE_GPU_CLOCK_BY_DRIVER && (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,28))
-    gcmkONERROR(gckOS_GpuPowerEnable(gcvNULL, gcvCORE_MAJOR, gcvTRUE, gcvTRUE, coreClock*1000*1000));
-
-#  if MRVL_2D3D_CLOCK_SEPARATED
-#    if MRVL_2D3D_POWER_SEPARATED
-        /* PXA1L88/TTD2: enable 2D power, too */
-        gcmkONERROR(gckOS_GpuPowerEnable(gcvNULL, gcvCORE_2D, gcvTRUE, gcvTRUE, coreClock*1000*1000));
-#    else
-        /* PXA1088: 2D power is shared with 3D */
-        gcmkONERROR(gckOS_GpuPowerEnable(gcvNULL, gcvCORE_2D, gcvTRUE, gcvFALSE, coreClock*1000*1000));
-#    endif
-#  endif
-
-#endif
-
-# endif /* MRVL_ENABLE_COMMON_PWRCLK_FRAMEWORK */
-
 
     printk(KERN_INFO "Galcore version %d.%d.%d.%d\n",
         gcvVERSION_MAJOR, gcvVERSION_MINOR, gcvVERSION_PATCH, gcvVERSION_BUILD);
@@ -1192,37 +1176,20 @@ static void drv_exit(void)
         gckDEBUGFS_Terminate();
     }
 
-# if MRVL_ENABLE_COMMON_PWRCLK_FRAMEWORK  /* == 1 */
-
 #if ENABLE_GPU_CLOCK_BY_DRIVER && LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,28)
     {
-#   if MRVL_2D3D_CLOCK_SEPARATED
-        gcmkVERIFY_OK(gckOS_SetGPUPowerOffMRVL(galDevice->os, gcvCORE_2D, gcvTRUE, gcvTRUE));
-#   endif
+        if(has_feat_separated_gc_clock())
+        {
+            gcmkVERIFY_OK(gckOS_SetGPUPowerOffMRVL(galDevice->os,
+                                                   gcvCORE_2D,
+                                                   gcvTRUE,
+                                                   (has_feat_separated_gc_power()
+                                                        ? gcvTRUE
+                                                        : gcvFALSE)));
+        }
         gcmkVERIFY_OK(gckOS_SetGPUPowerOffMRVL(galDevice->os, gcvCORE_MAJOR, gcvTRUE, gcvTRUE));
     }
 #endif
-
-# else /* MRVL_ENABLE_COMMON_PWRCLK_FRAMEWORK == 0 */
-
-#if ENABLE_GPU_CLOCK_BY_DRIVER && LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,28)
-    {
-
-#  if MRVL_2D3D_CLOCK_SEPARATED
-#    if MRVL_2D3D_POWER_SEPARATED
-        /* PXA1L88/TTD2 */
-        gcmkVERIFY_OK(gckOS_GpuPowerDisable(galDevice->os, gcvCORE_2D, gcvTRUE, gcvTRUE));
-#    else
-        /* PXA1088 */
-        gcmkVERIFY_OK(gckOS_GpuPowerDisable(galDevice->os, gcvCORE_2D, gcvTRUE, gcvFALSE));
-#    endif
-#  endif
-
-        gcmkVERIFY_OK(gckOS_GpuPowerDisable(galDevice->os, gcvCORE_MAJOR, gcvTRUE, gcvTRUE));
-    }
-#endif
-
-# endif /* MRVL_ENABLE_COMMON_PWRCLK_FRAMEWORK */
 
     gcmkFOOTER_NO();
 }

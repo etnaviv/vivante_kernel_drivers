@@ -11,9 +11,9 @@
  */
 
 #include "gpufreq.h"
+#include <linux/kallsyms.h>
 
 #if MRVL_CONFIG_ENABLE_GPUFREQ
-#if MRVL_PLATFORM_TTD2
 #include <linux/clk.h>
 #include <linux/err.h>
 #if MRVL_CONFIG_ENABLE_QOS_SUPPORT
@@ -28,26 +28,9 @@
     _table[_index].frequency = _freq;  \
 }
 
-extern int get_gc3d_freqs_table(unsigned long *gcu3d_freqs_table,
-                        unsigned int *item_counts, unsigned int max_item_counts);
-
-extern int get_gc3d_sh_freqs_table(unsigned long *gcu3d_sh_freqs_table,
-                        unsigned int *item_counts, unsigned int max_item_counts);
-
-extern int get_gc2d_freqs_table(unsigned long *gcu2d_freqs_table,
-                        unsigned int *item_counts, unsigned int max_item_counts);
-
 typedef int (*PFUNC_GET_FREQS_TBL)(unsigned long *, unsigned int *, unsigned int);
 
 struct gpufreq_eden {
-#if !MRVL_ENABLE_COMMON_PWRCLK_FRAMEWORK
-    /* 2d/3d core clk*/
-    struct clk *gc_clk;
-
-    /* 3d shader clk*/
-    struct clk *gc_clk_sh;
-#endif
-
     /* predefined freqs_table */
     struct gpufreq_frequency_table freq_table[GPUFREQ_FREQ_TABLE_MAX_NUM+2];
 
@@ -63,26 +46,6 @@ static gckOS gpu_os;
 struct gpufreq_eden gpu_eden[GPUFREQ_GPU_NUMS];
 static unsigned int major_freq_table_size;
 
-#if !MRVL_ENABLE_COMMON_PWRCLK_FRAMEWORK
-static unsigned int gpufreq_3d_shader_freq_get(void)
-{
-    unsigned int rate = ~0;
-    struct clk *gc_clk = gpu_eden[gcvCORE_MAJOR].gc_clk_sh;
-
-    if(!gc_clk)
-    {
-        debug_log(GPUFREQ_LOG_ERROR, "gc shader clk of gpu 0 is invalid\n");
-        return -EINVAL;
-    }
-
-    rate = clk_get_rate(gc_clk);
-
-    if(rate == (unsigned int)-1)
-        return -EINVAL;
-
-    return HZ_TO_KHZ(rate);
-}
-#else
 static unsigned int gpufreq_3d_shader_freq_get(void)
 {
     gceSTATUS status;
@@ -95,7 +58,6 @@ OnError:
     debug_log(GPUFREQ_LOG_ERROR, "failed to get clk rate of gpu %u\n", gcvCORE_SH);
     return -EINVAL;
 }
-#endif
 
 #if defined(CONFIG_ARM64)
 /* No need to restrict max freq to 600MHz for pxa1928 A0. */
@@ -293,6 +255,7 @@ static struct gpufreq_freq_attr *driver_attrs[] = {
 };
 
 static int eden_gpufreq_init (struct gpufreq_policy *policy);
+static int eden_gpufreq_exit (struct gpufreq_policy *policy);
 static int eden_gpufreq_verify (struct gpufreq_policy *policy);
 static int eden_gpufreq_target (struct gpufreq_policy *policy, unsigned int target_freq, unsigned int relation);
 static int eden_gpufreq_set(unsigned int gpu, struct gpufreq_freqs *freq, struct gpufreq_freqs *freq_sh);
@@ -316,26 +279,56 @@ static struct _gc_qos gc_qos[] = {
     DECLARE_META_GC_QOS_2D,
 };
 
+void eden_gpufreq_register_qos(unsigned int gpu)
+{
+    pm_qos_add_notifier(gc_qos[gpu].pm_qos_class_min, gc_qos[gpu].notifier_min);
+    pm_qos_add_notifier(gc_qos[gpu].pm_qos_class_max, gc_qos[gpu].notifier_max);
+}
+
+void eden_gpufreq_unregister_qos(unsigned int gpu)
+{
+    pm_qos_remove_notifier(gc_qos[gpu].pm_qos_class_min, gc_qos[gpu].notifier_min);
+    pm_qos_remove_notifier(gc_qos[gpu].pm_qos_class_max, gc_qos[gpu].notifier_max);
+}
+
 #endif /* MRVL_CONFIG_ENABLE_QOS_SUPPORT */
 
-static struct gpufreq_driver eden_gpufreq_driver = {
+struct gpufreq_driver eden_gpufreq_driver = {
     .init   = eden_gpufreq_init,
     .verify = eden_gpufreq_verify,
     .get    = eden_gpufreq_get,
     .target = eden_gpufreq_target,
     .name   = "eden-gpufreq",
+    .exit   = eden_gpufreq_exit,
     .attr   = driver_attrs,
 };
 
-static int eden_gpufreq_init (struct gpufreq_policy *policy)
+static void eden_init_freqs_table_func(unsigned int gpu)
 {
-    unsigned gpu = policy->gpu;
-#if !MRVL_ENABLE_COMMON_PWRCLK_FRAMEWORK
-    struct clk *gc_clk = gpu_eden[gpu].gc_clk;
-    struct clk *gc_clk_sh = gcvNULL;
-#endif
+#ifdef CONFIG_KALLSYMS
+    switch (gpu) {
+    case gcvCORE_MAJOR:
+        gpu_eden[gpu].pf_get_freqs_table = (PFUNC_GET_FREQS_TBL)kallsyms_lookup_name("get_gc3d_freqs_table");
+        gpu_eden[gpu].pf_get_sh_freqs_table = (PFUNC_GET_FREQS_TBL)kallsyms_lookup_name("get_gc3d_sh_freqs_table");
+        break;
 
-    /* get func pointer from kernel functions. */
+    case gcvCORE_2D:
+        gpu_eden[gpu].pf_get_freqs_table = (PFUNC_GET_FREQS_TBL)kallsyms_lookup_name("get_gc2d_freqs_table");
+        break;
+
+    default:
+        debug_log(GPUFREQ_LOG_ERROR, "cannot get func pointer for gpu %d\n", gpu);
+    }
+
+#elif (defined CONFIG_ARM64) || (defined CONFIG_CPU_EDEN) || (defined CONFIG_CPU_PXA1928)
+extern int get_gc3d_freqs_table(unsigned long *gcu3d_freqs_table,
+                        unsigned int *item_counts, unsigned int max_item_counts);
+
+extern int get_gc3d_sh_freqs_table(unsigned long *gcu3d_sh_freqs_table,
+                        unsigned int *item_counts, unsigned int max_item_counts);
+
+extern int get_gc2d_freqs_table(unsigned long *gcu2d_freqs_table,
+                        unsigned int *item_counts, unsigned int max_item_counts);
     switch (gpu) {
     case gcvCORE_MAJOR:
         gpu_eden[gpu].pf_get_freqs_table = get_gc3d_freqs_table;
@@ -349,8 +342,17 @@ static int eden_gpufreq_init (struct gpufreq_policy *policy)
     default:
         debug_log(GPUFREQ_LOG_ERROR, "cannot get func pointer for gpu %d\n", gpu);
     }
+#else
+    debug_log(GPUFREQ_LOG_ERROR, "cannot get func pointer for gpu %d\n", gpu);
+#endif
+}
 
-    debug_log(GPUFREQ_LOG_DEBUG, "gpu %d, pfunc %p\n", gpu, gpu_eden[gpu].pf_get_freqs_table);
+static int eden_gpufreq_init (struct gpufreq_policy *policy)
+{
+    unsigned gpu = policy->gpu;
+
+    /* get func pointer from kernel functions. */
+    eden_init_freqs_table_func(gpu);
 
     /* build freqs table */
     gpufreq_frequency_table_get(gpu,
@@ -361,46 +363,12 @@ static int eden_gpufreq_init (struct gpufreq_policy *policy)
 
     gpufreq_frequency_table_gpuinfo(policy, gpu_eden[gpu].freq_table);
 
-#if !MRVL_ENABLE_COMMON_PWRCLK_FRAMEWORK
-    if(!gc_clk)
-    {
-        switch (gpu) {
-        case gcvCORE_MAJOR:
-            gc_clk = clk_get(NULL, "GC3D_CLK1X");
-            gc_clk_sh = clk_get(NULL, "GC3D_CLK2X");
-            break;
-
-        case gcvCORE_2D:
-            gc_clk = clk_get(NULL, "GC2D_CLK");
-            break;
-
-        default:
-            debug_log(GPUFREQ_LOG_ERROR, "cannot get clk for gpu %d\n", gpu);
-        }
-
-        if(IS_ERR(gc_clk))
-        {
-            debug_log(GPUFREQ_LOG_ERROR, "get clk of gpu %d, ret %ld\n", gpu, PTR_ERR(gc_clk));
-            return PTR_ERR(gc_clk);
-        }
-
-        if((gpu == gcvCORE_MAJOR) && IS_ERR(gc_clk_sh))
-        {
-            debug_log(GPUFREQ_LOG_ERROR, "get shader clk of gpu %d, ret %ld\n", gpu, PTR_ERR(gc_clk_sh));
-            return PTR_ERR(gc_clk_sh);
-        }
-
-        /* store in global variable. */
-        gpu_eden[gpu].gc_clk    = gc_clk;
-        gpu_eden[gpu].gc_clk_sh = gc_clk_sh;
-    }
-#endif
-
     policy->cur = eden_gpufreq_get(policy->gpu);
 
 #if MRVL_CONFIG_ENABLE_QOS_SUPPORT
     if(unlikely(!(is_qos_inited & (1 << gpu))))
     {
+        eden_gpufreq_register_qos(gpu);
         pm_qos_add_request(gc_qos[gpu].pm_qos_req_min,
                            gc_qos[gpu].pm_qos_class_min,
                            policy->gpuinfo.min_freq);
@@ -412,6 +380,14 @@ static int eden_gpufreq_init (struct gpufreq_policy *policy)
 #endif
 
     debug_log(GPUFREQ_LOG_INFO, "GPUFreq for Eden gpu %d initialized, cur_freq %u\n", gpu, policy->cur);
+
+    return 0;
+}
+
+static int eden_gpufreq_exit (struct gpufreq_policy *policy)
+{
+    unsigned gpu = policy->gpu;
+    eden_gpufreq_unregister_qos(gpu);
 
     return 0;
 }
@@ -451,12 +427,15 @@ static int eden_gpufreq_target (struct gpufreq_policy *policy, unsigned int targ
 
     freq.gpu      = policy->gpu;
 
-#if MRVL_DFC_JUMP_HI_INDIRECT
-    /* Freq may be changed by galcore daemon, so policy->cur may not represent the actual freq. */
-    freq.old_freq = policy->cur = eden_gpufreq_get(gpu);
-#else
-    freq.old_freq = policy->cur;
-#endif
+    if(has_feat_freq_change_indirect())
+    {
+        /* Freq may be changed by galcore daemon, so policy->cur may not represent the actual freq. */
+        freq.old_freq = policy->cur = eden_gpufreq_get(gpu);
+    }
+    else
+    {
+        freq.old_freq = policy->cur;
+    }
 
     freq.new_freq = freq_table[index].frequency;
 
@@ -518,16 +497,14 @@ static int eden_gpufreq_target (struct gpufreq_policy *policy, unsigned int targ
     return ret;
 }
 
-#if MRVL_ENABLE_COMMON_PWRCLK_FRAMEWORK
 static int eden_gpufreq_set(unsigned int gpu, struct gpufreq_freqs *freq, struct gpufreq_freqs *freq_sh)
 {
     int ret = 0;
     unsigned int rate = 0;
     gceSTATUS status;
 
-#if MRVL_DFC_PROTECT_CLK_OPERATION
-    gpufreq_acquire_clock_mutex(gpu);
-#endif
+    if (has_feat_dfc_protect_clk_op())
+        gpufreq_acquire_clock_mutex(gpu);
 
     if(gpu == gcvCORE_MAJOR)
     {
@@ -557,9 +534,8 @@ static int eden_gpufreq_set(unsigned int gpu, struct gpufreq_freqs *freq, struct
         }
     }
 
-#if MRVL_DFC_PROTECT_CLK_OPERATION
-    gpufreq_release_clock_mutex(gpu);
-#endif
+    if (has_feat_dfc_protect_clk_op())
+        gpufreq_release_clock_mutex(gpu);
 
     /* update current frequency after adjustment */
     rate = eden_gpufreq_get(gpu);
@@ -589,146 +565,6 @@ OnError:
     debug_log(GPUFREQ_LOG_ERROR, "failed to get clk rate of gpu %u\n", gpu);
     return -EINVAL;
 }
-#else
-static int eden_gpufreq_set(unsigned int gpu, struct gpufreq_freqs *freq, struct gpufreq_freqs *freq_sh)
-{
-    int ret = 0;
-    unsigned int rate = 0;
-    struct clk *gc_clk = gpu_eden[gpu].gc_clk;
-    struct clk *gc_clk_sh = gpu_eden[gpu].gc_clk_sh;
 
-#if MRVL_DFC_PROTECT_CLK_OPERATION
-    gpufreq_acquire_clock_mutex(gpu);
-#endif
-
-    if(gpu == gcvCORE_MAJOR)
-    {
-        debug_log(GPUFREQ_LOG_DEBUG, "[3D]gpufreq change: (%d, %d) --> (%d, %d)\n",
-                        freq->old_freq, freq_sh->old_freq, freq->new_freq, freq_sh->new_freq);
-    }
-    else if(gpu == gcvCORE_2D)
-    {
-        debug_log(GPUFREQ_LOG_DEBUG, "[2D]gpufreq change: %d --> %d\n",
-                        freq->old_freq, freq->new_freq);
-    }
-
-#if MRVL_DFC_JUMP_HI_INDIRECT
-    if((freq->new_freq > 312000)
-    && (freq->old_freq < 312000)
-    )
-    {
-        clk_set_rate(gc_clk, KHZ_TO_HZ(312000));
-    }
-
-    if((gpu == gcvCORE_MAJOR)
-    && (freq_sh->new_freq > 312000)
-    && (freq_sh->old_freq < 312000)
-    )
-    {
-        clk_set_rate(gc_clk_sh, KHZ_TO_HZ(312000));
-    }
-#endif
-
-    ret = clk_set_rate(gc_clk, KHZ_TO_HZ(freq->new_freq));
-    if(ret)
-    {
-        debug_log(GPUFREQ_LOG_WARNING, "[%d] failed to set target rate %u to clk %p\n",
-                        gpu, freq->new_freq, gc_clk);
-    }
-
-    if(gpu == gcvCORE_MAJOR)
-    {
-        ret = clk_set_rate(gc_clk_sh, KHZ_TO_HZ(freq_sh->new_freq));
-        if(ret)
-        {
-            debug_log(GPUFREQ_LOG_WARNING, "[%d] failed to set target rate %u to clk %p\n",
-                            gpu, freq_sh->new_freq, gc_clk_sh);
-        }
-    }
-
-#if MRVL_DFC_PROTECT_CLK_OPERATION
-    gpufreq_release_clock_mutex(gpu);
-#endif
-
-    /* update current frequency after adjustment */
-    rate = eden_gpufreq_get(gpu);
-    if(rate == -EINVAL)
-    {
-        debug_log(GPUFREQ_LOG_WARNING, "failed get rate for gpu %d\n", gpu);
-        freq->new_freq = freq->old_freq;
-        ret = -EINVAL;
-    }
-    else
-    {
-        freq->new_freq = rate;
-    }
-
-    return ret;
-}
-
-static unsigned int eden_gpufreq_get (unsigned int gpu)
-{
-    unsigned int rate = ~0;
-    struct clk *gc_clk = gpu_eden[gpu].gc_clk;
-
-    if(!gc_clk)
-    {
-        debug_log(GPUFREQ_LOG_ERROR, "gc clk of gpu %d is invalid\n", gpu);
-        return -EINVAL;
-    }
-
-    rate = clk_get_rate(gc_clk);
-
-    if(rate == (unsigned int)-1)
-        return -EINVAL;
-
-    return HZ_TO_KHZ(rate);
-}
-#endif
-
-/***************************************************
-**  interfaces exported to GC driver
-****************************************************/
-int __GPUFREQ_EXPORT_TO_GC gpufreq_init(gckOS Os)
-{
-    if(!gpu_os)
-        gpu_os = Os;
-
-    WARN_ON(!gpu_os);
-
-    gpufreq_early_init();
-#if MRVL_CONFIG_ENABLE_QOS_SUPPORT
-    {
-        unsigned int gpu = 0;
-        for_each_gpu(gpu)
-        {
-            pm_qos_add_notifier(gc_qos[gpu].pm_qos_class_min, gc_qos[gpu].notifier_min);
-            pm_qos_add_notifier(gc_qos[gpu].pm_qos_class_max, gc_qos[gpu].notifier_max);
-        }
-    }
-#endif
-
-    gpufreq_register_driver(Os, &eden_gpufreq_driver);
-    return 0;
-}
-
-void __GPUFREQ_EXPORT_TO_GC gpufreq_exit(gckOS Os)
-{
-#if MRVL_CONFIG_ENABLE_QOS_SUPPORT
-    {
-        unsigned int gpu = 0;
-        for_each_gpu(gpu)
-        {
-            pm_qos_remove_notifier(gc_qos[gpu].pm_qos_class_min, gc_qos[gpu].notifier_min);
-            pm_qos_remove_notifier(gc_qos[gpu].pm_qos_class_max, gc_qos[gpu].notifier_max);
-        }
-    }
-#endif
-
-    gpufreq_unregister_driver(Os, &eden_gpufreq_driver);
-    gpufreq_late_exit();
-}
-
-#endif /* End of MRVL_PLATFORM_TTD2 */
 #endif /* End of MRVL_CONFIG_ENABLE_GPUFREQ */
 

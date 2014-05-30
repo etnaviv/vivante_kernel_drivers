@@ -109,10 +109,7 @@ struct _gckHARDWARE
 
 #endif
 
-#if MRVL_DFC_PROTECT_CLK_OPERATION
     gctPOINTER                  clockMutex;
-
-#endif
 };
 
 gceSTATUS

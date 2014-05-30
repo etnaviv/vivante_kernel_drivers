@@ -12,7 +12,6 @@
 
 #include "gc_hal_kernel_plat.h"
 
-#if MRVL_ENABLE_COMMON_PWRCLK_FRAMEWORK
 /********************************************************
  * basic initialization *********************************
  *******************************************************/
@@ -265,11 +264,30 @@ void gpu_pwr_enable_unprepare(struct gc_iface *iface)
         iface->ops->pwr_enable_unprepare(iface);
 }
 
-extern struct gc_iface *gc_ifaces[];
+static struct gc_iface **gc_ifaces = gcvNULL;
+extern struct gc_iface *pxa988_gc_ifaces[];
+extern struct gc_iface *eden_gc_ifaces[];
+
+void gpu_init_iface_mapping(void)
+{
+    if(cpu_is_pxa1928())
+    {
+        gc_ifaces = eden_gc_ifaces;
+    }
+    else
+    {
+        gc_ifaces = pxa988_gc_ifaces;
+    }
+}
 
 struct gc_iface* gpu_get_iface_mapping(gceCORE core)
 {
     struct gc_iface* iface = gcvNULL;
+
+    if(gc_ifaces == gcvNULL)
+    {
+        gpu_init_iface_mapping();
+    }
 
     switch(core) {
     case gcvCORE_MAJOR:
@@ -278,16 +296,13 @@ struct gc_iface* gpu_get_iface_mapping(gceCORE core)
     case gcvCORE_2D:
         iface = gc_ifaces[gcvCORE_2D];
         break;
-#if MRVL_3D_CORE_SH_CLOCK_SEPARATED
     case gcvCORE_SH:
         iface = gc_ifaces[gcvCORE_SH];
         break;
-#endif
     default:
         gcmkPRINT("Invalid core to get iface mapping!\n");
     }
 
     return iface;
 }
-#endif
 

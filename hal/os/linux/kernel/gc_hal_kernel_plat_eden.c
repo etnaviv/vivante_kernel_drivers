@@ -10,16 +10,15 @@
  */
 
 #include "gc_hal_kernel_plat_common.h"
+#include <linux/kallsyms.h>
 
-#if MRVL_PLATFORM_TTD2
 #define __PLAT_APINAME(apiname)     eden_##apiname
 
-extern void gc3d_pwr(PARAM_TYPE_PWR);
-#define GC3D_PWR    gc3d_pwr
-extern void gc2d_pwr(PARAM_TYPE_PWR);
-#define GC2D_PWR    gc2d_pwr
+typedef int (*PFUNC_GC_PWR)(unsigned int);
 
-#if MRVL_DFC_JUMP_HI_INDIRECT
+static PFUNC_GC_PWR GC3D_PWR = gcvNULL;
+static PFUNC_GC_PWR GC2D_PWR = gcvNULL;
+
 static struct _clk_restore {
     unsigned int power_enabled;
     unsigned long clk_rate;
@@ -27,7 +26,6 @@ static struct _clk_restore {
 
 int eden_gpu_clk_setrate(struct gc_iface *iface, unsigned long rate_khz);
 unsigned long eden_gpu_clk_getrate(struct gc_iface *iface);
-#endif
 
 /**
  * gc3d shader definition
@@ -36,13 +34,8 @@ static struct gc_ops gc3dsh_ops = {
     .init       = gpu_lock_init_dft,
     .enableclk  = gpu_clk_enable_dft,
     .disableclk = gpu_clk_disable_dft,
-#if MRVL_DFC_JUMP_HI_INDIRECT
     .setclkrate = eden_gpu_clk_setrate,
     .getclkrate = eden_gpu_clk_getrate,
-#else
-    .setclkrate = gpu_clk_setrate_dft,
-    .getclkrate = gpu_clk_getrate_dft,
-#endif
 };
 
 static struct gc_iface gc3dsh_iface = {
@@ -54,10 +47,10 @@ static struct gc_iface gc3dsh_iface = {
 /**
  * gc3d definition
  */
-static void __PLAT_APINAME(gc3d_pwr_ops)(struct gc_iface *iface, PARAM_TYPE_PWR enabled)
+static void __PLAT_APINAME(gc3d_pwr_ops)(struct gc_iface *iface, unsigned int enabled)
 {
     PR_DEBUG("[%6s] %s %d\n", iface->name, __func__, enabled);
-#if MRVL_DFC_JUMP_HI_INDIRECT
+    if (has_feat_freq_change_indirect())
     {
         unsigned int count = iface->chains_count;
 
@@ -76,7 +69,23 @@ static void __PLAT_APINAME(gc3d_pwr_ops)(struct gc_iface *iface, PARAM_TYPE_PWR 
         while(count-- != 0)
             gpu_clk_setrate_dft(iface->chains_clk[count], 156000);
     }
+
+    if(GC3D_PWR == gcvNULL)
+    {
+#ifdef CONFIG_KALLSYMS
+        GC3D_PWR = (PFUNC_GC_PWR)kallsyms_lookup_name("gc3d_pwr");
+
+#elif (defined CONFIG_ARM64) || (defined CONFIG_CPU_EDEN) || (defined CONFIG_CPU_PXA1928)
+
+        extern void gc3d_pwr(unsigned int);
+
+        GC3D_PWR = gc3d_pwr;
+#else
+        gcmkPRINT("GC3D_PWR not implemented!");
+        return;
 #endif
+    }
+
     GC3D_PWR(enabled);
 }
 
@@ -84,13 +93,8 @@ static struct gc_ops gc3d_ops = {
     .init       = gpu_lock_init_dft,
     .enableclk  = gpu_clk_enable_dft,
     .disableclk = gpu_clk_disable_dft,
-#if MRVL_DFC_JUMP_HI_INDIRECT
     .setclkrate = eden_gpu_clk_setrate,
     .getclkrate = eden_gpu_clk_getrate,
-#else
-    .setclkrate = gpu_clk_setrate_dft,
-    .getclkrate = gpu_clk_getrate_dft,
-#endif
     .pwrops     = __PLAT_APINAME(gc3d_pwr_ops),
 };
 
@@ -109,10 +113,10 @@ static struct gc_iface gc3d_iface = {
 /**
  * gc2d definition
  */
-static void __PLAT_APINAME(gc2d_pwr_ops)(struct gc_iface *iface, PARAM_TYPE_PWR enabled)
+static void __PLAT_APINAME(gc2d_pwr_ops)(struct gc_iface *iface, unsigned int enabled)
 {
     PR_DEBUG("[%6s] %s %d\n", iface->name, __func__, enabled);
-#if MRVL_DFC_JUMP_HI_INDIRECT
+    if (has_feat_freq_change_indirect())
     {
         clk_restore[gcvCORE_2D].power_enabled = enabled;
 
@@ -124,7 +128,23 @@ static void __PLAT_APINAME(gc2d_pwr_ops)(struct gc_iface *iface, PARAM_TYPE_PWR 
         /* make it safe to do Power operation */
         gpu_clk_setrate_dft(iface, 156000);
     }
+
+    if(GC2D_PWR == gcvNULL)
+    {
+#ifdef CONFIG_KALLSYMS
+        GC2D_PWR = (PFUNC_GC_PWR)kallsyms_lookup_name("gc2d_pwr");
+
+#elif (defined CONFIG_ARM64) || (defined CONFIG_CPU_EDEN) || (defined CONFIG_CPU_PXA1928)
+
+extern void gc2d_pwr(unsigned int);
+
+        GC2D_PWR = gc2d_pwr;
+#else
+        gcmkPRINT("GC2D_PWR not implemented!");
+        return;
 #endif
+    }
+
     GC2D_PWR(enabled);
 }
 
@@ -132,13 +152,8 @@ static struct gc_ops gc2d_ops = {
     .init       = gpu_lock_init_dft,
     .enableclk  = gpu_clk_enable_dft,
     .disableclk = gpu_clk_disable_dft,
-#if MRVL_DFC_JUMP_HI_INDIRECT
     .setclkrate = eden_gpu_clk_setrate,
     .getclkrate = eden_gpu_clk_getrate,
-#else
-    .setclkrate = gpu_clk_setrate_dft,
-    .getclkrate = gpu_clk_getrate_dft,
-#endif
     .pwrops     = __PLAT_APINAME(gc2d_pwr_ops),
 };
 
@@ -148,14 +163,13 @@ static struct gc_iface gc2d_iface = {
     .ops                = &gc2d_ops,
 };
 
-struct gc_iface *gc_ifaces[] = {
+struct gc_iface *eden_gc_ifaces[] = {
     [gcvCORE_MAJOR] = &gc3d_iface,
     [gcvCORE_2D]    = &gc2d_iface,
     [gcvCORE_SH]    = &gc3dsh_iface,
     gcvNULL,
 };
 
-#if MRVL_DFC_JUMP_HI_INDIRECT
 int eden_gpu_clk_setrate(struct gc_iface *iface, unsigned long rate_khz)
 {
     int ret = 0;
@@ -183,7 +197,8 @@ int eden_gpu_clk_setrate(struct gc_iface *iface, unsigned long rate_khz)
         clk_restore[core].clk_rate = rate_khz;
     }
 
-    if(rate_khz > 312000)
+    if(has_feat_freq_change_indirect()
+       && (rate_khz > 312000))
     {
         gpu_clk_setrate_dft(iface, 312000);
     }
@@ -231,5 +246,3 @@ unsigned long eden_gpu_clk_getrate(struct gc_iface *iface)
 OnError:
     return 0;
 }
-#endif
-#endif

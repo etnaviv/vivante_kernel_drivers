@@ -14,7 +14,6 @@
 #include <linux/kernel.h>
 #include <linux/atomic.h>
 
-#define CREATE_TRACE_POINTS
 #include "gc_trace.h"
 
 #define DEF_SAMPLING_DOWN_FACTOR            (1)

@@ -706,7 +706,6 @@ gckOS_ReleaseRecMutex(
     IN gckRecursiveMutex Mutex
     );
 
-#if MRVL_DFC_PROTECT_CLK_OPERATION
 gceSTATUS
 gckOS_AcquireClockMutex(
     IN gckOS Os,
@@ -718,7 +717,6 @@ gckOS_ReleaseClockMutex(
     IN gckOS Os,
     IN gceCORE Core
 );
-#endif
 
 /* Atomically exchange a pair of 32-bit values. */
 gceSTATUS
@@ -1536,8 +1534,6 @@ gckOS_SetGPUPower(
     IN gctBOOL Power
     );
 
-#if MRVL_ENABLE_COMMON_PWRCLK_FRAMEWORK /* == 1*/
-
 gceSTATUS
 gckOS_GetIfaceMapping(
     IN gckOS Os,
@@ -1552,43 +1548,6 @@ gckOS_SetGPUPowerOnBeforeInit(
     IN gctBOOL EnablePwr,
     IN gctUINT clkRate
     );
-
-#else /* MRVL_ENABLE_COMMON_PWRCLK_FRAMEWORK == 0 */
-
-gceSTATUS
-gckOS_GpuPowerEnable(
-    IN gckOS Os,
-    IN gceCORE Core,
-    IN gctBOOL enableClk,
-    IN gctBOOL enablePwr,
-    IN gctUINT32 Frequency
-    );
-
-gceSTATUS
-gckOS_GpuPowerDisable(
-    IN gckOS Os,
-    IN gceCORE Core,
-    IN gctBOOL disableClk,
-    IN gctBOOL disablePwr
-    );
-
-#if MRVL_CONFIG_SHADER_CLK_CONTROL
-gceSTATUS
-gckOS_QueryShClkRate(
-    IN gckOS Os,
-    IN gceCORE Core,
-    OUT gctUINT32_PTR Rate
-    );
-
-gceSTATUS
-gckOS_SetShClkRate(
-    IN gckOS Os,
-    IN gceCORE Core,
-    IN gctUINT32 Rate
-    );
-#endif
-
-#endif /* MRVL_ENABLE_COMMON_PWRCLK_FRAMEWORK */
 
 gceSTATUS
 gckOS_SetGPUPowerOnMRVL(
@@ -1606,13 +1565,11 @@ gckOS_SetGPUPowerOffMRVL(
     IN gctBOOL DisablePwr
     );
 
-#if MRVL_POLICY_CLKOFF_WHEN_IDLE
 gceSTATUS
 gckOS_SetClkOffWhenIdle(
     IN gckOS Os,
     IN gctBOOL enable
     );
-#endif
 
 gceSTATUS
 gckOS_ResetGPU(

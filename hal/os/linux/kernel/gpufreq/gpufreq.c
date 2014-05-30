@@ -551,6 +551,10 @@ static int gpufreq_remove_dev(struct gcsDEVOBJECT *pDevObj)
     /* release data */
     debug_log(GPUFREQ_LOG_INFO, "remove gpu %d\n", gpu);
 
+    data = gpufreq_policy_get(gpu);
+    gpufreq_driver->exit(data);
+    gpufreq_policy_put(data);
+
     spin_lock_irqsave(&gpufreq_driver_lock, flags);
     data = GPU_ELEM(gpufreq_policy_data, gpu);
 
@@ -588,12 +592,11 @@ static int gpufreq_handle_gov_timer(struct gcsDEVOBJECT *pDevObj, unsigned long 
         goto out_policy;
     }
 
-#if MRVL_DFC_JUMP_HI_INDIRECT
-    if(action == GPUFREQ_GOV_EVENT_RESUME)
+    if(has_feat_freq_change_indirect()
+       && (action == GPUFREQ_GOV_EVENT_RESUME))
     {
         policy->cur = gpufreq_driver->get(gpu);
     }
-#endif
 
     if(gpufreq_driver->target)
         _gpufreq_governor_notifier(policy, action);
@@ -965,6 +968,7 @@ int gpufreq_register_driver(gckOS Os, struct gpufreq_driver *driver_data)
 
     /* check gpufreq_driver callback functions */
     if (!driver_data || !driver_data->init || !driver_data->verify ||
+        !driver_data->exit ||
         ((!driver_data->setpolicy) && (!driver_data->target)))
         return -EINVAL;
 
@@ -1429,7 +1433,6 @@ int gpufreq_frequency_table_target(struct gpufreq_policy *policy,
     return 0;
 }
 
-#if MRVL_DFC_PROTECT_CLK_OPERATION
 void gpufreq_acquire_clock_mutex(unsigned int gpu)
 {
     gckOS_AcquireClockMutex(gpu_os, gpu);
@@ -1439,6 +1442,42 @@ void gpufreq_release_clock_mutex(unsigned int gpu)
 {
     gckOS_ReleaseClockMutex(gpu_os, gpu);
 }
-#endif
 
+/***************************************************
+**  interfaces exported to GC driver
+****************************************************/
+extern struct gpufreq_driver eden_gpufreq_driver;
+extern struct gpufreq_driver pxa988_gpufreq_driver;
+int __GPUFREQ_EXPORT_TO_GC gpufreq_init(gckOS Os)
+{
+    if(!gpu_os)
+        gpu_os = Os;
+
+    WARN_ON(!gpu_os);
+
+    gpufreq_early_init();
+
+    if(cpu_is_pxa1928())
+    {
+        gpufreq_register_driver(Os, &eden_gpufreq_driver);
+    }
+    else
+    {
+        gpufreq_register_driver(Os, &pxa988_gpufreq_driver);
+    }
+    return 0;
+}
+
+void __GPUFREQ_EXPORT_TO_GC gpufreq_exit(gckOS Os)
+{
+    if(cpu_is_pxa1928())
+    {
+        gpufreq_unregister_driver(Os, &eden_gpufreq_driver);
+    }
+    else
+    {
+        gpufreq_unregister_driver(Os, &pxa988_gpufreq_driver);
+    }
+    gpufreq_late_exit();
+}
 #endif /* END of MRVL_CONFIG_ENABLE_GPUFREQ */

@@ -32,9 +32,7 @@ static int gpufreq_governor_performance(struct gpufreq_policy *policy,
     switch (event) {
     case GPUFREQ_GOV_EVENT_START:
     case GPUFREQ_GOV_EVENT_LIMITS:
-#if MRVL_DFC_JUMP_HI_INDIRECT
     case GPUFREQ_GOV_EVENT_RESUME:
-#endif
         debug_log(GPUFREQ_LOG_DEBUG, "performance: freq %u, event %d", policy->max, event);
         __gpufreq_driver_target(policy, policy->max, GPUFREQ_RELATION_H);
         break;

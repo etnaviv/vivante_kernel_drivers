@@ -8,9 +8,9 @@
  */
 
 #include "gpufreq.h"
+#include <linux/kallsyms.h>
 
 #if MRVL_CONFIG_ENABLE_GPUFREQ
-#if MRVL_PLATFORM_PXA988_FAMILY
 #include <linux/clk.h>
 #include <linux/err.h>
 #if MRVL_CONFIG_ENABLE_QOS_SUPPORT
@@ -25,20 +25,9 @@
     _table[_index].frequency = _freq;  \
 }
 
-extern int get_gcu_freqs_table(unsigned long *gcu_freqs_table,
-                        unsigned int *item_counts, unsigned int max_item_counts);
-
-extern int get_gcu2d_freqs_table(unsigned long *gcu2d_freqs_table,
-                        unsigned int *item_counts, unsigned int max_item_counts);
-
 typedef int (*PFUNC_GET_FREQS_TBL)(unsigned long *, unsigned int *, unsigned int);
 
 struct gpufreq_pxa988 {
-#if !MRVL_ENABLE_COMMON_PWRCLK_FRAMEWORK
-    /* 2d/3d clk*/
-    struct clk *gc_clk;
-#endif
-
     /* predefined freqs_table */
     struct gpufreq_frequency_table freq_table[GPUFREQ_FREQ_TABLE_MAX_NUM+1];
 
@@ -114,6 +103,7 @@ static struct gpufreq_freq_attr *driver_attrs[] = {
 };
 
 static int pxa988_gpufreq_init (struct gpufreq_policy *policy);
+static int pxa988_gpufreq_exit (struct gpufreq_policy *policy);
 static int pxa988_gpufreq_verify (struct gpufreq_policy *policy);
 static int pxa988_gpufreq_target (struct gpufreq_policy *policy, unsigned int target_freq, unsigned int relation);
 static int pxa988_gpufreq_set(unsigned int gpu, struct gpufreq_freqs* freqs);
@@ -132,40 +122,60 @@ IMPLEMENT_META_NOTIFIER(1, 2d, min, GPUFREQ_RELATION_L);
 DECLARE_META_REQUEST(2d, max);
 IMPLEMENT_META_NOTIFIER(1, 2d, max, GPUFREQ_RELATION_H);
 
-#if MRVL_CONFIG_SHADER_CLK_CONTROL
 DECLARE_META_REQUEST(sh, min);
 IMPLEMENT_META_NOTIFIER(2, sh, min, GPUFREQ_RELATION_L);
 DECLARE_META_REQUEST(sh, max);
 IMPLEMENT_META_NOTIFIER(2, sh, max, GPUFREQ_RELATION_H);
-#endif
 
 static struct _gc_qos gc_qos[] = {
     DECLARE_META_GC_QOS_3D,
     DECLARE_META_GC_QOS_2D,
-#if MRVL_CONFIG_SHADER_CLK_CONTROL
     DECLARE_META_GC_QOS_SH,
-#endif
 };
 
+void pxa988_gpufreq_register_qos(unsigned int gpu)
+{
+    pm_qos_add_notifier(gc_qos[gpu].pm_qos_class_min, gc_qos[gpu].notifier_min);
+    pm_qos_add_notifier(gc_qos[gpu].pm_qos_class_max, gc_qos[gpu].notifier_max);
+}
+
+void pxa988_gpufreq_unregister_qos(unsigned int gpu)
+{
+    pm_qos_remove_notifier(gc_qos[gpu].pm_qos_class_min, gc_qos[gpu].notifier_min);
+    pm_qos_remove_notifier(gc_qos[gpu].pm_qos_class_max, gc_qos[gpu].notifier_max);
+}
 #endif /* MRVL_CONFIG_ENABLE_QOS_SUPPORT */
 
-static struct gpufreq_driver pxa988_gpufreq_driver = {
+struct gpufreq_driver pxa988_gpufreq_driver = {
     .init   = pxa988_gpufreq_init,
     .verify = pxa988_gpufreq_verify,
     .get    = pxa988_gpufreq_get,
     .target = pxa988_gpufreq_target,
     .name   = "pxa988-gpufreq",
+    .exit   = pxa988_gpufreq_exit,
     .attr   = driver_attrs,
 };
 
-static int pxa988_gpufreq_init (struct gpufreq_policy *policy)
+static void pxa988_init_freqs_table_func(unsigned int gpu)
 {
-    unsigned int gpu = policy->gpu;
-#if !MRVL_ENABLE_COMMON_PWRCLK_FRAMEWORK
-    struct clk *gc_clk = gh[gpu].gc_clk;
-#endif
+#ifdef CONFIG_KALLSYMS
+    switch (gpu) {
+    case 0:
+        gh[gpu].pf_get_freqs_table = (PFUNC_GET_FREQS_TBL)kallsyms_lookup_name("get_gcu_freqs_table");
+        break;
+    case 1:
+        gh[gpu].pf_get_freqs_table = (PFUNC_GET_FREQS_TBL)kallsyms_lookup_name("get_gcu2d_freqs_table");
+        break;
+    default:
+        debug_log(GPUFREQ_LOG_ERROR, "cannot get func pointer for gpu %u\n", gpu);
+    }
 
-    /* get func pointer from kernel functions. */
+#elif (defined CONFIG_CPU_PXA988)
+extern int get_gcu_freqs_table(unsigned long *gcu_freqs_table,
+                        unsigned int *item_counts, unsigned int max_item_counts);
+
+extern int get_gcu2d_freqs_table(unsigned long *gcu2d_freqs_table,
+                        unsigned int *item_counts, unsigned int max_item_counts);
     switch (gpu) {
     case 0:
         gh[gpu].pf_get_freqs_table = get_gcu_freqs_table;
@@ -176,43 +186,28 @@ static int pxa988_gpufreq_init (struct gpufreq_policy *policy)
     default:
         debug_log(GPUFREQ_LOG_ERROR, "cannot get func pointer for gpu %u\n", gpu);
     }
+#else
+    debug_log(GPUFREQ_LOG_ERROR, "cannot get func pointer for gpu %u\n", gpu);
+#endif
+}
 
-    debug_log(GPUFREQ_LOG_DEBUG, "gpu %u, pfunc %p\n", gpu, gh[gpu].pf_get_freqs_table);
+static int pxa988_gpufreq_init (struct gpufreq_policy *policy)
+{
+    unsigned int gpu = policy->gpu;
+
+    /* get func pointer from kernel functions. */
+    pxa988_init_freqs_table_func(gpu);
 
     /* build freqs table */
     gpufreq_frequency_table_get(gpu, gh[gpu].freq_table);
     gpufreq_frequency_table_gpuinfo(policy, gh[gpu].freq_table);
-
-#if !MRVL_ENABLE_COMMON_PWRCLK_FRAMEWORK
-    if(!gc_clk)
-    {
-        switch (gpu) {
-        case 0:
-            gc_clk = clk_get(NULL, "GCCLK");
-            break;
-        case 1:
-            gc_clk = clk_get(NULL, "GC2DCLK");
-            break;
-        default:
-            debug_log(GPUFREQ_LOG_ERROR, "cannot get clk for gpu %u\n", gpu);
-        }
-
-        if(IS_ERR(gc_clk))
-        {
-            debug_log(GPUFREQ_LOG_ERROR, "get clk of gpu %u, ret %ld\n", gpu, PTR_ERR(gc_clk));
-            return PTR_ERR(gc_clk);
-        }
-
-        /* store in global variable. */
-        gh[gpu].gc_clk = gc_clk;
-    }
-#endif
 
     policy->cur = pxa988_gpufreq_get(policy->gpu);
 
 #if MRVL_CONFIG_ENABLE_QOS_SUPPORT
     if(unlikely(!(is_qos_inited & (1 << gpu))))
     {
+        pxa988_gpufreq_register_qos(gpu);
         pm_qos_add_request(gc_qos[gpu].pm_qos_req_min,
                            gc_qos[gpu].pm_qos_class_min,
                            policy->gpuinfo.min_freq);
@@ -224,6 +219,14 @@ static int pxa988_gpufreq_init (struct gpufreq_policy *policy)
 #endif
 
     debug_log(GPUFREQ_LOG_INFO, "GPUFreq for HelanLTE gpu %u initialized, cur_freq %u\n", gpu, policy->cur);
+
+    return 0;
+}
+
+static int pxa988_gpufreq_exit (struct gpufreq_policy *policy)
+{
+    unsigned gpu = policy->gpu;
+    pxa988_gpufreq_unregister_qos(gpu);
 
     return 0;
 }
@@ -282,7 +285,6 @@ static int pxa988_gpufreq_target (struct gpufreq_policy *policy, unsigned int ta
     return ret;
 }
 
-#if MRVL_ENABLE_COMMON_PWRCLK_FRAMEWORK /* == 1 */
 static int pxa988_gpufreq_set(unsigned int gpu, struct gpufreq_freqs* freqs)
 {
     int ret = 0;
@@ -325,100 +327,7 @@ OnError:
     debug_log(GPUFREQ_LOG_ERROR, "failed to get clk rate of gpu %u\n", gpu);
     return -EINVAL;
 }
-#else /* MRVL_ENABLE_COMMON_PWRCLK_FRAMEWORK == 0 */
-static int pxa988_gpufreq_set(unsigned int gpu, struct gpufreq_freqs* freqs)
-{
-    int ret = 0;
-    unsigned int rate = 0;
-    struct clk *gc_clk = gh[gpu].gc_clk;
 
-    ret = clk_set_rate(gc_clk, KHZ_TO_HZ(freqs->new_freq));
-    if(ret)
-    {
-        debug_log(GPUFREQ_LOG_WARNING, "[%d] failed to set target rate %u to clk %p\n",
-                        gpu, freqs->new_freq, gc_clk);
-    }
-
-    /* update current frequency after adjustment */
-    rate = pxa988_gpufreq_get(gpu);
-    if(rate == -EINVAL)
-    {
-        debug_log(GPUFREQ_LOG_WARNING, "failed get rate for gpu %u\n", gpu);
-        freqs->new_freq = freqs->old_freq;
-        ret = -EINVAL;
-    }
-    else
-    {
-        freqs->new_freq = rate;
-    }
-
-    return ret;
-}
-
-static unsigned int pxa988_gpufreq_get (unsigned int gpu)
-{
-    unsigned int rate = ~0;
-    struct clk *gc_clk = gh[gpu].gc_clk;
-
-    if(!gc_clk)
-    {
-        debug_log(GPUFREQ_LOG_ERROR, "gc clk of gpu %u is invalid\n", gpu);
-        return -EINVAL;
-    }
-
-    rate = clk_get_rate(gc_clk);
-
-    if(rate == (unsigned int)-1)
-        return -EINVAL;
-
-    return HZ_TO_KHZ(rate);
-}
-#endif
-
-/***************************************************
-**  interfaces exported to GC driver
-****************************************************/
-int __GPUFREQ_EXPORT_TO_GC gpufreq_init(gckOS Os)
-{
-    if(!gpu_os)
-        gpu_os = Os;
-
-    WARN_ON(!gpu_os);
-
-    gpufreq_early_init();
-#if MRVL_CONFIG_ENABLE_QOS_SUPPORT
-    {
-        unsigned int gpu = 0;
-        for_each_gpu(gpu)
-        {
-            pm_qos_add_notifier(gc_qos[gpu].pm_qos_class_min, gc_qos[gpu].notifier_min);
-            pm_qos_add_notifier(gc_qos[gpu].pm_qos_class_max, gc_qos[gpu].notifier_max);
-        }
-    }
-#endif
-
-    gpufreq_register_driver(Os, &pxa988_gpufreq_driver);
-    return 0;
-}
-
-void __GPUFREQ_EXPORT_TO_GC gpufreq_exit(gckOS Os)
-{
-#if MRVL_CONFIG_ENABLE_QOS_SUPPORT
-    {
-        unsigned int gpu = 0;
-        for_each_gpu(gpu)
-        {
-            pm_qos_remove_notifier(gc_qos[gpu].pm_qos_class_min, gc_qos[gpu].notifier_min);
-            pm_qos_remove_notifier(gc_qos[gpu].pm_qos_class_max, gc_qos[gpu].notifier_max);
-        }
-    }
-#endif
-
-    gpufreq_unregister_driver(Os, &pxa988_gpufreq_driver);
-    gpufreq_late_exit();
-}
-
-#endif /* End of MRVL_PLATFORM_PXA988_FAMILY */
 #endif /* End of MRVL_CONFIG_ENABLE_GPUFREQ */
 
 

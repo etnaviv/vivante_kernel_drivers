@@ -18,6 +18,7 @@
 #include <linux/sysfs.h>
 
 static gckGALDEVICE galDevice = NULL;
+static struct device * parent_device = NULL;
 
 static inline int __create_sysfs_file_debug(void);
 static inline void __remove_sysfs_file_debug(void);
@@ -263,7 +264,6 @@ static ssize_t store_register_stats (struct device *dev,
     return count;
 }
 
-#if MRVL_POLICY_CLKOFF_WHEN_IDLE
 static ssize_t show_clk_off_when_idle (struct device *dev,
                     struct device_attribute *attr,
                     char * buf)
@@ -303,7 +303,6 @@ static ssize_t store_clk_off_when_idle (struct device *dev,
 }
 
 gc_sysfs_attr_rw(clk_off_when_idle);
-#endif
 
 #if gcdPOWEROFF_TIMEOUT
 static ssize_t show_poweroff_idle_timeout (struct device *dev,
@@ -364,8 +363,6 @@ static ssize_t store_poweroff_idle_timeout (struct device *dev,
 gc_sysfs_attr_rw(poweroff_idle_timeout);
 #endif
 
-#if MRVL_ENABLE_COMMON_PWRCLK_FRAMEWORK /* == 1 */
-
 static ssize_t show_clk_rate (struct device *dev,
                     struct device_attribute *attr,
                     char * buf)
@@ -388,8 +385,8 @@ static ssize_t show_clk_rate (struct device *dev,
                 len += sprintf(buf+len, "[%s] failed to get clock rate\n", _core_desc[i]);
             }
 
-#if MRVL_3D_CORE_SH_CLOCK_SEPARATED
-            if(i == gcvCORE_MAJOR)
+            if(has_feat_3d_shader_clock()
+               && (i == gcvCORE_MAJOR))
             {
                 unsigned int shClkRate = 0;
 
@@ -403,7 +400,6 @@ static ssize_t show_clk_rate (struct device *dev,
                     len += sprintf(buf+len, "[%s] failed to get clock rate\n", "SH");
                 }
             }
-#endif
         }
     }
 
@@ -421,9 +417,8 @@ static ssize_t store_clk_rate (struct device *dev,
         if (galDevice->kernels[i] != gcvNULL)
             gpu_count++;
 
-#if MRVL_3D_CORE_SH_CLOCK_SEPARATED
-    gpu_count++;
-#endif
+    if (has_feat_3d_shader_clock())
+        gpu_count++;
 
     /* read input and verify */
     SYSFS_VERIFY_INPUT(sscanf(buf, "%d,%d", &core, &frequency), 2);
@@ -439,80 +434,6 @@ static ssize_t store_clk_rate (struct device *dev,
 
     return count;
 }
-
-#else /* MRVL_ENABLE_COMMON_PWRCLK_FRAMEWORK == 0 */
-
-static ssize_t show_clk_rate (struct device *dev,
-                    struct device_attribute *attr,
-                    char * buf)
-{
-    gceSTATUS status;
-    unsigned int clockRate = 0;
-    int i = 0, len = 0;
-
-    for(i = 0; i < gcdMAX_GPU_COUNT; i++)
-    {
-        if(galDevice->kernels[i] != gcvNULL)
-        {
-            status = gckOS_QueryClkRate(galDevice->os, i, &clockRate);
-            if(status == gcvSTATUS_OK)
-                len += sprintf(buf+len, "[%s] current frequency: %u MHZ\n", _core_desc[i], clockRate/1000/1000);
-            else
-                len += sprintf(buf+len, "[%s] failed to get clock rate\n", _core_desc[i]);
-#if MRVL_3D_CORE_SH_CLOCK_SEPARATED
-            if(i == gcvCORE_MAJOR)
-            {
-                unsigned int shClkRate = 0;
-
-                status = gckOS_QueryClkRate(galDevice->os, gcvCORE_SH, &shClkRate);
-                if(status == gcvSTATUS_OK)
-                {
-                    len += sprintf(buf+len, "[%s] current frequency: %u MHZ\n", "SH", shClkRate/1000/1000);
-                }
-                else
-                {
-                    len += sprintf(buf+len, "[%s] failed to get clock rate\n", "SH");
-                }
-            }
-#endif
-
-        }
-    }
-
-    return len;
-}
-
-static ssize_t store_clk_rate (struct device *dev,
-                    struct device_attribute *attr,
-                    const char *buf, size_t count)
-{
-    gceSTATUS status;
-    int core, frequency, i, gpu_count;
-
-    for (i = 0, gpu_count = 0; i < gcdMAX_GPU_COUNT; i++)
-        if (galDevice->kernels[i] != gcvNULL)
-            gpu_count++;
-
-#if MRVL_3D_CORE_SH_CLOCK_SEPARATED
-    gpu_count++;
-#endif
-
-    /* read input and verify */
-    SYSFS_VERIFY_INPUT(sscanf(buf, "%d,%d", &core, &frequency), 2);
-    SYSFS_VERIFY_INPUT_RANGE(core, 0, (gpu_count-1));
-    SYSFS_VERIFY_INPUT_RANGE(frequency, 156, 624);
-
-    status = gckOS_SetClkRate(galDevice->os, core, frequency*1000*1000);
-
-    if(gcmIS_ERROR(status))
-    {
-        printk("fail to set core[%d] frequency to %d MHZ\n", core, frequency);
-    }
-
-    return count;
-}
-
-#endif /* MRVL_ENABLE_COMMON_PWRCLK_FRAMEWORK */
 
 gc_sysfs_attr_rw(pm_state);
 gc_sysfs_attr_rw(profiler_debug);
@@ -530,9 +451,7 @@ static struct attribute *gc_debug_attrs[] = {
     &gc_attr_show_commands.attr,
     &gc_attr_register_stats.attr,
     &gc_attr_clk_rate.attr,
-#if MRVL_POLICY_CLKOFF_WHEN_IDLE
     &gc_attr_clk_off_when_idle.attr,
-#endif
 #if gcdPOWEROFF_TIMEOUT
     &gc_attr_poweroff_idle_timeout.attr,
 #endif
@@ -713,6 +632,42 @@ static struct attribute *gc_default_attrs[] = {
 };
 
 /* *********************************************************** */
+static inline int __create_sysfs_soft_link(struct platform_device *pdev)
+{
+    int ret = 0;
+    struct device * tmp = pdev->dev.parent;
+    struct device * parent = tmp;
+
+    do
+    {
+        if((ret = !strnicmp(parent->kobj.name, "platform", 9)))
+            break;
+        parent = tmp->parent;
+        tmp = parent;
+    }while(gcvTRUE);
+
+    parent_device = parent;
+    if((ret = sysfs_create_link(&parent->kobj, &pdev->dev.kobj, "galcore")))
+        printk("failed to create soft link\n");
+
+    return ret;
+}
+
+static inline int __remove_sysfs_soft_link(struct platform_device *pdev)
+{
+    struct device *parent = NULL;
+
+    if(!parent_device)
+        return 1;
+
+    parent = parent_device;
+    sysfs_remove_link(&parent->kobj, "galcore");
+
+    parent_device = NULL;
+
+    return 0;
+}
+
 static inline int __create_sysfs_file_debug(void)
 {
     int ret = 0;
@@ -818,6 +773,8 @@ void create_gc_sysfs_file(struct platform_device *pdev)
     /* FIXME: force kset of kobject 'gpu' linked to itself. */
     kset_gpu->kobj.kset = kset_gpu;
 
+    __create_sysfs_soft_link(pdev);
+
     ret = __create_sysfs_file_common();
     if(ret == 0)
         registered_common = 1;
@@ -859,6 +816,7 @@ void remove_gc_sysfs_file(struct platform_device *pdev)
 
     if(registered_common)
     {
+        __remove_sysfs_soft_link(pdev);
         __remove_sysfs_file_common();
         registered_common = 0;
     }

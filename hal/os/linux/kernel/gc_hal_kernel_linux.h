@@ -217,9 +217,7 @@ struct _gckOS
     /* critical power/clock operations */
     struct rw_semaphore         rwsem_clk_pwr;
 
-#if MRVL_POLICY_CLKOFF_WHEN_IDLE
     gctBOOL                     clkOffWhenIdle;
-#endif
 
     /* workqueue for os timer. */
     struct workqueue_struct *   workqueue;

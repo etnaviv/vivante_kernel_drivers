@@ -13,6 +13,7 @@
 #define __gc_hal_kernel_plat_h_
 
 #include "gc_hal.h"
+#include "gc_hal_kernel.h"
 #include <linux/mutex.h>
 #include <linux/spinlock.h>
 
@@ -24,12 +25,6 @@ extern "C"
 #define KHZ_TO_HZ(val)     ((val) * 1000)
 #define HZ_TO_KHZ(val)     ((val) / 1000)
 
-#if (MRVL_PLATFORM_TTD2) || (MRVL_PLATFORM_ADIR)
-#define PARAM_TYPE_PWR      unsigned int
-#else
-#define PARAM_TYPE_PWR      int
-#endif
-
 struct gc_iface;
 
 struct gc_ops {
@@ -38,7 +33,7 @@ struct gc_ops {
     void (*disableclk) (struct gc_iface *);
     int (*setclkrate) (struct gc_iface *, unsigned long);
     unsigned long (*getclkrate) (struct gc_iface *);
-    void (*pwrops) (struct gc_iface *, PARAM_TYPE_PWR);
+    void (*pwrops) (struct gc_iface *, unsigned int);
     void (*pwr_enable_prepare) (struct gc_iface *);
     void (*pwr_enable_unprepare) (struct gc_iface *);
     void (*pwr_disable_prepare) (struct gc_iface *);
@@ -68,7 +63,6 @@ struct gc_iface
     spinlock_t pwr_spinlock;
 };
 
-#if MRVL_ENABLE_COMMON_PWRCLK_FRAMEWORK /* == 1 */
 int gpu_clk_init(struct gc_iface *iface);
 void gpu_clk_disable(struct gc_iface *iface);
 int gpu_clk_enable(struct gc_iface *iface);
@@ -83,41 +77,6 @@ void gpu_pwr_enable_prepare(struct gc_iface *iface);
 void gpu_pwr_enable_unprepare(struct gc_iface *iface);
 
 struct gc_iface* gpu_get_iface_mapping(gceCORE core);
-#else /* MRVL_ENABLE_COMMON_PWRCLK_FRAMEWORK == 0 */
-static inline int gpu_clk_init(struct gc_iface *iface)
-{
-    return 0;
-}
-
-static inline void gpu_clk_disable(struct gc_iface *iface) {}
-
-static inline int gpu_clk_enable(struct gc_iface *iface)
-{
-    return 0;
-}
-
-static inline int gpu_clk_setrate(struct gc_iface *iface, unsigned long rate_khz)
-{
-    return 0;
-}
-
-static inline int gpu_clk_getrate(struct gc_iface *iface, unsigned long *rate_khz)
-{
-    return 0;
-}
-
-static inline void gpu_pwr_disable(struct gc_iface *iface) {}
-static inline void gpu_pwr_enable(struct gc_iface *iface) {}
-static inline void gpu_pwr_disable_prepare(struct gc_iface *iface) {}
-static inline void gpu_pwr_disable_unprepare(struct gc_iface *iface) {}
-static inline void gpu_pwr_enable_prepare(struct gc_iface *iface) {}
-static inline void gpu_pwr_enable_unprepare(struct gc_iface *iface) {}
-
-static inline struct gc_iface* gpu_get_iface_mapping(gceCORE core)
-{
-    return NULL;
-}
-#endif /* MRVL_ENABLE_COMMON_PWRCLK_FRAMEWORK */
 
 #ifdef __cplusplus
 }

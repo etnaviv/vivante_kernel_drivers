@@ -12,6 +12,7 @@
 #define __GPUFREQ_H__
 
 #include "gc_hal.h"
+#include "gc_hal_kernel_features.h"
 
 #if MRVL_CONFIG_ENABLE_GPUFREQ
 #include <linux/kobject.h>
@@ -19,17 +20,14 @@
 #include <linux/notifier.h>
 #include <linux/workqueue.h>
 #include <linux/sysfs.h>
+#include <linux/cputype.h>
 
 #define IN
 #define OUT
 #define INOUT
 #define __GPUFREQ_EXPORT_TO_GC
 
-#if MRVL_PLATFORM_PXA988_FAMILY || MRVL_PLATFORM_TTD2
-#   define GPUFREQ_HAVE_MULTI_CORES     1
-#else /* default */
-#   define GPUFREQ_HAVE_MULTI_CORES     0
-#endif
+#define GPUFREQ_HAVE_MULTI_CORES     1
 
 #if GPUFREQ_HAVE_MULTI_CORES
 #   define GPUFREQ_GPU_NUMS     2
@@ -332,10 +330,8 @@ int gpufreq_frequency_table_target(struct gpufreq_policy *policy,
 struct gpufreq_policy * gpufreq_policy_get(unsigned int gpu);
 void gpufreq_policy_put(struct gpufreq_policy *policy_data);
 
-#if MRVL_DFC_PROTECT_CLK_OPERATION
 void gpufreq_acquire_clock_mutex(unsigned int gpu);
 void gpufreq_release_clock_mutex(unsigned int gpu);
-#endif
 
 #endif /* END of MRVL_CONFIG_ENABLE_GPUFREQ */
 #endif /* END of __GPUFREQ_H__ */
