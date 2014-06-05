@@ -449,7 +449,7 @@
         should only be in debug or development drops.
 */
 #ifndef gcdREGISTER_ACCESS_FROM_USER
-#   define gcdREGISTER_ACCESS_FROM_USER         1
+#   define gcdREGISTER_ACCESS_FROM_USER         0
 #endif
 
 /*

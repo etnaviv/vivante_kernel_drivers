@@ -44,7 +44,7 @@ static struct gc_iface gc3dsh_iface = {
  * gc3d definition
  */
 
-static void __PLAT_APINAME(gc3d_pwr_ops)(struct gc_iface *iface, PARAM_TYPE_PWR enabled)
+static void __PLAT_APINAME(gc3d_pwr_ops)(struct gc_iface *iface, unsigned int enabled)
 {
     PR_DEBUG("[%6s] %s %d\n", iface->name, __func__, enabled);
 
@@ -69,7 +69,7 @@ static void __PLAT_APINAME(gc3d_pwr_ops)(struct gc_iface *iface, PARAM_TYPE_PWR 
 #endif
     }
 
-    GC3D_PWR(enabled);
+    GC3D_PWR((PARAM_TYPE_PWR)enabled);
 }
 
 static struct gc_ops gc3d_ops = {
@@ -96,7 +96,7 @@ static struct gc_iface gc3d_iface = {
 /**
  * gc2d definition
  */
-static void __PLAT_APINAME(gc2d_pwr_ops)(struct gc_iface *iface, PARAM_TYPE_PWR enabled)
+static void __PLAT_APINAME(gc2d_pwr_ops)(struct gc_iface *iface, unsigned int enabled)
 {
     PR_DEBUG("[%6s] %s %d\n", iface->name, __func__, enabled);
 
@@ -121,7 +121,7 @@ static void __PLAT_APINAME(gc2d_pwr_ops)(struct gc_iface *iface, PARAM_TYPE_PWR 
 #endif
     }
 
-    GC2D_PWR(enabled);
+    GC2D_PWR((PARAM_TYPE_PWR)enabled);
 }
 
 static struct gc_ops gc2d_ops = {
