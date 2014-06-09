@@ -773,7 +773,13 @@ void create_gc_sysfs_file(struct platform_device *pdev)
     /* FIXME: force kset of kobject 'gpu' linked to itself. */
     kset_gpu->kobj.kset = kset_gpu;
 
+    /* No need for current pxa1U88
+    * Remove this control after
+    * enabling power-domain and DT on pxa1U88
+    */
+#if MRVL_GPU_RESOURCE_DT
     __create_sysfs_soft_link(pdev);
+#endif
 
     ret = __create_sysfs_file_common();
     if(ret == 0)
@@ -816,7 +822,9 @@ void remove_gc_sysfs_file(struct platform_device *pdev)
 
     if(registered_common)
     {
+#if MRVL_GPU_RESOURCE_DT
         __remove_sysfs_soft_link(pdev);
+#endif
         __remove_sysfs_file_common();
         registered_common = 0;
     }
