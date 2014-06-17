@@ -136,57 +136,22 @@ static int gpufreq_frequency_table_get(unsigned int gpu,
     if(gpu == gcvCORE_MAJOR)
     {
         int outIndex = 0;
-        /* Core: Idle, Shader: Idle */
-        GPUFREQ_SET_FREQ_TABLE(core_table, 0, HZ_TO_KHZ(gc_freqs_table[0]));
-        GPUFREQ_SET_FREQ_TABLE(sh_table, 0, HZ_TO_KHZ(gc_sh_freqs_table[0]));
 
-        /* Core: Busy, Shader: Idle */
-        i = gcmMIN(1, (freq_table_item_count - 1));
-        GPUFREQ_SET_FREQ_TABLE(core_table, 1, HZ_TO_KHZ(gc_freqs_table[i]));
-        GPUFREQ_SET_FREQ_TABLE(sh_table, 1, HZ_TO_KHZ(gc_sh_freqs_table[0]));
-
-        outIndex = 2;
-        for(i = 1, j = 1; (i < freq_table_item_count - 1) || (j < sh_freq_table_item_count - 1); i++, j++, outIndex++)
+        for(i = 0, j = 0; (i < freq_table_item_count) || (j < sh_freq_table_item_count); i++, j++, outIndex++)
         {
-            if(i >= (freq_table_item_count - 1))
+            if(i >= freq_table_item_count)
             {
-                i = (int)freq_table_item_count - 2;
-
-                if(i < 0)
-                {
-                    i = 0;
-                }
+                i = (int)freq_table_item_count - 1;
             }
 
-            if(j >= sh_freq_table_item_count- 1)
+            if(j >= sh_freq_table_item_count)
             {
-                j = (int)sh_freq_table_item_count - 2;
-
-                if(j < 0)
-                {
-                    j = 0;
-                }
+                j = (int)sh_freq_table_item_count - 1;
             }
 
             GPUFREQ_SET_FREQ_TABLE(core_table, outIndex, HZ_TO_KHZ(gc_freqs_table[i]));
             GPUFREQ_SET_FREQ_TABLE(sh_table, outIndex, HZ_TO_KHZ(gc_sh_freqs_table[j]));
         }
-
-#if 0
-        /* Core: Idle, Shader: Busy */
-        i = ((int)freq_table_item_count - 2 < 0)? 0 : ((int)freq_table_item_count - 2);
-        j = sh_freq_table_item_count - 1;
-        GPUFREQ_SET_FREQ_TABLE(core_table, outIndex,HZ_TO_KHZ(gc_freqs_table[i]));
-        GPUFREQ_SET_FREQ_TABLE(sh_table, outIndex, HZ_TO_KHZ(gc_sh_freqs_table[j]));
-        outIndex++;
-#endif
-
-        /* Core: Busy, Shader: Busy */
-        i = freq_table_item_count - 1;
-        j = sh_freq_table_item_count - 1;
-        GPUFREQ_SET_FREQ_TABLE(core_table, outIndex, HZ_TO_KHZ(gc_freqs_table[i]));
-        GPUFREQ_SET_FREQ_TABLE(sh_table, outIndex, HZ_TO_KHZ(gc_sh_freqs_table[j]));
-        outIndex++;
 
         /* End of Table */
         GPUFREQ_SET_FREQ_TABLE(core_table, outIndex, GPUFREQ_TABLE_END);
@@ -407,8 +372,6 @@ static int eden_gpufreq_target (struct gpufreq_policy *policy, unsigned int targ
     struct gpufreq_freqs freq_sh = {0};
     unsigned int gpu = policy->gpu;
     struct gpufreq_frequency_table *freq_table = gpu_eden[gpu].freq_table;
-    static int old_major_index = -1;
-    static struct gpufreq_policy * old_major_policy = gcvNULL;
 
 #if MRVL_CONFIG_ENABLE_QOS_SUPPORT
     target_freq = max((unsigned int)pm_qos_request(gc_qos[gpu].pm_qos_class_min),
@@ -441,39 +404,9 @@ static int eden_gpufreq_target (struct gpufreq_policy *policy, unsigned int targ
 
     if(gpu == gcvCORE_MAJOR)
     {
-        if(old_major_policy != policy)
-        {
-            old_major_index = index;
-            old_major_policy = policy;
-        }
         freq_sh.gpu = gcvCORE_MAJOR;
         freq_sh.old_freq = gpufreq_3d_shader_freq_get();
         freq_sh.new_freq = gpu_eden[gcvCORE_MAJOR].freq_table_sh[index].frequency;
-
-        /* FIXME: Workaround current gpufreq_frequency_table_target() function can only
-           handle monotone increasing data.*/
-        if(freq.old_freq == freq.new_freq)
-        {
-            if(target_freq > freq.old_freq)
-            {
-                if((old_major_index + 1) < major_freq_table_size)
-                {
-                    index = old_major_index + 1;
-                }
-            }
-            else if(target_freq < freq.old_freq)
-            {
-                if((old_major_index - 1) >= 0)
-                {
-                    index = old_major_index - 1;
-                }
-            }
-
-            freq.new_freq = freq_table[index].frequency;
-            freq_sh.new_freq = gpu_eden[gcvCORE_MAJOR].freq_table_sh[index].frequency;
-        }
-
-        old_major_index = index;
     }
 
 #if MRVL_CONFIG_ENABLE_QOS_SUPPORT
@@ -517,13 +450,6 @@ static int eden_gpufreq_set(unsigned int gpu, struct gpufreq_freqs *freq, struct
                         freq->old_freq, freq->new_freq);
     }
 
-    status = gckOS_SetClkRate(gpu_os, gpu, freq->new_freq);
-    if(gcmIS_ERROR(status))
-    {
-        debug_log(GPUFREQ_LOG_WARNING, "[%d] failed to set target rate %u KHZ\n",
-                        gpu, freq->new_freq);
-    }
-
     if(gpu == gcvCORE_MAJOR)
     {
         status = gckOS_SetClkRate(gpu_os, gcvCORE_SH, freq_sh->new_freq);
@@ -532,6 +458,13 @@ static int eden_gpufreq_set(unsigned int gpu, struct gpufreq_freqs *freq, struct
             debug_log(GPUFREQ_LOG_WARNING, "[%d] failed to set target rate %u KHZ\n",
                             gpu, freq_sh->new_freq);
         }
+    }
+
+    status = gckOS_SetClkRate(gpu_os, gpu, freq->new_freq);
+    if(gcmIS_ERROR(status))
+    {
+        debug_log(GPUFREQ_LOG_WARNING, "[%d] failed to set target rate %u KHZ\n",
+                        gpu, freq->new_freq);
     }
 
     if (has_feat_dfc_protect_clk_op())

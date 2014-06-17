@@ -1891,6 +1891,12 @@ gcoTEXTURE_RenderIntoMipMap2(
     );
 
 gceSTATUS
+gcoTEXTURE_DetachMipMapFromFBO(
+    IN gcoTEXTURE Texture,
+    IN gctINT Level
+    );
+
+gceSTATUS
 gcoTEXTURE_IsRenderable(
     IN gcoTEXTURE Texture,
     IN gctUINT Level
