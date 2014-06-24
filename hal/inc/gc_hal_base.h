@@ -170,6 +170,7 @@ typedef enum _gcePATCH_ID
     gcvPATCH_RIPTIDEGP2,
     gcvPATCH_OESCTS,
     gcvPATCH_GANGSTAR,
+    gcvPATCH_HOME_L,
 
     gcvPATCH_COUNT
 } gcePATCH_ID;
