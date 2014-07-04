@@ -239,6 +239,7 @@ typedef enum _gceFEATURE
     gcvFEATURE_BUG_FIXES8,
     gcvFEATURE_2D_ALL_QUAD,
 
+    gcvFEATURE_V2_MSAA_COMP_FIX,
     /* Insert features above this comment only. */
     gcvFEATURE_COUNT                /* Not a feature. */
 }
