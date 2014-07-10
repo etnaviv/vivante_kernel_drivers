@@ -4298,6 +4298,7 @@ gckHARDWARE_GetIdle(
 {
     gceSTATUS status;
     gctUINT32 idle = 0;
+    gctBOOL isIdle = gcvFALSE;
     gctINT retry, poll, pollCount;
     gctUINT32 address;
 
@@ -4321,24 +4322,28 @@ gckHARDWARE_GetIdle(
             gcmkONERROR(
                 gckOS_ReadRegisterEx(Hardware->os, Hardware->core, 0x00004, &idle));
 
-            /* Read the current FE address. */
-            gcmkONERROR(gckOS_ReadRegisterEx(Hardware->os,
-                                             Hardware->core,
-                                             0x00664,
-                                             &address));
+            /* Pipe must be idle. */
+            if ((idle & 0x7FFFFFFF) == 0x7FFFFFFF)
+            {
+                /* Read the current FE address. */
+                gcmkONERROR(gckOS_ReadRegisterEx(Hardware->os,
+                                                 Hardware->core,
+                                                 0x00664,
+                                                 &address));
 
-
-            /* See if we have to wait for FE idle. */
-	if ((((((gctUINT32)(idle)) >> (0 ? 0:0)) &((gctUINT32) ((((1 ? 0:0) - (0 ? 0:0) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 0:0) - (0 ? 0:0) + 1)))))))&& (address == Hardware->lastEnd + 8))
-	            {
-                /* FE is idle. */
-                break;
+                /* See if we have to wait for FE idle. */
+                if (address == Hardware->lastEnd + 8)
+                {
+                    /* FE is idle. */
+                    isIdle = gcvTRUE;
+                    break;
+                }
             }
         }
 
-        /* Check if we need to wait for FE and FE is busy. */
-	if (Wait && !(((((gctUINT32)(idle)) >> (0 ? 0:0)) &((gctUINT32) ((((1 ? 0:0) - (0 ? 0:0) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 0:0) - (0 ? 0:0) + 1))))))))
-	        {
+        /* Check if we need to wait. */
+        if (Wait && !isIdle)
+        {
             /* Wait a little. */
             gcmkTRACE_ZONE(gcvLEVEL_INFO, gcvZONE_HARDWARE,
                            "%s: Waiting for idle: 0x%08X",
