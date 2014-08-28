@@ -168,7 +168,7 @@ ifeq ($(ANDROID), 1)
     USE_VDK = 0
     CFLAGS += -DANDROID=1 -DANDROID_SDK_VERSION=$(PLATFORM_SDK_VERSION)
     CFLAGS += -I $(ANDROID_HOME)/libnativehelper/include/nativehelper -isystem $(ANDROID_HOME)/system/core/include -isystem $(ANDROID_HOME)/hardware/libhardware/include -isystem $(ANDROID_HOME)/hardware/libhardware_legacy/include -isystem $(ANDROID_HOME)/hardware/ril/include -isystem $(ANDROID_HOME)/libnativehelper/include -isystem $(ANDROID_HOME)/frameworks/native/include -isystem $(ANDROID_HOME)/frameworks/native/opengl/include -isystem $(ANDROID_HOME)/frameworks/av/include -isystem $(ANDROID_HOME)/frameworks/base/include -isystem $(ANDROID_HOME)/frameworks/base/opengl/include -isystem $(ANDROID_HOME)/external/skia/include -isystem $(ANDROID_PRODUCT_OUT)/obj/include -isystem $(ANDROID_HOME)/bionic/libc/include -isystem $(ANDROID_HOME)/bionic/libstdc++/include -isystem $(ANDROID_HOME)/bionic/libm/include -isystem $(ANDROID_HOME)/bionic/libthread_db/include
-    CFLAGS += -fno-exceptions -Wno-multichar -fpic -fPIE -ffunction-sections -fdata-sections -funwind-tables -Wa,--noexecstack -Werror=format-security -D_FORTIFY_SOURCE=1 -fno-short-enums -fno-builtin-sin -Wno-psabi -fmessage-length=0 -W -Wall -Wno-unused -Winit-self -Wpointer-arith -Werror=return-type -Werror=non-virtual-dtor -Werror=address -Werror=sequence-point -DNDEBUG -g -Wstrict-aliasing=2 -fgcse-after-reload -frerun-cse-after-loop -frename-registers -UDEBUG -Os -fomit-frame-pointer -fno-strict-aliasing -Wno-missing-field-initializers -Wno-unused-parameter -Wextra -MD
+    CFLAGS += -fno-exceptions -Wno-multichar -ffunction-sections -fdata-sections -funwind-tables -fstack-protector -Wa,--noexecstack -Werror=format-security -D_FORTIFY_SOURCE=1 -fno-short-enums -Wno-psabi -fmessage-length=0 -W -Wall -Wno-unused -Winit-self -Wpointer-arith -Werror=return-type -Werror=non-virtual-dtor -Werror=address -Werror=sequence-point -DNDEBUG -g -Wstrict-aliasing=2 -fgcse-after-reload -frerun-cse-after-loop -frename-registers -UDEBUG -Os -fno-strict-aliasing -Wno-missing-field-initializers -Wno-unused-parameter -Wextra -fPIC -MD
 
     # TODO: This works on current AOSP master, need to check sdk version and include path after a new formal Android release
     ifeq ($(shell expr $(PLATFORM_SDK_VERSION) ">=" 20),1)
@@ -190,6 +190,9 @@ ifeq ($(ANDROID), 1)
     ifeq ($(shell expr $(PLATFORM_SDK_VERSION) ">=" 16),1)
         CFLAGS += -Wno-unused-but-set-variable -fno-strict-volatile-bitfields
     endif
+    ifeq ($(shell expr $(PLATFORM_SDK_VERSION) ">=" 20),1)
+        CFLAGS += -no-canonical-prefixes -fno-canonical-system-headers
+    endif
 
     ifeq ($(USE_LOCAL_GRALLOC), 1)
         CFLAGS += -DUSE_LOCAL_GRALLOC=1 -I $(AQROOT)/driver/android/gralloc
@@ -202,7 +205,7 @@ ifeq ($(ANDROID), 1)
     endif
 
     ifeq ($(ARCH_TYPE), arm)
-        CFLAGS += -msoft-float -fstack-protector -march=armv7-a -mfloat-abi=softfp -mfpu=neon -mthumb-interwork -mthumb
+        CFLAGS += -fno-builtin-sin -fomit-frame-pointer -msoft-float -march=armv7-a -mfloat-abi=softfp -mfpu=neon -mthumb-interwork -mthumb
     else ifeq ($(ARCH_TYPE), arm64)
         # TODO: these flags are added by Android toolchain on 64bit master by default, usefull to check int/ptr cast errors.
         #       But VSC_NEW will fail to compile, so turn off these flags until VSC is on use!
