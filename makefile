@@ -8,10 +8,6 @@ ifneq ($(ARCH),)
        ARCH_TYPE := $(ARCH)
 endif
 
-ifeq ($(ARCH), arm64)
-       CROSS_COMPILE := aarch64-linux-android-
-endif
-
 KERNEL_DIR ?= ${ANDROID_PRODUCT_OUT}/obj/kernel/
 GPU_TYPE ?= XAQ2
 

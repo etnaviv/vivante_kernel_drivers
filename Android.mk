@@ -10,7 +10,7 @@ ifneq ($(ARCH),)
 endif
 
 ifeq ($(ARCH), arm64)
-       CROSS_COMPILE := aarch64-linux-android-
+       CROSS_COMPILE := $(KERNEL_TOOLS_PREFIX)
        BUILD_PARAMETERS := -j$(MAKE_JOBS)
 endif
 
@@ -26,7 +26,7 @@ LOCAL_MODULE_PATH := $(PRODUCT_OUT)/system/lib/modules
 $(LOCAL_PATH)/$(LOCAL_SRC_FILES): build-galcore
 include $(BUILD_PREBUILT)
 
-build-galcore: uImage
+build-galcore: android_kernel
 	cd $(GALCORE_SRC_PATH) &&\
 	$(MAKE) $(BUILD_PARAMETERS)
 ifeq (,$(wildcard $(PRODUCT_OUT)/system/lib/modules))
