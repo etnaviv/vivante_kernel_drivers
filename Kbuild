@@ -168,7 +168,9 @@ all:
 
 clean:
 	@rm -rf $(OBJS)
+	@rm -rf $(OS_KERNEL_DIR)/gc_hal_kernel_sync.o
 	@rm -rf $(DRIVER_OUT_DIR)
+	@rm -rf .tmp_versions
 	@rm -rf modules.order Module.symvers
 	@find $(AQROOT) -name ".gc_*.cmd" | xargs rm -f
 	@find $(OS_KERNEL_DIR) -name ".gc_*.cmd" | xargs rm -f
