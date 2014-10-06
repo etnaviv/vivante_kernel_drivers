@@ -1,3 +1,5 @@
+ifeq ($(TARGET_BOARD_PLATFORM),mrvl)
+
 .PHONY: build-galcore
 
 ARCH ?= arm64
@@ -43,3 +45,5 @@ ifeq (,$(wildcard $(PRODUCT_OUT)/system/lib/modules))
 	mkdir -p $(PRODUCT_OUT)/system/lib/modules
 endif
 	cp $(GALCORE_SRC_PATH)/hal/driver/galcore.ko $(PRODUCT_OUT)/system/lib/modules
+
+endif
