@@ -29,6 +29,7 @@ $(LOCAL_PATH)/$(LOCAL_SRC_FILES): build-galcore
 include $(BUILD_PREBUILT)
 
 build-galcore: android_kernel
+	make clean -C $(GALCORE_SRC_PATH)
 	cd $(GALCORE_SRC_PATH) &&\
 	$(MAKE) $(BUILD_PARAMETERS)
 ifeq (,$(wildcard $(PRODUCT_OUT)/system/lib/modules))
