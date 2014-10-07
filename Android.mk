@@ -16,7 +16,7 @@ ifeq ($(ARCH), arm64)
        BUILD_PARAMETERS := -j$(MAKE_JOBS)
 endif
 
-$(PRODUCT_OUT)/ramdisk.img: galcore.ko
+$(PRODUCT_OUT)/ramdisk.img: build-galcore
 
 include $(CLEAR_VARS)
 GALCORE_SRC_PATH := $(ANDROID_BUILD_TOP)/vendor/marvell/generic/graphics/driver
@@ -24,7 +24,7 @@ LOCAL_PATH := $(GALCORE_SRC_PATH)/hal/driver
 LOCAL_SRC_FILES := galcore.ko
 LOCAL_MODULE := $(LOCAL_SRC_FILES)
 LOCAL_MODULE_CLASS := EXECUTABLES
-LOCAL_MODULE_PATH := $(PRODUCT_OUT)/system/lib/modules
+LOCAL_MODULE_PATH := $(PRODUCT_OUT)/root/lib/modules
 $(LOCAL_PATH)/$(LOCAL_SRC_FILES): build-galcore
 include $(BUILD_PREBUILT)
 
@@ -32,10 +32,10 @@ build-galcore: android_kernel
 	make clean -C $(GALCORE_SRC_PATH)
 	cd $(GALCORE_SRC_PATH) &&\
 	$(MAKE) $(BUILD_PARAMETERS)
-ifeq (,$(wildcard $(PRODUCT_OUT)/system/lib/modules))
-	mkdir -p $(PRODUCT_OUT)/system/lib/modules
+ifeq (,$(wildcard $(PRODUCT_OUT)/root/lib/modules))
+	mkdir -p $(PRODUCT_OUT)/root/lib/modules
 endif
-	cp $(GALCORE_SRC_PATH)/hal/driver/galcore.ko $(PRODUCT_OUT)/system/lib/modules
+	cp $(GALCORE_SRC_PATH)/hal/driver/galcore.ko $(PRODUCT_OUT)/root/lib/modules
 
 
 .PHONY: build-debug-galcore
