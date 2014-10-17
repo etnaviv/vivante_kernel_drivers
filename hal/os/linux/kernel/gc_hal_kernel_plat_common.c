@@ -12,6 +12,7 @@
 #include <linux/clk.h>
 #include <linux/printk.h>
 #include <linux/err.h>
+#include <linux/platform_device.h>
 #include "gc_hal_kernel_plat_common.h"
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0))
@@ -22,20 +23,29 @@
 #define GC_CLK_DISABLE      clk_disable
 #endif
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0))
+#define get_clk_ptr(dev, id) devm_clk_get(&(dev), id)
+#else
+#define get_clk_ptr(dev, id) clk_get(NULL, id)
+#endif
 static struct clk * __get_gpu_clk(struct gc_iface *iface)
 {
+    struct platform_device *pdev = gcvNULL;
+
+    pdev = (struct platform_device *)iface->pdev;
+
     if(WARN_ON(unlikely(!iface)))
         return NULL;
 
     if(unlikely(!iface->clk))
-        iface->clk = clk_get(NULL, iface->con_id);
+        iface->clk = get_clk_ptr(pdev->dev, iface->con_id);
 
     BUG_ON(IS_ERR_OR_NULL(iface->clk));
 
     return iface->clk;
 }
 
-void gpu_lock_init_dft(struct gc_iface *iface)
+void gpu_lock_init_dft(struct gc_iface *iface, gctPOINTER pdev)
 {
     /* init lock for iface at the first time */
     if(unlikely(!iface->inited))
@@ -50,6 +60,9 @@ void gpu_lock_init_dft(struct gc_iface *iface)
 
         /* set clk to be cansleep by default */
         iface->cansleep = 1;
+
+        /* init all pdev in iface*/
+        iface->pdev = pdev;
     }
 }
 

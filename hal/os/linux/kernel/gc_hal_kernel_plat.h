@@ -28,7 +28,7 @@ extern "C"
 struct gc_iface;
 
 struct gc_ops {
-    void (*init) (struct gc_iface *);
+    void (*init) (struct gc_iface *, void *);
     int (*enableclk) (struct gc_iface *);
     void (*disableclk) (struct gc_iface *);
     int (*setclkrate) (struct gc_iface *, unsigned long);
@@ -48,6 +48,9 @@ struct gc_iface
     const char *con_id;
     struct clk *clk;
 
+    /*ptr for current device*/
+    void *pdev;
+
     const unsigned int chains_count;
     struct gc_iface **chains_clk;
 
@@ -63,7 +66,7 @@ struct gc_iface
     spinlock_t pwr_spinlock;
 };
 
-int gpu_clk_init(struct gc_iface *iface);
+int gpu_clk_init(struct gc_iface *iface, void *ptr);
 void gpu_clk_disable(struct gc_iface *iface);
 int gpu_clk_enable(struct gc_iface *iface);
 int gpu_clk_setrate(struct gc_iface *iface, unsigned long rate_khz);

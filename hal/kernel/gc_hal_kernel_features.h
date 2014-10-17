@@ -3,6 +3,16 @@
 
 #include <linux/cputype.h>
 
+/* refer to MRVL_CONFIG_MMP_PM_DOMAIN(used in mrvl4x)*/
+static inline int has_feat_power_domain(void)
+{
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,14,0)
+    return cpu_is_pxa1U88() || cpu_is_pxa1908();
+#else
+    return 0;
+#endif
+}
+
 /* refer to MRVL_CONFIG_POWER_CLOCK_SEPARATED(removed) */
 static inline int has_feat_separated_power_clock(void)
 {
@@ -26,7 +36,23 @@ static inline int has_feat_separated_gc_power(void)
 */
 static inline int has_feat_2d_power_onoff(void)
 {
+#if LINUX_VERSION_CODE <= KERNEL_VERSION(3,10,0)
     return !cpu_is_pxa1928_zx();
+#else
+    return 1;
+#endif
+}
+
+/* has pulse eater support */
+static inline int has_feat_pulse_eater_profiler(void)
+{
+    return cpu_is_pxa1U88() || cpu_is_pxa1908();
+}
+
+/* refer to MRVL_CONFIG_SHADER_CLK_CONTROL */
+static inline int has_feat_shader_indept_dfc(void)
+{
+    return cpu_is_pxa1U88() || cpu_is_pxa1908();
 }
 
 /* MRVL_3D_CORE_SH_CLOCK_SEPARATED */
@@ -46,7 +72,7 @@ static inline int has_feat_policy_clock_off_when_idle(void)
 */
 static inline int has_feat_dfc_protect_clk_op(void)
 {
-    return cpu_is_pxa1928();
+    return cpu_is_pxa1928() || cpu_is_pxa1U88() || cpu_is_pxa1908();
 }
 
 /*

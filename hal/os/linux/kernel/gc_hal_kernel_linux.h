@@ -11,7 +11,6 @@
 *****************************************************************************/
 
 
-
 #ifndef __gc_hal_kernel_linux_h_
 #define __gc_hal_kernel_linux_h_
 
@@ -46,9 +45,11 @@
 #include "gc_hal.h"
 #include "gc_hal_driver.h"
 #include "gc_hal_kernel.h"
+#include "gc_hal_kernel_platform.h"
 #include "gc_hal_kernel_device.h"
 #include "gc_hal_kernel_os.h"
 #include "gc_hal_kernel_debugfs.h"
+
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,31)
 #define FIND_TASK_BY_PID(x) pid_task(find_vpid(x), PIDTYPE_PID)
@@ -63,10 +64,12 @@
 
 #define countof(a)                    (sizeof(a) / sizeof(a[0]))
 
+#ifndef DEVICE_NAME
 #ifdef CONFIG_DOVE_GPU
 #   define DEVICE_NAME              "dove_gpu"
 #else
 #   define DEVICE_NAME              "galcore"
+#endif
 #endif
 
 #define GetPageCount(size, offset)     ((((size) + ((offset) & ~PAGE_CACHE_MASK)) + PAGE_CACHE_SIZE - 1) >> PAGE_CACHE_SHIFT)
@@ -96,29 +99,9 @@
 #define gcdNOWARN 0
 #endif
 
-#define gcdUSE_NON_PAGED_MEMORY_CACHE 50
-
 /******************************************************************************\
 ********************************** Structures **********************************
 \******************************************************************************/
-#if gcdUSE_NON_PAGED_MEMORY_CACHE
-typedef struct _gcsNonPagedMemoryCache
-{
-#ifndef NO_DMA_COHERENT
-    gctINT                           size;
-    gctSTRING                        addr;
-    dma_addr_t                       dmaHandle;
-#else
-    long                             order;
-    struct page *                    page;
-#endif
-
-    struct _gcsNonPagedMemoryCache * prev;
-    struct _gcsNonPagedMemoryCache * next;
-}
-gcsNonPagedMemoryCache;
-#endif /* gcdUSE_NON_PAGED_MEMORY_CACHE */
-
 typedef struct _gcsUSER_MAPPING * gcsUSER_MAPPING_PTR;
 typedef struct _gcsUSER_MAPPING
 {
@@ -204,12 +187,6 @@ struct _gckOS
     gcsUSER_MAPPING_PTR         userMap;
     gctPOINTER                  debugLock;
 
-#if gcdUSE_NON_PAGED_MEMORY_CACHE
-    gctUINT                      cacheSize;
-    gcsNonPagedMemoryCache *     cacheHead;
-    gcsNonPagedMemoryCache *     cacheTail;
-#endif
-
     /* Nested power/clock enable/disable of 2D/3D chip. */
     gctUINT32                   clockDepth;
     gctUINT32                   powerDepth;
@@ -229,6 +206,20 @@ struct _gckOS
     atomic_t                    allocateCount;
 
     struct list_head            allocatorList;
+
+    gcsDEBUGFS_DIR              allocatorDebugfsDir;
+
+    /* Lock for register access check. */
+    struct mutex                registerAccessLocks[gcdMAX_GPU_COUNT];
+
+    /* External power states. */
+    gctBOOL                     powerStates[gcdMAX_GPU_COUNT];
+
+    /* External clock states. */
+    gctBOOL                     clockStates[gcdMAX_GPU_COUNT];
+
+    /* store unparse freq-table*/
+    gctPOINTER                  freqTable[gcdMAX_GPU_COUNT];
 };
 
 typedef struct _gcsSIGNAL * gcsSIGNAL_PTR;
@@ -282,6 +273,7 @@ typedef struct _gcsPageInfo
 #if gcdPROCESS_ADDRESS_SPACE
     gckMMU mmu;
 #endif
+    gctBOOL pfnMap;
 }
 gcsPageInfo;
 

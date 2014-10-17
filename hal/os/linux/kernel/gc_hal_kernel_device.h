@@ -11,9 +11,19 @@
 *****************************************************************************/
 
 
-
 #ifndef __gc_hal_kernel_device_h_
 #define __gc_hal_kernel_device_h_
+
+#include "gc_hal_kernel_debugfs.h"
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0)
+#define FREQ_TABLE_MAX 10
+struct freq_table {
+    unsigned int    index;
+    unsigned int    frequency;
+    unsigned int    busfreq;
+};
+#endif
 
 /******************************************************************************\
 ******************************* gckGALDEVICE Structure *******************************
@@ -24,6 +34,14 @@ typedef struct _gckGALDEVICE
     /* Objects. */
     gckOS               os;
     gckKERNEL           kernels[gcdMAX_GPU_COUNT];
+
+    gcsPLATFORM*        platform;
+
+    struct platform_device *pdev[gcdMAX_GPU_COUNT];
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0)
+    struct freq_table   *ft;
+#endif
 
     /* Attributes. */
     gctSIZE_T           internalSize;
@@ -43,6 +61,7 @@ typedef struct _gckGALDEVICE
     gctSIZE_T           contiguousSize;
     gctBOOL             contiguousMapped;
     gctPOINTER          contiguousMappedUser;
+    gctBOOL             contiguousRequested;
     gctSIZE_T           systemMemorySize;
     gctUINT32           systemMemoryBaseAddress;
 #if gcdMULTI_GPU
@@ -69,7 +88,6 @@ typedef struct _gckGALDEVICE
 #endif
     gctINT              irqLines[gcdMAX_GPU_COUNT];
     gctBOOL             isrInitializeds[gcdMAX_GPU_COUNT];
-    gctBOOL             dataReadys[gcdMAX_GPU_COUNT];
 
     /* Thread management. */
 #if gcdMULTI_GPU
@@ -104,10 +122,6 @@ typedef struct _gckGALDEVICE
     /* GC memory profile*/
     gctSIZE_T           reservedMem;
     gctINT32            vidMemUsage;
-#if MRVL_VIDEO_MEMORY_USE_PMEM
-    gctSIZE_T           reservedPmemMem;
-    gctINT32            pmemUsage;
-#endif
     gctINT32            contiguousNonPagedMemUsage;
     gctINT32            contiguousPagedMemUsage;
     gctINT32            virtualPagedMemUsage;
@@ -131,6 +145,8 @@ typedef struct _gckGALDEVICE
 
     /* Device Debug File System Entry in kernel. */
     struct _gcsDEBUGFS_Node * dbgNode;
+
+    gcsDEBUGFS_DIR      debugfsDir;
 }
 * gckGALDEVICE;
 
@@ -148,6 +164,10 @@ typedef struct _gcsDEVICE_CONSTRUCT_ARGS
 {
     gctBOOL             recovery;
     gctUINT             stuckDump;
+    gctUINT             gpu3DMinClock;
+
+    gctBOOL             contiguousRequested;
+    gcsPLATFORM*        platform;
 }
 gcsDEVICE_CONSTRUCT_ARGS;
 
@@ -222,7 +242,7 @@ gceSTATUS gckGALDEVICE_Construct(
     IN gctINT PowerManagement,
     IN gctINT GpuProfiler,
     IN gcsDEVICE_CONSTRUCT_ARGS * Args,
-    OUT gckGALDEVICE *Device
+    IN gckGALDEVICE Device
     );
 
 gceSTATUS gckGALDEVICE_Destroy(

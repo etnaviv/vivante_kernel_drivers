@@ -11,7 +11,6 @@
 *****************************************************************************/
 
 
-
 #ifndef __gc_hal_kernel_precomp_h_
 #define __gc_hal_kernel_precomp_h_
 

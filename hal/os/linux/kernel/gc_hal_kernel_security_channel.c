@@ -18,7 +18,8 @@
 
 #define _GC_OBJ_ZONE gcvZONE_OS
 
-#define GPU3D_UUID     { 0x111111, 0x1111, 0x1111, { 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11 } }
+#define GPU3D_UUID   { 0xcc9f80ea, 0xa836, 0x11e3, { 0x9b, 0x07, 0x78, 0x2b, 0xcb, 0x5c, 0xf3, 0xe3 } }
+
 static const TEEC_UUID gpu3d_uuid = GPU3D_UUID;
 TEEC_Context teecContext;
 
@@ -54,11 +55,23 @@ gpu3d_allocate_secure_mem(
 
     memset(shm, 0, sizeof(TEEC_SharedMemory));
 
-    status = gckOS_AllocateIonMemory(Os,
-                            gcvTRUE,
-                            &bytes,
-                            (gctPHYS_ADDR *)&handle,
-                            &phyAddr);
+    status = gckOS_AllocatePagedMemoryEx(
+                Os,
+                gcvALLOC_FLAG_SECURITY,
+                bytes,
+                gcvNULL,
+                (gctPHYS_ADDR *)&handle);
+
+    if (gcmIS_ERROR(status))
+    {
+         kfree(shm);
+         return NULL;
+    }
+
+    status = gckOS_PhysicalToPhysicalAddress(
+                Os,
+                handle,
+                &phyAddr);
 
     if (gcmIS_ERROR(status))
     {
@@ -79,9 +92,10 @@ gpu3d_allocate_secure_mem(
     result = TEEC_RegisterSharedMemory(
             context,
             shm);
+
     if (result != TEEC_SUCCESS)
     {
-        gpu_free_memory(handle);
+        gckOS_FreePagedMemory(Os, (gctPHYS_ADDR)handle, shm->size);
         kfree(shm);
         return NULL;
     }
@@ -105,8 +119,7 @@ void gpu3d_release_secure_mem(
     handle = shm->userdata;
 
     TEEC_ReleaseSharedMemory(shm);
-
-    gckOS_FreeIonMemory(Os, (gctPHYS_ADDR)handle);
+    gckOS_FreePagedMemory(Os, (gctPHYS_ADDR)handle, shm->size);
 
     kfree(shm);
 

@@ -24,32 +24,6 @@
 
 #define GC_DRIVER_VERSION 5
 
-/* Use pmem flag */
-#if (defined ANDROID || defined X11) && !defined(__QNXNTO__)
-#define MRVL_VIDEO_MEMORY_USE_PMEM              1
-#define MRVL_PMEM_MINOR_FLAG                    1
-
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,4,0))
-#define MRVL_VIDEO_MEMORY_USE_ION               1
-#else
-#define MRVL_VIDEO_MEMORY_USE_ION               0
-#endif
-
-#else
-#define MRVL_VIDEO_MEMORY_USE_PMEM              0
-#endif
-
-/*
-  This marco is for PXA988 series platforms
-    support platforms:   HelanLTE, Helan2
-    no longer support:   Emei, Helan
-*/
-#ifdef CONFIG_CPU_PXA988
-#define MRVL_PLATFORM_PXA988_FAMILY             1
-#else
-#define MRVL_PLATFORM_PXA988_FAMILY             0
-#endif
-
 /* Eden/TTD2 */
 #if (defined CONFIG_MACH_TTD2_FPGA) || (defined CONFIG_MACH_EDEN_FPGA) || \
     (defined CONFIG_MACH_PXA1928_FPGA)
@@ -73,10 +47,11 @@
 #define MRVL_ENABLE_GC_POWER_CLOCK              0
 #endif
 
+#if defined(LINUX)
 /*
     Reserve GPU memory resource by device tree.
 */
-#if (defined CONFIG_OF) && (defined CONFIG_ARM64)
+#if (defined CONFIG_OF) && ((defined CONFIG_ARM64)|| (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0)))
 #define MRVL_GPU_RESOURCE_DT                    1
 #else
 #define MRVL_GPU_RESOURCE_DT                    0
@@ -87,6 +62,7 @@
 #define MRVL_USE_GPU_RESERVE_MEM                1
 #else
 #define MRVL_USE_GPU_RESERVE_MEM                0
+#endif
 #endif
 
 /* API log enable */
@@ -116,6 +92,8 @@
 #ifndef MRVL_ENABLE_DUMP_SURFACE
 #define MRVL_ENABLE_DUMP_SURFACE                1
 #endif
+
+#define MRVL_ALWAYS_PRINT_ERROR                 1
 
 /*
     MRVL_CONFIG_SYSFS
@@ -149,6 +127,13 @@
 #define MRVL_CONFIG_ENABLE_GPUFREQ              0
 #endif
 
+/*
+ * MRVL_CONFIG_SHADER_CLK_CONTROL
+ *      default is enable, and let has_feat_shader_indept_dfc() to check
+ *      whether current platform supports it or not.
+ */
+#define MRVL_CONFIG_SHADER_CLK_CONTROL          1
+
 #define MRVL_CONFIG_ENABLE_QOS_SUPPORT          1
 
 /*
@@ -163,6 +148,15 @@
 #endif
 
 #define MRVL_REDEFINE_KERNEL_MUTEX_INIT         1
+
+/*Pulse Eater counter --- record Nums*/
+#ifndef PULSE_EATER_COUNT
+#define PULSE_EATER_COUNT                       200
+#endif
+
+#ifndef gcdPulseEaterPeriode
+#define gcdPulseEaterPeriode                  10
+#endif
 
 /*
     MRVL_ENABLE_S3TC_TEXTURE
@@ -210,6 +204,9 @@
 #define MRVL_ENABLE_GPUTEX                 0
 #endif
 
+#ifndef MRVL_USE_MRVL_SUPER_TILE_UPLOAD
+#define MRVL_USE_MRVL_SUPER_TILE_UPLOAD    1
+#endif
 
 /*
     MRVL_USE_VIV_ICD_DISPATCH
@@ -247,29 +244,6 @@
 
 #define MRVL_GC_FLUSHCACHE_PFN                1
 
-/*
-    MRVL_DISABLE_NEW_HZ
-        -- disable NEW_HZ since systemui hang when booting up after 5.0.11.pre2 on eden a0
-*/
-#ifndef MRVL_DISABLE_NEW_HZ
-#define MRVL_DISABLE_NEW_HZ 0
-#endif
-
-/*
-    MRVL_DISABLE_SMALL_MSAA
-        -- disable SMALL_MSAA since system hang when running oes20 javasft TRasTex_007 after 5.0.11.pre2 on eden a0
-*/
-#ifndef MRVL_DISABLE_SMALL_MSAA
-#define MRVL_DISABLE_SMALL_MSAA 0
-#endif
-
-/*
-    MRVL_DISABLE_SINGLE_BUFFER
-        -- disable SINGLE_BUFFER since system hang when running oes20 javasft TFBFBO_001 after 5.0.11.pre2 on eden a0
-*/
-#ifndef MRVL_DISABLE_SINGLE_BUFFER
-#define MRVL_DISABLE_SINGLE_BUFFER 0
-#endif
 
 /*
 *  Definitions for vendor, renderer and version strings
@@ -280,7 +254,7 @@
 /* @Ziyi: If any change happened between these 2 comments please contact zyxu@marvell.com, Thanks. */
 /* #################### [START ==DO NOT CHANGE THIS MARCRO== START] #################### */
 
-#define _GC_VERSION_STRING_ "GC version rls_pxa1928_aosp_bringup_r7"
+#define _GC_VERSION_STRING_                     "GC version rls_eden_5011p3v0001_GC1"
 
 /* Do not align u/v stride to 16 */
 #define VIVANTE_ALIGN_UVSTRIDE                  0
@@ -294,12 +268,19 @@
 */
 #define DISABLE_2D_BLOCK_SIZE_SETTING           0
 
+/* Block size and split rect tuning */
+#define MRVL_BLOCK_SIZE_TUNING                  1
+
 /* Enable NEON memcpy to replace default memcpy */
 #if (!defined MRVL_ENABLE_GPUTEX_MEMCPY) && (defined ANDROID) \
     && (!gcdFPGA_BUILD) && (MRVL_ENABLE_GPUTEX)
 #define MRVL_ENABLE_GPUTEX_MEMCPY               1
 #else
 #define MRVL_ENABLE_GPUTEX_MEMCPY               0
+#endif
+
+#ifndef MRVL_DISABLE_INTERNAL_DFS
+#define MRVL_DISABLE_INTERNAL_DFS 0
 #endif
 
 #endif /* __gc_hal_options_mrvl_h_*/

@@ -12,13 +12,29 @@
 
 
 #include "gc_hal_kernel_linux.h"
+#include "gc_hal_kernel_platform.h"
 
-gctINT
-gckMATH_ModuloInt(
-    IN gctINT X,
-    IN gctINT Y
+gctBOOL
+_NeedAddDevice(
+    IN gckPLATFORM Platform
     )
 {
-    if(Y ==0) {return 0;}
-    else {return X % Y;}
+#if MRVL_USE_GPU_RESERVE_MEM
+    return gcvFALSE;
+#else
+    return gcvTRUE;
+#endif
+}
+
+gcsPLATFORM_OPERATIONS platformOperations =
+{
+    .needAddDevice = _NeedAddDevice,
+};
+
+void
+gckPLATFORM_QueryOperations(
+    IN gcsPLATFORM_OPERATIONS ** Operations
+    )
+{
+     *Operations = &platformOperations;
 }

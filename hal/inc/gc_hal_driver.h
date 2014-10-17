@@ -11,7 +11,6 @@
 *****************************************************************************/
 
 
-
 #ifndef __gc_hal_driver_h_
 #define __gc_hal_driver_h_
 
@@ -178,6 +177,12 @@ typedef enum _gceHAL_COMMAND_CODES
 
     /* Destory MMU. */
     gcvHAL_DESTROY_MMU,
+
+    /* Shared buffer. */
+    gcvHAL_SHBUF,
+
+    /* Config power management. */
+    gcvHAL_CONFIG_POWER_MANAGEMENT,
 }
 gceHAL_COMMAND_CODES;
 
@@ -271,6 +276,9 @@ typedef struct _gcsHAL_QUERY_CHIP_IDENTITY
 
     /* Special control bits for 2D chip. */
     gctUINT32                   chip2DControl;
+
+    /* Product ID */
+    gctUINT32                   productID;
 
     gctCHAR                     chipName[32];
 }
@@ -408,6 +416,9 @@ typedef struct _gcsHAL_INTERFACE
             /* Type of allocation. */
             IN gceSURF_TYPE             type;
 
+            /* Flag of allocation. */
+            IN gctUINT32                flag;
+
             /* Memory pool to allocate from. */
             IN OUT gcePOOL              pool;
 
@@ -475,6 +486,12 @@ typedef struct _gcsHAL_INTERFACE
 
             /* Mapped logical address. */
             OUT gctUINT64               memory;
+
+            /* Customer priviate handle*/
+            OUT gctUINT32               gid;
+
+            /* Bus address of a contiguous video node. */
+            OUT gctUINT64               physicalAddress;
         }
         LockVideoMemory;
 
@@ -1095,6 +1112,27 @@ typedef struct _gcsHAL_INTERFACE
             IN gctUINT64                mmu;
         }
         DestroyMmu;
+
+        struct _gcsHAL_SHBUF
+        {
+            gceSHBUF_COMMAND_CODES      command;
+
+            /* Shared buffer. */
+            IN OUT gctUINT64            id;
+
+            /* User data to be shared. */
+            IN gctUINT64                data;
+
+            /* Data size. */
+            IN OUT gctUINT32            bytes;
+        }
+        ShBuf;
+
+        struct _gcsHAL_CONFIG_POWER_MANAGEMENT
+        {
+            IN gctBOOL                  enable;
+        }
+        ConfigPowerManagement;
     }
     u;
 }

@@ -11,7 +11,6 @@
 *****************************************************************************/
 
 
-
 #include "gc_hal_kernel_precomp.h"
 #include "gc_hal_kernel_context.h"
 
@@ -315,6 +314,9 @@ _FlushMMU(
     IN gckCOMMAND Command
     )
 {
+#if gcdSECURITY
+    return gcvSTATUS_OK;
+#else
     gceSTATUS status;
     gctUINT32 oldValue;
     gckHARDWARE hardware = Command->kernel->hardware;
@@ -348,7 +350,7 @@ _FlushMMU(
     if (pause)
     {
         /* Query size. */
-        gcmkONERROR(gckHARDWARE_Event(hardware, gcvNULL, 0, 0, &eventBytes));
+        gcmkONERROR(gckHARDWARE_Event(hardware, gcvNULL, 0, gcvKERNEL_PIXEL, &eventBytes));
         gcmkONERROR(gckHARDWARE_End(hardware, gcvNULL, &endBytes));
 
         executeBytes = eventBytes + endBytes;
@@ -397,6 +399,7 @@ _FlushMMU(
     return gcvSTATUS_OK;
 OnError:
     return status;
+#endif
 }
 
 static void
@@ -991,6 +994,12 @@ gckCOMMAND_Start(
     Command->offset   = waitLinkBytes;
     Command->newQueue = gcvFALSE;
 
+#if gcdSECURITY
+    /* Start FE by calling security service. */
+    gckKERNEL_SecurityStartCommand(
+        Command->kernel
+        );
+#else
     /* Enable command processor. */
     gcmkONERROR(gckHARDWARE_Execute(
         hardware,
@@ -998,6 +1007,7 @@ gckCOMMAND_Start(
         waitLinkBytes,
         gcvFALSE
         ));
+#endif
 
     /* Command queue is running. */
     Command->running = gcvTRUE;
@@ -1079,6 +1089,11 @@ gckCOMMAND_Stop(
             hardware, Command->waitLogical, &Command->waitSize
             ));
 
+#if gcdSECURITY
+        gcmkONERROR(gckKERNEL_SecurityExecute(
+            Command->kernel, Command->waitLogical, 8
+            ));
+#endif
 
         /* Update queue tail pointer. */
         gcmkONERROR(gckHARDWARE_UpdateQueueTail(Command->kernel->hardware,
@@ -1513,6 +1528,8 @@ gckCOMMAND_Commit(
         entryLogical  =                commandBufferLogical  + offset;
         entryAddress  =                commandBufferAddress  + offset;
         entryBytes    =                commandBufferSize     - offset;
+
+        Command->currContext = gcvNULL;
     }
     else if (Command->currContext != Context)
     {
@@ -1672,8 +1689,6 @@ gckCOMMAND_Commit(
         /* Not using 2D. */
         else
         {
-            /* Mark 2D as dirty. */
-            Context->dirty2D = gcvTRUE;
 
             /* Store the current context buffer. */
             Context->dirtyBuffer = contextBuffer;
@@ -1691,7 +1706,7 @@ gckCOMMAND_Commit(
                 offset = (Command->pipeSelect == gcvPIPE_3D)
 
                     /* Skip pipe switching sequence. */
-                    ? Context->entryOffset3D + pipeBytes
+                    ? Context->entryOffset3D + Context->pipeSelectBytes
 
                     /* Do not skip pipe switching sequence. */
                     : Context->entryOffset3D;
@@ -1839,6 +1854,14 @@ gckCOMMAND_Commit(
         contextDumpBytes   = entryBytes;
 #endif
 
+#if gcdSECURITY
+        /* Commit context buffer to trust zone. */
+        gckKERNEL_SecurityExecute(
+            Command->kernel,
+            entryLogical,
+            entryBytes - 8
+            );
+#endif
     }
 
     /* Same context. */
@@ -2161,6 +2184,7 @@ gckCOMMAND_Commit(
 
     /* Generate a LINK from the end of the command buffer being scheduled
        back to the kernel command queue. */
+#if !gcdSECURITY
     gcmkONERROR(gckHARDWARE_Link(
         hardware,
         commandBufferLink,
@@ -2168,6 +2192,7 @@ gckCOMMAND_Commit(
         exitBytes,
         &linkBytes
         ));
+#endif
 
 #ifdef __QNXNTO__
     gcmkONERROR(gckOS_UnmapUserPointer(
@@ -2191,6 +2216,14 @@ gckCOMMAND_Commit(
         ));
 #endif
 
+#if gcdSECURITY
+    /* Submit command buffer to trust zone. */
+    gckKERNEL_SecurityExecute(
+        Command->kernel,
+        commandBufferLogical + offset,
+        commandBufferSize    - offset - 8
+        );
+#else
     /* Generate a LINK from the previous WAIT/LINK command sequence to the
        entry determined above (either the context or the command buffer).
        This LINK replaces the WAIT instruction from the previous WAIT/LINK
@@ -2203,6 +2236,7 @@ gckCOMMAND_Commit(
         entryBytes,
         &Command->waitSize
         ));
+#endif
 
 #if gcdNONPAGED_MEMORY_CACHEABLE
     /* Flush the cache for the link. */
@@ -2861,11 +2895,7 @@ gckCOMMAND_Stall(
         }
 
     }
-    while (gcmIS_ERROR(status)
-#if gcdGPU_TIMEOUT
-           && (timer < Command->kernel->timeOut)
-#endif
-           );
+    while (gcmIS_ERROR(status));
 
     /* Bail out on timeout. */
     if (gcmIS_ERROR(status))
@@ -2922,6 +2952,7 @@ OnError:
 **          Pointer to a variable that will receive the number of states
 **          in the context buffer.
 */
+#if (gcdENABLE_3D || gcdENABLE_2D)
 gceSTATUS
 gckCOMMAND_Attach(
     IN gckCOMMAND Command,
@@ -2976,6 +3007,7 @@ OnError:
     gcmkFOOTER();
     return status;
 }
+#endif
 
 /*******************************************************************************
 **

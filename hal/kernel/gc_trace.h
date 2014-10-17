@@ -58,6 +58,42 @@ TRACE_EVENT(gc_workload,
     TP_printk("core: %d freq: %u workload: %2u", __entry->core, __entry->freq, __entry->workload)
 );
 
+TRACE_EVENT(gc_power,
+    TP_PROTO(u32 core, u32 on),
+
+    TP_ARGS(core, on),
+
+    TP_STRUCT__entry(
+        __field(u32, core)
+        __field(u32, on)
+    ),
+
+    TP_fast_assign(
+        __entry->core = core;
+        __entry->on = on;
+    ),
+
+    TP_printk("core: %d power on: %u", __entry->core, __entry->on)
+);
+
+TRACE_EVENT(gc_clock,
+    TP_PROTO(u32 core, u32 on),
+
+    TP_ARGS(core, on),
+
+    TP_STRUCT__entry(
+        __field(u32, core)
+        __field(u32, on)
+    ),
+
+    TP_fast_assign(
+        __entry->core = core;
+        __entry->on = on;
+    ),
+
+    TP_printk("core: %d clock on: %u", __entry->core, __entry->on)
+);
+
 /* This file can get included multiple times, TRACE_HEADER_MULTI_READ at top */
 
 #endif /* _TRACE_GC_TRACE_H */
@@ -86,6 +122,8 @@ TRACE_EVENT(gc_workload,
 
 #define trace_gc_reg_acc(...)
 #define trace_gc_workload(...)
+#define trace_gc_power(...)
+#define trace_gc_clock(...)
 
 #endif /* _TRACE_GC_TRACE_H */
 

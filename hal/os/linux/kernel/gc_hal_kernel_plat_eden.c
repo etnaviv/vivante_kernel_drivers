@@ -87,6 +87,19 @@ static void __PLAT_APINAME(gc3d_pwr_ops)(struct gc_iface *iface, unsigned int en
     }
 
     GC3D_PWR(enabled);
+
+    if (has_feat_freq_change_indirect())
+    {
+        if (enabled)
+        {
+            /* Delay 10 us to wait for chip stable. */
+            gckOS_Udelay(gcvNULL, 10);
+
+            /* restore clock */
+            eden_gpu_clk_setrate(&gc3dsh_iface, clk_restore[gcvCORE_SH].clk_rate);
+            eden_gpu_clk_setrate(iface, clk_restore[gcvCORE_MAJOR].clk_rate);
+        }
+    }
 }
 
 static struct gc_ops gc3d_ops = {
@@ -146,6 +159,18 @@ extern void gc2d_pwr(unsigned int);
     }
 
     GC2D_PWR(enabled);
+
+    if (has_feat_freq_change_indirect())
+    {
+        if (enabled)
+        {
+            /* Delay 10 us to wait for chip stable. */
+            gckOS_Udelay(gcvNULL, 10);
+
+            /* restore clock */
+            eden_gpu_clk_setrate(iface, clk_restore[gcvCORE_2D].clk_rate);
+        }
+    }
 }
 
 static struct gc_ops gc2d_ops = {
@@ -192,7 +217,8 @@ int eden_gpu_clk_setrate(struct gc_iface *iface, unsigned long rate_khz)
         goto OnError;
     }
 
-    if (!clk_restore[core].power_enabled)
+    if (has_feat_freq_change_indirect() &&
+        !clk_restore[core].power_enabled)
     {
         clk_restore[core].clk_rate = rate_khz;
     }
@@ -232,7 +258,8 @@ unsigned long eden_gpu_clk_getrate(struct gc_iface *iface)
         goto OnError;
     }
 
-    if (!clk_restore[core].power_enabled)
+    if (has_feat_freq_change_indirect() &&
+        !clk_restore[core].power_enabled)
     {
         rate = clk_restore[core].clk_rate;
     }

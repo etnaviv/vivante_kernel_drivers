@@ -11,7 +11,6 @@
 *****************************************************************************/
 
 
-
 #ifndef __gc_hal_kernel_os_h_
 #define __gc_hal_kernel_os_h_
 
@@ -62,6 +61,8 @@ typedef struct _LINUX_MDL
     void *                  priv;
 
     gctSIZE_T               wastSize;
+
+    uint                    gid;
 }
 LINUX_MDL, *PLINUX_MDL;
 

@@ -19,14 +19,6 @@
 # Select prebuilt binary types.
 FIXED_ARCH_TYPE ?=
 
-# Indicator as compile with correct gralloc in android project when
-# there are two versions of gralloc exsit in one repo, e.g. pxa988-kk44
-# Then this value must be set to 5x in order to pass build for helan2,
-# while it keeps *none* for other projects, that is to say, for 4x driver
-# or 5x driver but only has one gralloc project in its android repo, this
-# value no need to be set.
-BOARD_GFX_DRIVER_VERSION ?=
-
 ################################################################
 # Arch.
 
@@ -35,29 +27,37 @@ CPU_TYPE        ?= arm920
 CPU_ARCH        ?= 0
 
 gcdSTATIC_LINK  ?= 0
+USE_OPENCL      ?= 1
+ifeq ($(USE_OPENCL),1)
+BUILD_OPENCL_ICD ?= 1
+else
+BUILD_OPENCL_ICD ?= 0
+endif
 EGL_API_FB      ?= 0
 EGL_API_WL      ?= 0
 EGL_API_DRI     ?= 0
 EGL_API_DFB     ?= 0
 EGL_API_X       ?= 0
+USE_MOVG        ?= 0
 USE_VDK         ?= 0
 USE_PROFILER    ?= 0
 USE_SW_FB       ?= 0
-USE_3D_VG       ?= 1
 ABI             ?= 0
 ANDROID         ?= 0
 ENDIANNESS		?=
 LINUX_OABI		?= 0
 USE_ARMCC		?= 0
-VIVANTE_ENABLE_VG       ?= 0
-USE_355_VG              ?= 1
+VIVANTE_ENABLE_2D ?= 1
+VIVANTE_ENABLE_VG ?= 0
+VIVANTE_ENABLE_3D ?= 1
+VIVANTE_NO_VG   ?= 0
 USE_NEON        ?= 0
 USE_BANK_ALIGNMENT ?= 0
 BANK_BIT_START  ?= 0
 BANK_BIT_END    ?= 0
 BANK_CHANNEL_BIT     ?= 0
 USE_LOADTIME_OPT     ?= 1
-YOCTO_BUILD     ?= 0
+YOCTO_DRI_BUILD      ?= 0
 
 ifeq ($(gcdSTATIC_LINK), 1)
 
@@ -149,6 +149,28 @@ CONFIG_DOVE_GPU = 0
 ###############################################################
 # Common CFLAGS.
 
+ifeq ($(VIVANTE_ENABLE_3D),0)
+CFLAGS += -DgcdENABLE_3D=0
+else
+CFLAGS += -DgcdENABLE_3D=1
+endif
+
+ifeq ($(VIVANTE_ENABLE_2D),0)
+CFLAGS += -DgcdENABLE_2D=0
+else
+CFLAGS += -DgcdENABLE_2D=1
+endif
+
+ifeq ($(VIVANTE_ENABLE_VG),0)
+CFLAGS += -DgcdENABLE_VG=0
+else
+CFLAGS += -DgcdENABLE_VG=1
+endif
+
+ifeq ($(VIVANTE_NO_VG),1)
+CFLAGS += -DVIVANTE_NO_VG
+endif
+
 ifeq ($(USE_ARMCC), 1)
 	CFLAGS += --c99 #--strict
 else
@@ -169,8 +191,8 @@ ifeq ($(ANDROID), 1)
     CFLAGS += -DANDROID=1 -DANDROID_SDK_VERSION=$(PLATFORM_SDK_VERSION)
     CFLAGS += -I $(ANDROID_HOME)/libnativehelper/include/nativehelper -isystem $(ANDROID_HOME)/system/core/include -isystem $(ANDROID_HOME)/hardware/libhardware/include -isystem $(ANDROID_HOME)/hardware/libhardware_legacy/include -isystem $(ANDROID_HOME)/hardware/ril/include -isystem $(ANDROID_HOME)/libnativehelper/include -isystem $(ANDROID_HOME)/frameworks/native/include -isystem $(ANDROID_HOME)/frameworks/native/opengl/include -isystem $(ANDROID_HOME)/frameworks/av/include -isystem $(ANDROID_HOME)/frameworks/base/include -isystem $(ANDROID_HOME)/frameworks/base/opengl/include -isystem $(ANDROID_HOME)/external/skia/include -isystem $(ANDROID_PRODUCT_OUT)/obj/include -isystem $(ANDROID_HOME)/bionic/libc/include -isystem $(ANDROID_HOME)/bionic/libstdc++/include -isystem $(ANDROID_HOME)/bionic/libm/include -isystem $(ANDROID_HOME)/bionic/libthread_db/include
     CFLAGS += -fno-exceptions -Wno-multichar -ffunction-sections -fdata-sections -funwind-tables -fstack-protector -Wa,--noexecstack -Werror=format-security -D_FORTIFY_SOURCE=1 -fno-short-enums -Wno-psabi -fmessage-length=0 -W -Wall -Wno-unused -Winit-self -Wpointer-arith -Werror=return-type -Werror=non-virtual-dtor -Werror=address -Werror=sequence-point -DNDEBUG -g -Wstrict-aliasing=2 -fgcse-after-reload -frerun-cse-after-loop -frename-registers -UDEBUG -Os -fno-strict-aliasing -Wno-missing-field-initializers -Wno-unused-parameter -Wextra -fPIC -MD
+    CXXFLAGS += -isystem $(ANDROID_HOME)/bionic -isystem $(ANDROID_HOME)/external/stlport/stlport
 
-    # TODO: This works on current AOSP master, need to check sdk version and include path after a new formal Android release
     ifeq ($(shell expr $(PLATFORM_SDK_VERSION) ">=" 20),1)
         CFLAGS += -isystem $(ANDROID_HOME)/system/core/libsync/include -isystem $(ANDROID_HOME)/bionic/libc/arch-$(ARCH_TYPE)/include -isystem $(ANDROID_HOME)/bionic/libc/kernel/uapi -isystem $(ANDROID_HOME)/bionic/libc/kernel/uapi/asm-$(ARCH_TYPE) -isystem $(ANDROID_HOME)/bionic/libm/include/$(ARCH_TYPE) -I $(ANDROID_HOME) -include build/core/combo/include/arch/linux-$(ARCH_TYPE)/AndroidConfig.h -I $(ANDROID_HOME)/build/core/combo/include/arch/linux-$(ARCH_TYPE)/
     else
@@ -195,21 +217,17 @@ ifeq ($(ANDROID), 1)
     endif
 
     ifeq ($(USE_LOCAL_GRALLOC), 1)
-        CFLAGS += -DUSE_LOCAL_GRALLOC=1 -I $(AQROOT)/driver/android/gralloc
-    else
-        ifeq ($(BOARD_GFX_DRIVER_VERSION), 5x)
-            CFLAGS += -DUSE_LOCAL_GRALLOC=0 -I $(ANDROID_HOME)/vendor/marvell/generic/marvell-gralloc5x
-        else
-            CFLAGS += -DUSE_LOCAL_GRALLOC=0 -I $(ANDROID_HOME)/vendor/marvell/generic/marvell-gralloc
-        endif
+        CFLAGS += -DUSE_LOCAL_GRALLOC=1
     endif
+    CFLAGS += -I $(ANDROID_HOME)/vendor/marvell/generic/marvell-gralloc
 
     ifeq ($(ARCH_TYPE), arm)
         CFLAGS += -fno-builtin-sin -fomit-frame-pointer -msoft-float -march=armv7-a -mfloat-abi=softfp -mfpu=neon -mthumb-interwork -mthumb
     else ifeq ($(ARCH_TYPE), arm64)
-        # TODO: these flags are added by Android toolchain on 64bit master by default, usefull to check int/ptr cast errors.
-        #       But VSC_NEW will fail to compile, so turn off these flags until VSC is on use!
-        #CFLAGS += -Werror=pointer-to-int-cast -Werror=int-to-pointer-cast
+        ifneq ($(NEW_COMPILER), 1)
+            # these flags are added by Android toolchain on 64bit master by default, but VSC_NEW will fail to compile
+            CFLAGS += -Werror=pointer-to-int-cast -Werror=int-to-pointer-cast
+        endif
     endif
 endif
 
@@ -276,11 +294,12 @@ ifeq ($(EGL_API_FB), 1)
 endif
 
 ifeq ($(EGL_API_WL), 1)
-   CFLAGS += -DEGL_API_WL
+   CFLAGS += -DEGL_API_WL -DWL_EGL_PLATFORM
+   LFLAGS += -L$(ROOTFS_USR)/lib
 endif
 
 ifeq ($(EGL_API_DRI), 1)
-    ifeq ($(YOCTO_BUILD), 1)
+    ifeq ($(YOCTO_DRI_BUILD), 1)
    	CFLAGS += -DDRI_PIXMAPRENDER_ASYNC
    	CFLAGS += -DDRI_PIXMAPRENDER_GL
     endif
@@ -360,12 +379,6 @@ else
 CFLAGS += -DgcdFPGA_BUILD=0
 endif
 
-ifeq ($(VIVANTE_ENABLE_VG), 1)
-CFLAGS += -DgcdENABLE_VG=1
-else
-CFLAGS += -DgcdENABLE_VG=0
-endif
-
 ifeq ($(FORCE_ALL_VIDEO_MEMORY_CACHED), 1)
 CFLAGS += -DgcdPAGED_MEMORY_CACHEABLE=1
 else
@@ -376,6 +389,12 @@ ifeq ($(USE_LOADTIME_OPT), 1)
 CFLAGS += -DGC_ENABLE_LOADTIME_OPT=1
 else
 CFLAGS += -DGC_ENABLE_LOADTIME_OPT=0
+endif
+
+ifeq ($(USE_MOVG), 1)
+CFLAGS += -DgcdMOVG=1
+else
+CFLAGS += -DgcdMOVG=0
 endif
 
 ################################################################################
@@ -394,6 +413,12 @@ endif
 
 ifeq ($(ENABLE_GPUTEX), 1)
 CFLAGS += -I$(ANDROID_HOME)/vendor/marvell/generic/gpu-engine/tex/include
+endif
+
+ifeq ($(NEW_COMPILER), 1)
+CFLAGS += -DNEW_COMPILER=1
+else
+CFLAGS += -DNEW_COMPILER=0
 endif
 
 VIVANTE_SDK_DIR ?= $(AQROOT)/build/sdk
@@ -428,14 +453,16 @@ GL21_DIR        := $(AQROOT)/driver/khronos/libGL2
 
 GFX_DIR         := $(AQROOT)/driver/dfb
 CL11_DIR        := $(AQROOT)/driver/khronos/libCL
-CL11_ICD_DIR    := $(AQROOT)/driver/khronos/libCL/icdloader
+CL11_ICD_DIR    := $(AQROOT)/driver/khronos/libCL/icd
 CLC_DIR         := $(AQROOT)/compiler/libCLC
-CLICD_DIR       := $(AQROOT)/driver/khronos/libCL/icd
 
 VSC_DIR         := $(AQROOT)/compiler/libVSC
 GLSLC_DIR       := $(AQROOT)/compiler/libGLSLC
 ifeq ($(ANDROID), 1)
 GCU3_DIR        := $(AQROOT)/gcu3/proj/android
+ifeq ($(USE_CLU), 1)
+CLU_DIR         := $(AQROOT)/clu/proj/android
+endif
 else
 GCU3_DIR        := $(AQROOT)/gcu3/proj/linux
 endif

@@ -11,7 +11,6 @@
 *****************************************************************************/
 
 
-
 #include "gc_hal_kernel_precomp.h"
 
 #if gcdENABLE_VG
@@ -950,24 +949,31 @@ _HardwareToKernel(
     gceSTATUS status;
     gckVIDMEM memory;
     gctUINT32 offset;
-#if gcdDYNAMIC_MAP_RESERVED_MEMORY
     gctUINT32 nodePhysical;
-#endif
+    gctPOINTER *logical;
+    gctSIZE_T bytes;
     status = gcvSTATUS_OK;
-    /* Assume a non-virtual node and get the pool manager object. */
+
     memory = Node->VidMem.memory;
 
-#if gcdDYNAMIC_MAP_RESERVED_MEMORY
-    nodePhysical = memory->baseAddress
-                 + (gctUINT32)Node->VidMem.offset
-                 + Node->VidMem.alignment;
-
-    if (Node->VidMem.kernelVirtual == gcvNULL)
+    if (memory->object.type == gcvOBJ_VIDMEM)
     {
-        status = gckOS_MapPhysical(Os,
-                        nodePhysical,
-                        Node->VidMem.bytes,
-                        (gctPOINTER *)&Node->VidMem.kernelVirtual);
+        nodePhysical = memory->baseAddress
+                     + (gctUINT32)Node->VidMem.offset
+                     + Node->VidMem.alignment;
+        bytes = Node->VidMem.bytes;
+        logical = &Node->VidMem.kernelVirtual;
+    }
+    else
+    {
+        nodePhysical = Node->Virtual.physicalAddress;
+        bytes = Node->Virtual.bytes;
+        logical = &Node->Virtual.kernelVirtual;
+    }
+
+    if (*logical == gcvNULL)
+    {
+        status = gckOS_MapPhysical(Os, nodePhysical, bytes, logical);
 
         if (gcmkIS_ERROR(status))
         {
@@ -976,19 +982,7 @@ _HardwareToKernel(
     }
 
     offset = Address - nodePhysical;
-    *KernelPointer = (gctPOINTER)((gctUINT8_PTR)Node->VidMem.kernelVirtual + offset);
-#else
-    /* Determine the header offset within the pool it is allocated in. */
-    offset = Address - memory->baseAddress;
-
-    /* Translate the offset into the kernel side pointer. */
-    status = gckOS_GetKernelLogicalEx(
-        Os,
-        gcvCORE_VG,
-        offset,
-        KernelPointer
-        );
-#endif
+    *KernelPointer = (gctPOINTER)((gctUINT8_PTR)(*logical) + offset);
 
     /* Return status. */
     return status;
@@ -1068,51 +1062,25 @@ _AllocateLinear(
     )
 {
     gceSTATUS status, last;
-    gcuVIDMEM_NODE_PTR node = gcvNULL;
-    gctUINT32 address = (gctUINT32)~0;
+    gctPOINTER logical;
+    gctPHYS_ADDR physical;
+    gctUINT32 address;
+    gctSIZE_T size = Size;
 
     do
     {
-        gcePOOL pool;
-        gctPOINTER logical;
-
-        /* Allocate from the system pool. */
-        pool = gcvPOOL_SYSTEM;
-
-        /* Allocate memory. */
-        gcmkERR_BREAK(gckVGKERNEL_AllocateLinearMemory(
-            Command->kernel->kernel, &pool,
-            Size, Alignment,
-            gcvSURF_TYPE_UNKNOWN,
-            &node
-            ));
-
-        /* Do not accept virtual pools for now because we don't handle the
-           kernel pointer translation at the moment. */
-        if (pool == gcvPOOL_VIRTUAL)
-        {
-            status = gcvSTATUS_OUT_OF_MEMORY;
-            break;
-        }
-
-        /* Lock the command buffer. */
-        gcmkERR_BREAK(gckVIDMEM_Lock(
-            Command->kernel->kernel,
-            node,
-            gcvFALSE,
-            &address
-            ));
-
-        /* Translate the logical address to the kernel space. */
-        gcmkERR_BREAK(_HardwareToKernel(
+        gcmkERR_BREAK(gckOS_AllocateContiguous(
             Command->os,
-            node,
-            address,
+            gcvFALSE,
+            &size,
+            &physical,
             &logical
             ));
 
+        gcmkERR_BREAK(gckOS_GetPhysicalAddress(Command->os, logical, &address));
+
         /* Set return values. */
-        * Node    = node;
+        * Node    = physical;
         * Address = address;
         * Logical = logical;
 
@@ -1122,18 +1090,10 @@ _AllocateLinear(
     while (gcvFALSE);
 
     /* Roll back. */
-    if (node != gcvNULL)
+    if (physical != gcvNULL)
     {
-        /* Unlock the command buffer. */
-        if (address != ~0)
-        {
-            gcmkCHECK_STATUS(gckVIDMEM_Unlock(
-                Command->kernel->kernel, node, gcvSURF_TYPE_UNKNOWN, gcvNULL
-                ));
-        }
-
         /* Free the command buffer. */
-        gcmkCHECK_STATUS(gckVIDMEM_Free(Command->kernel->kernel, node));
+        gcmkCHECK_STATUS(gckOS_FreeContiguous(Command->os, physical, logical, size));
     }
 
     /* Return status. */
@@ -1143,18 +1103,15 @@ _AllocateLinear(
 static gceSTATUS
 _FreeLinear(
     IN gckVGKERNEL Kernel,
-    IN gcuVIDMEM_NODE_PTR Node
+    IN gcuVIDMEM_NODE_PTR Node,
+    IN gctPOINTER Logical
     )
 {
-    gceSTATUS status;
+    gceSTATUS status = gcvSTATUS_OK;
 
     do
     {
-        /* Unlock the linear buffer. */
-        gcmkERR_BREAK(gckVIDMEM_Unlock(Kernel->kernel, Node, gcvSURF_TYPE_UNKNOWN, gcvNULL));
-
-        /* Free the linear buffer. */
-        gcmkERR_BREAK(gckVIDMEM_Free(Kernel->kernel, Node));
+        gcmkERR_BREAK(gckOS_FreeContiguous(Kernel->os, Node, Logical, 1));
     }
     while (gcvFALSE);
 
@@ -1171,6 +1128,7 @@ _AllocateCommandBuffer(
 {
     gceSTATUS status, last;
     gcuVIDMEM_NODE_PTR node = gcvNULL;
+    gcsCMDBUFFER_PTR commandBuffer = gcvNULL;
 
     do
     {
@@ -1178,7 +1136,6 @@ _AllocateCommandBuffer(
         gctUINT requestedSize;
         gctUINT allocationSize;
         gctUINT32 address = 0;
-        gcsCMDBUFFER_PTR commandBuffer = gcvNULL;
         gctUINT8_PTR endCommand;
 
         /* Determine the aligned header size. */
@@ -1246,7 +1203,7 @@ _AllocateCommandBuffer(
     if (node != gcvNULL)
     {
         /* Free the command buffer. */
-        gcmkCHECK_STATUS(_FreeLinear(Command->kernel, node));
+        gcmkCHECK_STATUS(_FreeLinear(Command->kernel, node, commandBuffer));
     }
 
     /* Return status. */
@@ -1262,7 +1219,7 @@ _FreeCommandBuffer(
     gceSTATUS status;
 
     /* Free the buffer. */
-    status = _FreeLinear(Kernel, CommandBuffer->node);
+    status = _FreeLinear(Kernel, CommandBuffer->node, CommandBuffer);
 
     /* Return status. */
     return status;
@@ -1717,7 +1674,7 @@ _TaskUnlockVideoMemory(
         /* Unlock video memory. */
         gcmkERR_BREAK(gckVIDMEM_Unlock(
             Command->kernel->kernel,
-            ((gckVIDMEM_NODE)gcmUINT64_TO_PTR(task->node))->node,
+            (gckVIDMEM_NODE)gcmUINT64_TO_PTR(task->node),
             gcvSURF_TYPE_UNKNOWN,
             gcvNULL));
 
@@ -3553,10 +3510,10 @@ gckVGCOMMAND_Commit(
             break;
         }
 
-        gcmkERR_BREAK(_FlushMMU(Command));
-
         do
         {
+            gcmkERR_BREAK(_FlushMMU(Command));
+
             /* Assign a context ID if not yet assigned. */
             if (Context->id == 0)
             {

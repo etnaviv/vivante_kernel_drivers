@@ -23,7 +23,7 @@ extern "C"
 #define PR_DEBUG    pr_debug
 #endif
 
-void gpu_lock_init_dft(struct gc_iface *iface);
+void gpu_lock_init_dft(struct gc_iface *iface, void *pdev);
 int gpu_clk_enable_dft(struct gc_iface *iface);
 void gpu_clk_disable_dft(struct gc_iface *iface);
 int gpu_clk_setrate_dft(struct gc_iface *iface, unsigned long rate_khz);

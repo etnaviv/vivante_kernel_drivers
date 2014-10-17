@@ -26,7 +26,6 @@
 *****************************************************************************/
 
 
-
 #ifndef __gc_hal_eglplatform_type_h_
 #define __gc_hal_eglplatform_type_h_
 

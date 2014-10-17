@@ -11,9 +11,9 @@
 *****************************************************************************/
 
 
-
 #include <linux/device.h>
 #include <linux/slab.h>
+#include <linux/pm_runtime.h>
 
 #include "gc_hal_kernel_linux.h"
 #include "gc_hal_driver.h"
@@ -35,6 +35,8 @@
 #if MRVL_GPU_RESOURCE_DT
 #include <linux/of.h>
 #include <linux/of_device.h>
+#include <linux/of_irq.h>
+#include <linux/of_address.h>
 #endif
 
 /* Zone used for header/footer. */
@@ -44,6 +46,8 @@ MODULE_DESCRIPTION("Vivante Graphics Driver");
 MODULE_LICENSE("GPL");
 
 static struct class* gpuClass;
+
+static gcsPLATFORM platform;
 
 static gckGALDEVICE galDevice;
 
@@ -97,14 +101,14 @@ module_param(registerMemBaseVG, ulong, 0644);
 static ulong registerMemSizeVG = 2 << 10;
 module_param(registerMemSizeVG, ulong, 0644);
 
-static ulong contiguousSize = 4 << 20;
+#ifndef gcdDEFAULT_CONTIGUOUS_SIZE
+#define gcdDEFAULT_CONTIGUOUS_SIZE (4 << 20)
+#endif
+static ulong contiguousSize = gcdDEFAULT_CONTIGUOUS_SIZE;
 module_param(contiguousSize, ulong, 0644);
 
 static ulong contiguousBase = 0;
 module_param(contiguousBase, ulong, 0644);
-
-static long pmemSize = 0;
-module_param(pmemSize, long, 0644);
 
 static ulong bankSize = 0;
 module_param(bankSize, ulong, 0644);
@@ -153,17 +157,21 @@ MODULE_PARM_DESC(stuckDump, "Level of stuck dump content (1: Minimal, 2: Middle,
 static int showArgs = 1;
 module_param(showArgs, int, 0644);
 
+static int gpu3DMinClock = 1;
+module_param(gpu3DMinClock, int, 0644);
+
+static int contiguousRequested = 0;
+
 #if ENABLE_GPU_CLOCK_BY_DRIVER
-#if MRVL_PLATFORM_ADIR
-    unsigned long coreClock = 624;
-#else
-    unsigned long coreClock = 624;
-#endif
-    module_param(coreClock, ulong, 0644);
+static unsigned long coreClock = 624;
+module_param(coreClock, ulong, 0644);
 
 static unsigned long coreClock2D = 312;
 module_param(coreClock2D, ulong, 0644);
 #endif
+
+static long pmemSize = 0;
+module_param(pmemSize, long, 0644);
 
 /******************************************************************************\
 * Create a data entry system using proc for GC
@@ -367,6 +375,40 @@ static struct file_operations driver_fops =
 };
 
 void
+_UpdateModuleParam(
+    gcsMODULE_PARAMETERS *Param
+    )
+{
+#if gcdMULTI_GPU || gcdMULTI_GPU_AFFINITY
+#else
+    irqLine           = Param->irqLine ;
+    registerMemBase   = Param->registerMemBase;
+    registerMemSize   = Param->registerMemSize;
+#endif
+    irqLine2D         = Param->irqLine2D      ;
+    registerMemBase2D = Param->registerMemBase2D;
+    registerMemSize2D = Param->registerMemSize2D;
+    irqLineVG         = Param->irqLineVG;
+    registerMemBaseVG = Param->registerMemBaseVG;
+    registerMemSizeVG = Param->registerMemSizeVG;
+    contiguousSize    = Param->contiguousSize;
+    contiguousBase    = Param->contiguousBase;
+    bankSize          = Param->bankSize;
+    fastClear         = Param->fastClear;
+    compression       = Param->compression;
+    powerManagement   = Param->powerManagement;
+    gpuProfiler       = Param->gpuProfiler;
+    signal            = Param->signal;
+    baseAddress       = Param->baseAddress;
+    physSize          = Param->physSize;
+    logFileSize       = Param->logFileSize;
+    recovery          = Param->recovery;
+    stuckDump         = Param->stuckDump;
+    showArgs          = Param->showArgs;
+    contiguousRequested = Param->contiguousRequested;
+}
+
+void
 gckOS_DumpParam(
     void
     )
@@ -417,6 +459,7 @@ gckOS_DumpParam(
     printk("  stuckDump         = %d\n",      stuckDump);
 #if ENABLE_GPU_CLOCK_BY_DRIVER
     printk("  coreClock         = %lu\n",     coreClock);
+    printk("  coreClock2D       = %lu\n",     coreClock2D);
 #endif
     printk("  gpuProfiler       = %d\n",      gpuProfiler);
 }
@@ -954,19 +997,23 @@ static int drv_init(void)
     int ret, i;
     int result = -EINVAL;
     gceSTATUS status;
-    gckGALDEVICE device = gcvNULL;
+    gckGALDEVICE device = galDevice;
     struct class* device_class = gcvNULL;
 
     gcsDEVICE_CONSTRUCT_ARGS args = {
-        .recovery  = recovery,
-        .stuckDump = stuckDump,
+        .recovery           = recovery,
+        .stuckDump          = stuckDump,
+        .gpu3DMinClock      = gpu3DMinClock,
+        .contiguousRequested = contiguousRequested,
+        .platform           = &platform,
     };
 
     gcmkHEADER();
 
 #if ENABLE_GPU_CLOCK_BY_DRIVER && LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,28)
     {
-        gcmkONERROR(gckOS_SetGPUPowerOnBeforeInit(gcvCORE_MAJOR,
+        gcmkONERROR(gckOS_SetGPUPowerOnBeforeInit((gctPOINTER)galDevice->pdev[gcvCORE_MAJOR],
+                                                  gcvCORE_MAJOR,
                                                   gcvTRUE,
                                                   gcvTRUE,
                                                   coreClock * 1000));
@@ -974,7 +1021,8 @@ static int drv_init(void)
         if (has_feat_separated_gc_clock())
         {
 
-            gcmkONERROR(gckOS_SetGPUPowerOnBeforeInit(gcvCORE_2D,
+            gcmkONERROR(gckOS_SetGPUPowerOnBeforeInit((gctPOINTER)galDevice->pdev[gcvCORE_2D],
+                                                       gcvCORE_2D,
                                                        gcvTRUE,
                                                        (has_feat_separated_gc_power()
                                                          ? gcvTRUE
@@ -986,20 +1034,25 @@ static int drv_init(void)
 
     printk(KERN_INFO "Galcore version %d.%d.%d.%d\n",
         gcvVERSION_MAJOR, gcvVERSION_MINOR, gcvVERSION_PATCH, gcvVERSION_BUILD);
+
+#if !VIVANTE_PROFILER_PM
     /* when enable gpu profiler, we need to turn off gpu powerMangement */
-    if(gpuProfiler)
+    if (gpuProfiler)
+    {
         powerManagement = 0;
+    }
+#endif
+
     if (showArgs)
     {
         gckOS_DumpParam();
     }
-
 #if MRVL_MMU_FLATMAP_2G_ADDRESS
     physSize = 0x80000000;
     printk("  physSize modified to          = 0x%08lX\n", physSize);
 #endif
 
-    if(logFileSize != 0)
+    if (logFileSize != 0)
     {
         gckDEBUGFS_Initialize();
     }
@@ -1025,7 +1078,7 @@ static int drv_init(void)
         powerManagement,
         gpuProfiler,
         &args,
-        &device
+        device
     );
 
     if (gcmIS_ERROR(status))
@@ -1044,12 +1097,16 @@ static int drv_init(void)
        && (device->kernels[gcvCORE_MAJOR] != gcvNULL)
        && (device->kernels[gcvCORE_MAJOR]->hardware->mmuVersion != 0))
     {
-        status = gckMMU_Enable(device->kernels[gcvCORE_MAJOR]->mmu, baseAddress, physSize);
+#if !gcdSECURITY
+        gctUINT32 gpuPhysical;
+        gcmkVERIFY_OK(gckOS_CPUPhysicalToGPUPhysical(device->os, baseAddress, &gpuPhysical));
+
+        status = gckMMU_Enable(device->kernels[gcvCORE_MAJOR]->mmu, gpuPhysical, physSize);
         gcmkTRACE_ZONE(gcvLEVEL_INFO, gcvZONE_DRIVER,
             "Enable new MMU: status=%d\n", status);
 
 #if gcdMULTI_GPU_AFFINITY
-        status = gckMMU_Enable(device->kernels[gcvCORE_OCL]->mmu, baseAddress, physSize);
+        status = gckMMU_Enable(device->kernels[gcvCORE_OCL]->mmu, gpuPhysical, physSize);
         gcmkTRACE_ZONE(gcvLEVEL_INFO, gcvZONE_DRIVER,
             "Enable new MMU: status=%d\n", status);
 #endif
@@ -1057,10 +1114,11 @@ static int drv_init(void)
         if ((device->kernels[gcvCORE_2D] != gcvNULL)
             && (device->kernels[gcvCORE_2D]->hardware->mmuVersion != 0))
         {
-            status = gckMMU_Enable(device->kernels[gcvCORE_2D]->mmu, baseAddress, physSize);
+            status = gckMMU_Enable(device->kernels[gcvCORE_2D]->mmu, gpuPhysical, physSize);
             gcmkTRACE_ZONE(gcvLEVEL_INFO, gcvZONE_DRIVER,
                 "Enable new MMU for 2D: status=%d\n", status);
         }
+#endif
 
         /* Reset the base address */
         device->baseAddress = 0;
@@ -1113,7 +1171,6 @@ static int drv_init(void)
     device_create(device_class, NULL, MKDEV(major, 0), DEVICE_NAME);
 #endif
 
-    galDevice = device;
     gpuClass  = device_class;
 
 #if gcdMULTI_GPU || gcdMULTI_GPU_AFFINITY
@@ -1185,9 +1242,10 @@ static void drv_exit(void)
                                                    gcvTRUE,
                                                    (has_feat_separated_gc_power()
                                                         ? gcvTRUE
-                                                        : gcvFALSE)));
+                                                        : gcvFALSE),
+                                                        gcvFALSE));
         }
-        gcmkVERIFY_OK(gckOS_SetGPUPowerOffMRVL(galDevice->os, gcvCORE_MAJOR, gcvTRUE, gcvTRUE));
+        gcmkVERIFY_OK(gckOS_SetGPUPowerOffMRVL(galDevice->os, gcvCORE_MAJOR, gcvTRUE, gcvTRUE, gcvFALSE));
     }
 #endif
 
@@ -1227,8 +1285,27 @@ static int __enable_gpufreq(gckGALDEVICE device)
                             device->os,
                             GPUFREQ_GPU_EVENT_INIT,
                             (gctPOINTER) &hardware->devObj);
+
+#if MRVL_CONFIG_SHADER_CLK_CONTROL
+            if(has_feat_shader_indept_dfc() && i == gcvCORE_MAJOR)
+            {
+                if(!hardware->devShObj.kobj)
+                    continue;
+
+                gckOS_GPUFreqNotifierCallChain(
+                                device->os,
+                                GPUFREQ_GPU_EVENT_INIT,
+                                (gctPOINTER) &hardware->devShObj);
+            }
+#endif
         }
     }
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0)
+    kfree(device->ft);
+    device->ft = gcvNULL;
+    memset(device->os->freqTable, 0, sizeof(device->os->freqTable));
+#endif
 
     return 0;
 }
@@ -1252,6 +1329,19 @@ static int __disable_gpufreq(gckGALDEVICE device)
                             device->os,
                             GPUFREQ_GPU_EVENT_DESTORY,
                             (gctPOINTER) &hardware->devObj);
+
+#if MRVL_CONFIG_SHADER_CLK_CONTROL
+            if(has_feat_shader_indept_dfc() && i == gcvCORE_MAJOR)
+            {
+                if(!hardware->devShObj.kobj)
+                    continue;
+
+                gckOS_GPUFreqNotifierCallChain(
+                                device->os,
+                                GPUFREQ_GPU_EVENT_DESTORY,
+                                (gctPOINTER) &hardware->devShObj);
+            }
+#endif
         }
     }
 
@@ -1268,27 +1358,235 @@ static int __disable_gpufreq(gckGALDEVICE device)
 #endif
 
 #if MRVL_GPU_RESOURCE_DT
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0)
+#define MEM_BASE_STR "marvell,gpu-mem-base"
+#define MEM_SIZE_STR "marvell,gpu-mem-size"
+#else
+#define MEM_BASE_STR "gpu-mem-base"
+#define MEM_SIZE_STR "gpu-mem-size"
+#endif
+
+# if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0)
+static int parse_freq_table(const __be32 *prop, unsigned int proplen, struct freq_table *FreqTable)
+
+{
+    unsigned size;
+    int i = 0;
+    struct freq_table *ft = FreqTable;
+
+    size = proplen / sizeof(u32);
+
+    if ((proplen % sizeof(u32)) || size % 2)
+    {
+        gcmkPRINT("mmp-clk-freq-combine has wrong value\n");
+        goto out;
+    }
+
+    for (;i < size / 2; i++)
+    {
+        (ft+i)->index     = i;
+        (ft+i)->frequency = be32_to_cpup(prop + i*2);
+        (ft+i)->busfreq   = be32_to_cpup(prop + i*2 + 1);
+    }
+    /* end of the freq table*/
+    (ft+i)->index = ~1;
+
+    return 0;
+out:
+    /* failed to get freq table*/
+    ft[i].index = ~0;
+
+    return -1;
+}
+# endif
+
+static int gpu2D_dt_probe(struct platform_device *pdev)
+{
+    struct device_node *np = pdev->dev.of_node;
+    gctUINT32 irq = 0;
+    struct resource res;
+    gctINT rnt = 0;
+# if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0)
+    const __be32 *prop = gcvNULL;
+    unsigned int proplen;
+# endif
+
+    irq = irq_of_parse_and_map(np, 0);
+    if (!irq)
+    {
+        gcmkPRINT("interrupt line missing");
+        return -EINVAL;
+    }
+    irqLine2D = irq;
+
+    if (of_address_to_resource(np, 0, &res))
+    {
+        gcmkPRINT("register address missing");
+        return -EINVAL;
+    }
+    registerMemBase2D = res.start;
+    registerMemSize2D = resource_size(&res);
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0)
+    /* get 2D core & Axi Bus frequency table head*/
+    prop = of_get_property(pdev->dev.of_node,
+               "marvell,2d-clk-freq-combine", &proplen);
+    if(!prop)
+    {
+        gcmkPRINT(" get 2D frequency table failed\n");
+        return -EINVAL;
+    }
+
+    if(!galDevice->ft)
+    {
+        /* allocate memory for 3D/2D/Shader table, each table has length "FREQ_TABLE_MAX" */
+        galDevice->ft = kzalloc(sizeof(struct freq_table)*gcdMAX_GPU_COUNT*FREQ_TABLE_MAX, GFP_KERNEL);
+        if(!galDevice->ft)
+        {
+            gcmkPRINT("allocate frequency table memory failed\n");
+            return -EINVAL;
+        }
+    }
+
+    /* pass 2D freq table head ptr in*/
+    rnt = parse_freq_table(prop, proplen, galDevice->ft + gcvCORE_2D*FREQ_TABLE_MAX);
+#endif
+
+    return rnt;
+
+}
+
+static int gpu2D_probe(struct platform_device *pdev)
+{
+    if (gpu2D_dt_probe(pdev))
+    {
+        gcmkPRINT(KERN_ERR "%s: Failed to get GC resource in Device Tree.\n",__FUNCTION__);
+        return -ENODEV;
+    }
+
+    if(!galDevice)
+        return -EINVAL;
+
+    /*save pdev for 2D core*/
+    galDevice->pdev[gcvCORE_2D] = pdev;
+
+    if(has_feat_power_domain())
+    {
+        /* register gc 2D to power domain*/
+        pm_runtime_enable(&pdev->dev);
+    }
+
+    return 0;
+}
+
+static int gpu2D_remove(struct platform_device *pdev)
+{
+    if(has_feat_power_domain())
+    {
+        /* unregister 2D to power domain*/
+        pm_runtime_disable(&pdev->dev);
+    }
+
+    return 0;
+}
+
 static int gpu_dt_probe(struct platform_device *pdev)
 {
     struct device_node *np = pdev->dev.of_node;
     gctUINT32 memBase = 0;
     gctUINT32 memSize = 0;
+    gctUINT32 irq = 0;
+    struct resource res;
+    gctINT rnt = 0;
+# if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0)
+    const __be32 *prop = gcvNULL;
+    unsigned int proplen;
+# endif
 
-    if (of_property_read_u32(np, "gpu-mem-base", &memBase))
+    irq = irq_of_parse_and_map(np, 0);
+    if (!irq)
+    {
+        gcmkPRINT("interrupt line missing");
+        return -EINVAL;
+    }
+#if gcdMULTI_GPU || gcdMULTI_GPU_AFFINITY
+    irqLine3D0 = irq;
+#else
+    irqLine = irq;
+#endif
+
+    if (of_address_to_resource(np, 0, &res))
+    {
+        gcmkPRINT("register address missing");
+        return -EINVAL;
+    }
+#if gcdMULTI_GPU || gcdMULTI_GPU_AFFINITY
+    registerMemBase3D0 = res.start;
+    registerMemSize3D0 = resource_size(&res);
+#else
+    registerMemBase = res.start;
+    registerMemSize = resource_size(&res);
+#endif
+
+    if (of_property_read_u32(np, MEM_BASE_STR, &memBase))
     {
         gcmkPRINT("continuous memory base address missing");
         return -EINVAL;
     }
     contiguousBase = memBase;
 
-    if (of_property_read_u32(np, "gpu-mem-size", &memSize))
+    if (of_property_read_u32(np, MEM_SIZE_STR, &memSize))
     {
         gcmkPRINT("continuous memory size missing");
         return -EINVAL;
     }
     contiguousSize = memSize;
 
-    return 0;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0)
+    if(!galDevice->ft)
+    {
+        gcmkPRINT("frequency table is not allocated\n");
+        return -EINVAL;
+    }
+
+    /* get 3D core/Axi Bus frequency table head*/
+    prop = of_get_property(pdev->dev.of_node,
+               "marvell,3d-clk-freq-combine", &proplen);
+    if(!prop)
+    {
+        gcmkPRINT(" get 3D frequency table failed\n");
+        return -EINVAL;
+    }
+
+    /* pass 3D freq table head ptr in*/
+    rnt = parse_freq_table(prop, proplen, galDevice->ft + gcvCORE_MAJOR*FREQ_TABLE_MAX);
+
+    if(rnt)
+    {
+        goto out;
+    }
+
+    /* get shader core/Axi Bus frequency table head*/
+    prop = of_get_property(pdev->dev.of_node,
+               "marvell,sh-clk-freq-combine", &proplen);
+    if(!prop)
+    {
+        gcmkPRINT(" get Shader frequency table failed\n");
+        return -EINVAL;
+    }
+
+    /* pass shader freq table head ptr in*/
+    rnt = parse_freq_table(prop, proplen, galDevice->ft + gcvCORE_SH*FREQ_TABLE_MAX);
+
+    if(rnt)
+    {
+        goto out;
+    }
+
+out:
+#endif
+
+    return rnt;
 }
 #endif
 
@@ -1299,63 +1597,78 @@ static int __devinit gpu_probe(struct platform_device *pdev)
 #endif
 {
     int ret = -ENODEV;
-#if !MRVL_GPU_RESOURCE_DT
-    struct resource* res;
+    gcsMODULE_PARAMETERS moduleParam = {
+#if gcdMULTI_GPU || gcdMULTI_GPU_AFFINITY
+#else
+        .irqLine            = irqLine,
+        .registerMemBase    = registerMemBase,
+        .registerMemSize    = registerMemSize,
 #endif
+        .irqLine2D          = irqLine2D,
+        .registerMemBase2D  = registerMemBase2D,
+        .registerMemSize2D  = registerMemSize2D,
+        .irqLineVG          = irqLineVG,
+        .registerMemBaseVG  = registerMemBaseVG,
+        .registerMemSizeVG  = registerMemSizeVG,
+        .contiguousSize     = contiguousSize,
+        .contiguousBase     = contiguousBase,
+        .bankSize           = bankSize,
+        .fastClear          = fastClear,
+        .compression        = compression,
+        .powerManagement    = powerManagement,
+        .gpuProfiler        = gpuProfiler,
+        .signal             = signal,
+        .baseAddress        = baseAddress,
+        .physSize           = physSize,
+        .logFileSize        = logFileSize,
+        .recovery           = recovery,
+        .stuckDump          = stuckDump,
+        .showArgs           = showArgs,
+    };
 
     gcmkHEADER();
+
+    platform.device = pdev;
+
+    if (platform.ops->getPower)
+    {
+        if (gcmIS_ERROR(platform.ops->getPower(&platform)))
+        {
+            gcmkFOOTER_NO();
+            return ret;
+        }
+    }
+
+    if (platform.ops->adjustParam)
+    {
+        /* Override default module param. */
+        platform.ops->adjustParam(&platform, &moduleParam);
+
+        /* Update module param because drv_init() uses them directly. */
+        _UpdateModuleParam(&moduleParam);
+    }
 
 #if MRVL_GPU_RESOURCE_DT
     gcmkPRINT(KERN_INFO "[galcore] info: GC use DT to reserve video memory.\n");
     if (gpu_dt_probe(pdev))
     {
-        gcmkPRINT(KERN_ERR "%s: No continuous memory supplied in Device Tree.\n",__FUNCTION__);
-        goto gpu_probe_fail;
+        gcmkPRINT(KERN_ERR "%s: Failed to get GC resource in Device Tree.\n",__FUNCTION__);
+        gcmkFOOTER_NO();
+        return ret;
     }
-#else
-    res = platform_get_resource_byname(pdev, IORESOURCE_IRQ, "gpu_irq");
 
-    if (!res)
+    if(!galDevice)
+        return -EINVAL;
+
+    /*save pdev ptr for 3D core*/
+    galDevice->pdev[gcvCORE_MAJOR] = pdev;
+
+    if(has_feat_power_domain())
     {
-        printk(KERN_ERR "%s: No irq line supplied.\n",__FUNCTION__);
-        goto gpu_probe_fail;
+        /* register 3D core to power domain*/
+        pm_runtime_enable(&pdev->dev);
     }
 
-#if gcdMULTI_GPU || gcdMULTI_GPU_AFFINITY
-    irqLine3D0 = res->start;
-#else
-    irqLine = res->start;
-#endif
-
-    res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "gpu_base");
-
-    if (!res)
-    {
-        printk(KERN_ERR "%s: No register base supplied.\n",__FUNCTION__);
-        goto gpu_probe_fail;
-    }
-
-#if gcdMULTI_GPU || gcdMULTI_GPU_AFFINITY
-    registerMemBase3D0 = res->start;
-    registerMemSize3D0 = res->end - res->start + 1;
-#else
-    registerMemBase = res->start;
-    registerMemSize = res->end - res->start + 1;
-#endif
-
-#if MRVL_USE_GPU_RESERVE_MEM
-    gcmkPRINT(KERN_INFO "[galcore] info: GC use memblock to reserve video memory.\n");
-    res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "gpu_mem");
-
-    if (!res)
-    {
-        printk(KERN_ERR "%s: No memory base supplied.\n",__FUNCTION__);
-        goto gpu_probe_fail;
-    }
-
-    contiguousBase = res->start;
-    contiguousSize = res->end - res->start + 1;
-#endif
 #endif
 
     printk("\n[galcore] GC Version: %s\n", _GC_VERSION_STRING_);
@@ -1382,7 +1695,6 @@ static int __devinit gpu_probe(struct platform_device *pdev)
         return ret;
     }
 
-gpu_probe_fail:
     gcmkFOOTER_ARG(KERN_INFO "Failed to register gpu driver: %d\n", ret);
     return ret;
 }
@@ -1403,9 +1715,20 @@ static int __devexit gpu_remove(struct platform_device *pdev)
 
     drv_exit();
 
+    if (platform.ops->putPower)
+    {
+        platform.ops->putPower(&platform);
+    }
+
 #if MRVL_CONFIG_PROC
     remove_gc_proc_file();
 #endif
+
+    if(has_feat_power_domain())
+    {
+        /* unregister 3D to power domain*/
+        pm_runtime_disable(&pdev->dev);
+    }
 
     gcmkFOOTER_NO();
     return 0;
@@ -1453,7 +1776,7 @@ static int gpu_suspend(struct platform_device *dev, pm_message_t state)
             else
 #endif
             {
-                status = gckHARDWARE_SetPowerManagementState(device->kernels[i]->hardware, gcvPOWER_OFF);
+                status = gckHARDWARE_SetPowerManagementState(device->kernels[i]->hardware, gcvPOWER_OFF_HINT);
             }
 
             if (gcmIS_ERROR(status))
@@ -1485,6 +1808,12 @@ static int gpu_resume(struct platform_device *dev)
     {
         if (device->kernels[i] != gcvNULL)
         {
+            if( has_feat_power_domain() &&
+                device->statesStored[i] == gcvPOWER_OFF)
+            {
+                continue;
+            }
+
 #if gcdENABLE_VG
             if (i == gcvCORE_VG)
             {
@@ -1493,7 +1822,7 @@ static int gpu_resume(struct platform_device *dev)
             else
 #endif
             {
-                status = gckHARDWARE_SetPowerManagementState(device->kernels[i]->hardware, gcvPOWER_ON);
+                status = gckHARDWARE_SetPowerManagementState(device->kernels[i]->hardware, gcvPOWER_ON_HINT);
             }
 
             if (gcmIS_ERROR(status))
@@ -1543,10 +1872,44 @@ static int gpu_resume(struct platform_device *dev)
     return 0;
 }
 
+#if defined(CONFIG_PM) && LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 30)
+#ifdef CONFIG_PM_SLEEP
+static int gpu_system_suspend(struct device *dev)
+{
+    pm_message_t state={0};
+    return gpu_suspend(to_platform_device(dev), state);
+}
+
+static int gpu_system_resume(struct device *dev)
+{
+    return gpu_resume(to_platform_device(dev));
+}
+#endif
+
+static const struct dev_pm_ops gpu_pm_ops = {
+    SET_SYSTEM_SLEEP_PM_OPS(gpu_system_suspend, gpu_system_resume)
+};
+#endif
+
 #if MRVL_GPU_RESOURCE_DT
 static struct of_device_id gpu_dt_ids[] = {
     { .compatible = "marvell,gpu", },
     {}
+};
+
+static struct of_device_id gpu2D_dt_ids[] = {
+    { .compatible = "marvell,gpu2d", },
+    {}
+};
+
+static struct platform_driver gpu2D_driver = {
+    .probe      = gpu2D_probe,
+    .remove     = gpu2D_remove,
+
+    .driver     = {
+        .name   = "galcore2D",
+        .of_match_table = of_match_ptr(gpu2D_dt_ids),
+    }
 };
 #endif
 
@@ -1563,73 +1926,85 @@ static struct platform_driver gpu_driver = {
 
     .driver     = {
         .name   = DEVICE_NAME,
+#if defined(CONFIG_PM) && LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 30)
+        .pm     = &gpu_pm_ops,
+#endif
 #if MRVL_GPU_RESOURCE_DT
         .of_match_table = of_match_ptr(gpu_dt_ids),
 #endif
     }
 };
 
-#ifndef CONFIG_DOVE_GPU
-#if !MRVL_USE_GPU_RESERVE_MEM
-/* gpu_resources are put in kernel when using memblock mechanism */
-static struct resource gpu_resources[] = {
-    {
-        .name   = "gpu_irq",
-        .flags  = IORESOURCE_IRQ,
-    },
-    {
-        .name   = "gpu_base",
-        .flags  = IORESOURCE_MEM,
-    },
-};
-
-static struct platform_device * gpu_device;
-#endif
-#endif
-
 static int __init gpu_init(void)
 {
     int ret = 0;
 
-#ifndef CONFIG_DOVE_GPU
-# if !MRVL_USE_GPU_RESERVE_MEM
-#if gcdMULTI_GPU || gcdMULTI_GPU_AFFINITY
-    gpu_resources[0].start = gpu_resources[0].end = irqLine3D0;
+    memset(&platform, 0, sizeof(gcsPLATFORM));
 
-    gpu_resources[1].start = registerMemBase3D0;
-    gpu_resources[1].end   = registerMemBase3D0 + registerMemSize3D0 - 1;
-#else
-    gpu_resources[0].start = gpu_resources[0].end = irqLine;
+    gckPLATFORM_QueryOperations(&platform.ops);
 
-    gpu_resources[1].start = registerMemBase;
-    gpu_resources[1].end   = registerMemBase + registerMemSize - 1;
-#endif
-
-    /* Allocate device */
-    gpu_device = platform_device_alloc(DEVICE_NAME, -1);
-    if (!gpu_device)
+    if (platform.ops == gcvNULL)
     {
-        printk(KERN_ERR "galcore: platform_device_alloc failed.\n");
-        ret = -ENOMEM;
+        printk(KERN_ERR "galcore: No platform specific operations.\n");
+        ret = -ENODEV;
         goto out;
     }
 
-    /* Insert resource */
-    ret = platform_device_add_resources(gpu_device, gpu_resources, 2);
-    if (ret)
+    if (platform.ops->allocPriv)
     {
-        printk(KERN_ERR "galcore: platform_device_add_resources failed.\n");
-        goto put_dev;
+        /* Allocate platform private data. */
+        if (gcmIS_ERROR(platform.ops->allocPriv(&platform)))
+        {
+            ret = -ENOMEM;
+            goto out;
+        }
     }
 
-    /* Add device */
-    ret = platform_device_add(gpu_device);
+    if (platform.ops->needAddDevice
+     && platform.ops->needAddDevice(&platform))
+    {
+        /* Allocate device */
+        platform.device = platform_device_alloc(DEVICE_NAME, -1);
+        if (!platform.device)
+        {
+            printk(KERN_ERR "galcore: platform_device_alloc failed.\n");
+            ret = -ENOMEM;
+            goto out;
+        }
+
+        /* Add device */
+        ret = platform_device_add(platform.device);
+        if (ret)
+        {
+            printk(KERN_ERR "galcore: platform_device_add failed.\n");
+            goto put_dev;
+        }
+    }
+
+    platform.driver = &gpu_driver;
+
+    if (platform.ops->adjustDriver)
+    {
+        /* Override default platform_driver struct. */
+        platform.ops->adjustDriver(&platform);
+    }
+
+    /* Allocate device structure. */
+    galDevice = kzalloc(sizeof(struct _gckGALDEVICE), GFP_KERNEL | __GFP_NOWARN);
+
+    if(!galDevice)
+    {
+        printk(KERN_ERR "galcore: failed to allocate galDevice\n");
+        goto out;
+    }
+
+#if MRVL_GPU_RESOURCE_DT
+    /* register 2D driver before 3D, we need to get 2D resource first, and init in 3D probe. */
+    ret = platform_driver_register(&gpu2D_driver);
     if (ret)
     {
-        printk(KERN_ERR "galcore: platform_device_add failed.\n");
-        goto put_dev;
+        goto out;
     }
-# endif
 #endif
 
     ret = platform_driver_register(&gpu_driver);
@@ -1638,13 +2013,9 @@ static int __init gpu_init(void)
         goto out;
     }
 
-#ifndef CONFIG_DOVE_GPU
-# if !MRVL_USE_GPU_RESERVE_MEM
-    platform_device_del(gpu_device);
+    platform_device_del(platform.device);
 put_dev:
-    platform_device_put(gpu_device);
-# endif
-#endif
+    platform_device_put(platform.device);
 
 out:
     return ret;
@@ -1653,11 +2024,27 @@ out:
 static void __exit gpu_exit(void)
 {
     platform_driver_unregister(&gpu_driver);
-#ifndef CONFIG_DOVE_GPU
-# if !MRVL_USE_GPU_RESERVE_MEM
-    platform_device_unregister(gpu_device);
-# endif
+#if MRVL_GPU_RESOURCE_DT
+    platform_driver_unregister(&gpu2D_driver);
 #endif
+
+    if (platform.ops->needAddDevice
+     && platform.ops->needAddDevice(&platform))
+    {
+        platform_device_unregister(platform.device);
+    }
+
+    if (platform.priv)
+    {
+        /* Free platform private data. */
+        platform.ops->freePriv(&platform);
+    }
+
+    if(galDevice)
+    {
+        kfree(galDevice);
+        galDevice = gcvNULL;
+    }
 }
 
 module_init(gpu_init);

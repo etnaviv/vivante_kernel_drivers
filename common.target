@@ -120,7 +120,7 @@ $(OBJ_DIR)/%.o: %.c $(PREREQUISITES)
 
 $(OBJ_DIR)/%.o: %.cpp $(PREREQUISITES)
 	@mkdir -p $(OBJ_DIR)
-	$(CXX) -c $(CFLAGS) -o $@ $<
+	$(CXX) -c $(CXXFLAGS) $(CFLAGS) -o $@ $<
 
 $(OBJ_DIR)/%.d: %.c $(PREREQUISITES)
 	@mkdir -p $(OBJ_DIR)
@@ -128,7 +128,7 @@ $(OBJ_DIR)/%.d: %.c $(PREREQUISITES)
 
 $(OBJ_DIR)/%.d: %.cpp $(PREREQUISITES)
 	@mkdir -p $(OBJ_DIR)
-	$(CXX) -MM $(CFLAGS) -MP -MT $(addprefix $(OBJ_DIR)/,$(subst .cpp,.o,$<)) -MF $@  $<
+	$(CXX) -MM $(CXXFLAGS) $(CFLAGS) -MP -MT $(addprefix $(OBJ_DIR)/,$(subst .cpp,.o,$<)) -MF $@  $<
 
 ifeq ($(filter clean cleandeps cleanall distclean distcleandeps distcleanall, $(MAKECMDGOALS)),)
     -include $(DEPENDS)

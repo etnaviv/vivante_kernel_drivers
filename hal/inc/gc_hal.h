@@ -11,7 +11,6 @@
 *****************************************************************************/
 
 
-
 #ifndef __gc_hal_h_
 #define __gc_hal_h_
 
@@ -21,14 +20,19 @@
 #include "gc_hal_base.h"
 #include "gc_hal_profiler.h"
 #include "gc_hal_driver.h"
-#ifndef VIVANTE_NO_3D
+#if gcdENABLE_3D
 #include "gc_hal_statistics.h"
 #endif
 
+#if gcdSECURITY
+#include "gc_hal_security_interface.h"
+#endif
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+#define DEF_MIN_SAMPLING_RATE  (100)
 
 /******************************************************************************\
 ******************************* Alignment Macros *******************************
@@ -174,6 +178,7 @@ struct gcsDEVOBJECT
 {
     gctINT32        id;
     gctPOINTER      kobj;
+    gctPOINTER      freqt;
 };
 #endif
 
@@ -199,6 +204,9 @@ gceCORE;
 #endif
 
 #define gcdMAX_SURF_LAYER              4
+
+#define gcdMAX_DRAW_BUFFERS            4
+
 /*******************************************************************************
 **
 **  gcmVERIFY_OBJECT
@@ -213,7 +221,6 @@ gceCORE;
 **      obj     Object to test.
 **      t       Expected type of the object.
 */
-#if gcmIS_DEBUG(gcdDEBUG_TRACE)
 #define _gcmVERIFY_OBJECT(prefix, obj, t) \
     if ((obj) == gcvNULL) \
     { \
@@ -239,10 +246,7 @@ gceCORE;
 
 #   define gcmVERIFY_OBJECT(obj, t)     _gcmVERIFY_OBJECT(gcm, obj, t)
 #   define gcmkVERIFY_OBJECT(obj, t)    _gcmVERIFY_OBJECT(gcmk, obj, t)
-#else
-#   define gcmVERIFY_OBJECT(obj, t)     do {} while (gcvFALSE)
-#   define gcmkVERIFY_OBJECT(obj, t)    do {} while (gcvFALSE)
-#endif
+
 
 /******************************************************************************/
 /*VERIFY_OBJECT if special return expected*/
@@ -361,8 +365,9 @@ gckOS_AllocatePagedMemory(
 gceSTATUS
 gckOS_AllocatePagedMemoryEx(
     IN gckOS Os,
-    IN gctBOOL Contiguous,
+    IN gctUINT32 Flag,
     IN gctSIZE_T Bytes,
+    OUT gctUINT32 * Gid,
     OUT gctPHYS_ADDR * Physical
     );
 
@@ -517,6 +522,22 @@ gckOS_UnmapPhysical(
     IN gckOS Os,
     IN gctPOINTER Logical,
     IN gctSIZE_T Bytes
+    );
+
+/* Get real physical address from descriptor. */
+gceSTATUS
+gckOS_PhysicalToPhysicalAddress(
+    IN gckOS Os,
+    IN gctPOINTER Physical,
+    OUT gctUINT32 * PhysicalAddress
+    );
+
+/* Get frequency table pointer*/
+gceSTATUS
+gckOS_GetFreqTablePointer(
+    IN gckOS Os,
+    gctPOINTER *tf,
+    gceCORE Core
     );
 
 /* Read data from a hardware register. */
@@ -758,6 +779,13 @@ gckOS_GetProcessNameByPid(
     IN gctINT Pid,
     IN gctSIZE_T Length,
     OUT gctUINT8_PTR String
+    );
+
+gceSTATUS
+gckOS_ModifyPulseEaterPollingPeriod(
+    IN gckOS Os,
+    IN gctUINT32 Freq,
+    IN gctUINT32 Core
     );
 
 /*******************************************************************************
@@ -1187,6 +1215,39 @@ gckOS_GetThreadID(
     OUT gctUINT32_PTR ThreadID
     );
 
+#if gcdSECURITY
+gceSTATUS
+gckOS_OpenSecurityChannel(
+    IN gckOS Os,
+    IN gceCORE Core,
+    OUT gctUINT32 *Channel
+    );
+
+gceSTATUS
+gckOS_CloseSecurityChannel(
+    IN gctUINT32 Channel
+    );
+
+gceSTATUS
+gckOS_CallSecurityService(
+    IN gctUINT32 Channel,
+    IN gcsTA_INTERFACE * Interface
+    );
+
+gceSTATUS
+gckOS_InitSecurityChannel(
+    OUT gctUINT32 Channel
+    );
+
+gceSTATUS
+gckOS_AllocatePageArray(
+    IN gckOS Os,
+    IN gctPHYS_ADDR Physical,
+    IN gctSIZE_T PageCount,
+    OUT gctPOINTER * PageArrayLogical,
+    OUT gctPHYS_ADDR * PageArrayPhysical
+    );
+#endif
 
 /******************************************************************************\
 ********************************** Signal Object *********************************
@@ -1420,6 +1481,20 @@ gckOS_FlushCache(
     );
 #endif
 
+gceSTATUS
+gckOS_CPUPhysicalToGPUPhysical(
+    IN gckOS Os,
+    IN gctUINT32 CPUPhysical,
+    IN gctUINT32_PTR GPUPhysical
+    );
+
+gceSTATUS
+gckOS_GPUPhysicalToCPUPhysical(
+    IN gckOS Os,
+    IN gctUINT32 GPUPhysical,
+    IN gctUINT32_PTR CPUPhysical
+    );
+
 /******************************************************************************\
 ** Debug Support
 */
@@ -1477,6 +1552,9 @@ typedef enum _gceBROADCAST
 
     /* AXI bus error. */
     gcvBROADCAST_AXI_BUS_ERROR,
+
+    /* Out of memory. */
+    gcvBROADCAST_OUT_OF_MEMORY,
 }
 gceBROADCAST;
 
@@ -1543,6 +1621,7 @@ gckOS_GetIfaceMapping(
 
 gceSTATUS
 gckOS_SetGPUPowerOnBeforeInit(
+    IN gctPOINTER Ptr4dev,
     IN gceCORE Core,
     IN gctBOOL EnableClk,
     IN gctBOOL EnablePwr,
@@ -1554,7 +1633,8 @@ gckOS_SetGPUPowerOnMRVL(
     IN gckOS Os,
     IN gceCORE Core,
     IN gctBOOL EnableClk,
-    IN gctBOOL EnablePwr
+    IN gctBOOL EnablePwr,
+    IN gctBOOL Hint
     );
 
 gceSTATUS
@@ -1562,7 +1642,8 @@ gckOS_SetGPUPowerOffMRVL(
     IN gckOS Os,
     IN gceCORE Core,
     IN gctBOOL DisableClk,
-    IN gctBOOL DisablePwr
+    IN gctBOOL DisablePwr,
+    IN gctBOOL Hint
     );
 
 gceSTATUS
@@ -1583,6 +1664,14 @@ gckOS_QueryIdleProfile(
     IN     gceCORE       Core,
     IN OUT gctUINT32_PTR Timeslice,
     OUT    gctUINT32_PTR IdleTime
+    );
+
+gceSTATUS
+gckOS_QueryPulseCountProfile(
+    IN gckOS Os,
+    IN gceCORE Core,
+    IN gcePulseEaterDomain Domain,
+    OUT gctUINT32_PTR DutyCycle
     );
 
 gceSTATUS
@@ -1612,7 +1701,6 @@ gckOS_SetClkRate(
     IN gceCORE Core,
     IN gctUINT32 Rate
     );
-
 #if MRVL_CONFIG_ENABLE_GPUFREQ
 typedef enum _gceGPUFreqEvent
 {
@@ -1863,16 +1951,18 @@ gckVIDMEM_Free(
 gceSTATUS
 gckVIDMEM_Lock(
     IN gckKERNEL Kernel,
-    IN gcuVIDMEM_NODE_PTR Node,
+    IN gckVIDMEM_NODE Node,
     IN gctBOOL Cacheable,
-    OUT gctUINT32 * Address
+    OUT gctUINT32 * Address,
+    OUT gctUINT32 * Gid,
+    OUT gctUINT64 * PhysicalAddress
     );
 
 /* Unlock memory. */
 gceSTATUS
 gckVIDMEM_Unlock(
     IN gckKERNEL Kernel,
-    IN gcuVIDMEM_NODE_PTR Node,
+    IN gckVIDMEM_NODE Node,
     IN gceSURF_TYPE Type,
     IN OUT gctBOOL * Asynchroneous
     );
@@ -1881,7 +1971,7 @@ gckVIDMEM_Unlock(
 gceSTATUS
 gckVIDMEM_ConstructVirtual(
     IN gckKERNEL Kernel,
-    IN gctBOOL Contiguous,
+    IN gctUINT32 Flag,
     IN gctSIZE_T Bytes,
     OUT gcuVIDMEM_NODE_PTR * Node
     );
@@ -1952,6 +2042,14 @@ gckKERNEL_Dispatch(
     IN OUT struct _gcsHAL_INTERFACE * Interface
     );
 
+/* Query Database requirements. */
+gceSTATUS
+    gckKERNEL_QueryDatabase(
+    IN gckKERNEL Kernel,
+    IN gctUINT32 ProcessID,
+    IN OUT gcsHAL_INTERFACE * Interface
+    );
+
 /* Query the video memory. */
 gceSTATUS
 gckKERNEL_QueryVideoMemory(
@@ -1975,6 +2073,7 @@ gckKERNEL_AllocateLinearMemory(
     IN gctSIZE_T Bytes,
     IN gctUINT32 Alignment,
     IN gceSURF_TYPE Type,
+    IN gctUINT32 Flag,
     OUT gctUINT32 * Node
     );
 
@@ -2454,6 +2553,12 @@ gckHARDWARE_GetFscaleValue(
     IN gctUINT * MinFscaleValue,
     IN gctUINT * MaxFscaleValue
     );
+
+gceSTATUS
+gckHARDWARE_SetMinFscaleValue(
+    IN gckHARDWARE Hardware,
+    IN gctUINT MinFscaleValue
+    );
 #endif
 
 #if gcdPOWEROFF_TIMEOUT
@@ -2547,6 +2652,21 @@ gceSTATUS
 gckHARDWARE_SetDVFSPeroid(
     IN gckHARDWARE Hardware,
     IN gctUINT32 Frequency
+    );
+
+gceSTATUS
+gckHARDWARE_PrepareFunctions(
+    gckHARDWARE Hardware
+    );
+
+gceSTATUS
+gckHARDWARE_SetMMUStates(
+    IN gckHARDWARE Hardware,
+    IN gctPOINTER MtlbAddress,
+    IN gceMMU_MODE Mode,
+    IN gctPOINTER SafeAddress,
+    IN gctPOINTER Logical,
+    IN OUT gctUINT32 * Bytes
     );
 
 #if !gcdENABLE_VG
@@ -2885,6 +3005,18 @@ gckCOMMAND_AddressInKernelCommandBuffer(
     IN gctUINT32 Address,
     OUT gctBOOL *In
     );
+
+gceSTATUS
+gckHARDWARE_QueryPulseEaterIdleProfile(
+    IN gckHARDWARE Hardware,
+    IN gctUINT32   Time,
+    IN gctUINT32_PTR  TimeGap,
+    IN gcePulseEaterDomain Domain);
+
+gceSTATUS
+gckHARDWARE_ModifyPeriod(
+    IN gckHARDWARE Hardware,
+    IN gctUINT32 Freq);
 
 /******************************************************************************\
 ********************************* gckMMU Object ********************************

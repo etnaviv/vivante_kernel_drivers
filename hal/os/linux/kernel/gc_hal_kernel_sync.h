@@ -16,11 +16,14 @@
 
 #include <linux/types.h>
 
+/* sync.h is in drivers/staging/android/ for now. */
+#include <sync.h>
+
 #include <gc_hal.h>
 #include <gc_hal_base.h>
 
 #if gcdANDROID_NATIVE_FENCE_SYNC
-#include <linux/sync.h>
+#include <sync.h>
 
 struct viv_sync_timeline
 {

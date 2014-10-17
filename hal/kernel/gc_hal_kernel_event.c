@@ -11,7 +11,6 @@
 *****************************************************************************/
 
 
-
 #include "gc_hal_kernel_precomp.h"
 #include "gc_hal_kernel_buffer.h"
 
@@ -611,7 +610,7 @@ OnError:
 #if gcdINTERRUPT_STATISTIC
         if (eventObj->interruptCount)
         {
-            gcmkVERIFY_OK(gckOS_AtomDestroy(os, &eventObj->interruptCount));
+            gcmkVERIFY_OK(gckOS_AtomDestroy(os, eventObj->interruptCount));
         }
 #endif
         gcmkVERIFY_OK(gcmkOS_SAFE_FREE(os, eventObj));
@@ -730,7 +729,7 @@ gckEVENT_Destroy(
 #endif
 
 #if gcdINTERRUPT_STATISTIC
-    gcmkVERIFY_OK(gckOS_AtomDestroy(Event->os, &Event->interruptCount));
+    gcmkVERIFY_OK(gckOS_AtomDestroy(Event->os, Event->interruptCount));
 #endif
 
     /* Mark the gckEVENT object as unknown. */
@@ -794,10 +793,6 @@ gckEVENT_GetEvent(
     gctINT32 free;
 #if gcdMULTI_GPU
     gctINT j;
-#endif
-
-#if gcdGPU_TIMEOUT
-    gctUINT32 timer = 0;
 #endif
 
     gcmkHEADER_ARG("Event=0x%x Source=%d", Event, Source);
@@ -904,42 +899,6 @@ gckEVENT_GetEvent(
 
         /* Delay a while. */
         gcmkONERROR(gckOS_Delay(Event->os, 1));
-
-#if gcdGPU_TIMEOUT
-        /* Increment the wait timer. */
-        timer += 1;
-
-        if (timer == Event->kernel->timeOut)
-        {
-            /* Try to call any outstanding events. */
-#if gcdMULTI_GPU
-            gcmkONERROR(gckHARDWARE_Interrupt(Event->kernel->hardware,
-                                              gcvCORE_3D_0_ID,
-                                              gcvTRUE));
-#if gcdMULTI_GPU > 1
-            gcmkONERROR(gckHARDWARE_Interrupt(Event->kernel->hardware,
-                                              gcvCORE_3D_1_ID,
-                                              gcvTRUE));
-
-#endif
-#else
-            gcmkONERROR(gckHARDWARE_Interrupt(Event->kernel->hardware,
-                                              gcvTRUE));
-#endif
-        }
-        else if (timer > Event->kernel->timeOut)
-        {
-            gcmkTRACE_N(
-                gcvLEVEL_ERROR,
-                gcmSIZEOF(gctCONST_STRING) + gcmSIZEOF(gctINT),
-                "%s(%d): no available events\n",
-                __FUNCTION__, __LINE__
-                );
-
-            /* Bail out. */
-            gcmkONERROR(gcvSTATUS_GPU_NOT_RESPONDING);
-        }
-#endif
     }
 
 OnError:
@@ -1227,7 +1186,6 @@ gckEVENT_AddList(
     default:
         break;
     }
-
 
     /* Release the mutex. */
     gcmkONERROR(gckOS_ReleaseMutex(Event->os, Event->eventListMutex));
@@ -1686,9 +1644,12 @@ gckEVENT_Submit(
 #endif
 
 #if gcdINTERRUPT_STATISTIC
-    gctUINT32 oldValue;
+    gctINT32 oldValue;
 #endif
 
+#if gcdSECURITY
+    gctPOINTER reservedBuffer;
+#endif
 
     gctUINT32 flushBytes;
     gctUINT32 executeBytes;
@@ -1703,6 +1664,8 @@ gckEVENT_Submit(
     hardware = Event->kernel->hardware;
 
     gcmkVERIFY_OBJECT(hardware, gcvOBJ_HARDWARE);
+
+    gckOS_GetTicks(&Event->lastCommitStamp);
 
     /* Are there event queues? */
     if (Event->queueHead != gcvNULL)
@@ -1803,6 +1766,9 @@ gckEVENT_Submit(
 
             /* Reserve space in the command queue. */
             gcmkONERROR(gckCOMMAND_Reserve(command, bytes, &buffer, &bytes));
+#if gcdSECURITY
+            reservedBuffer = buffer;
+#endif
 
 #if gcdMULTI_GPU
             gcmkONERROR(gckHARDWARE_ChipEnable(
@@ -1847,8 +1813,16 @@ gckEVENT_Submit(
                 ));
 #endif
 
+#if gcdSECURITY
+            gckKERNEL_SecurityExecute(
+                Event->kernel,
+                reservedBuffer,
+                executeBytes
+                );
+#else
             /* Execute the hardware event. */
             gcmkONERROR(gckCOMMAND_Execute(command, executeBytes));
+#endif
 #endif
         }
 
@@ -1874,16 +1848,16 @@ gckEVENT_Submit(
     return gcvSTATUS_OK;
 
 OnError:
-    if (commitEntered)
-    {
-        /* Release the command queue mutex. */
-        gcmkVERIFY_OK(gckCOMMAND_ExitCommit(command, FromPower));
-    }
-
     if (acquired)
     {
         /* Need to unroll the mutex acquire. */
         gcmkVERIFY_OK(gckOS_ReleaseMutex(Event->os, Event->eventListMutex));
+    }
+
+    if (commitEntered)
+    {
+        /* Release the command queue mutex. */
+        gcmkVERIFY_OK(gckCOMMAND_ExitCommit(command, FromPower));
     }
 
     if (id != 0xFF)
@@ -2276,7 +2250,7 @@ gckEVENT_Interrupt(
 #if gcdINTERRUPT_STATISTIC
     {
         gctINT j = 0;
-        gctUINT32 oldValue;
+        gctINT32 oldValue;
 
         for (j = 0; j < gcmCOUNTOF(Event->queues); j++)
         {
@@ -2477,7 +2451,6 @@ gckEVENT_Notify(
         if (pending & 0x80000000)
         {
             gcmkPRINT("AXI BUS ERROR");
-            gckHARDWARE_DumpMMUException(Event->kernel->hardware);
             pending &= 0x7FFFFFFF;
 
             mask  = 1 << 31;
@@ -2929,7 +2902,7 @@ gckEVENT_Notify(
                 /* Unlock. */
                 status = gckVIDMEM_Unlock(
                     Event->kernel,
-                    node,
+                    nodeObject,
                     record->info.u.UnlockVideoMemory.type,
                     gcvNULL);
 
@@ -3475,7 +3448,8 @@ gckEVENT_Dump(
     gcsEVENT_PTR record = gcvNULL;
     gctINT i;
 #if gcdINTERRUPT_STATISTIC
-    gctUINT32 pendingInterrupt;
+    gctINT32 pendingInterrupt;
+    gctUINT32 intrAcknowledge;
 #endif
 
     gcmkHEADER_ARG("Event=0x%x", Event);
@@ -3483,7 +3457,6 @@ gckEVENT_Dump(
     gcmkPRINT("**************************\n");
     gcmkPRINT("***  EVENT STATE DUMP  ***\n");
     gcmkPRINT("**************************\n");
-
 
     gcmkPRINT("  Unsumbitted Event:");
     while(queueHead)
@@ -3525,6 +3498,18 @@ gckEVENT_Dump(
 #if gcdINTERRUPT_STATISTIC
     gckOS_AtomGet(Event->os, Event->interruptCount, &pendingInterrupt);
     gcmkPRINT("  Number of Pending Interrupt: %d", pendingInterrupt);
+
+    if (Event->kernel->recovery == 0)
+    {
+        gckOS_ReadRegisterEx(
+            Event->os,
+            Event->kernel->core,
+            0x10,
+            &intrAcknowledge
+            );
+
+        gcmkPRINT("  INTR_ACKNOWLEDGE=0x%x", intrAcknowledge);
+    }
 #endif
 
     gcmkFOOTER_NO();

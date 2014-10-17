@@ -11,7 +11,6 @@
 *****************************************************************************/
 
 
-
 #ifndef __gc_hal_kernel_hardware_h_
 #define __gc_hal_kernel_hardware_h_
 
@@ -24,6 +23,64 @@
 extern "C" {
 
 #endif
+
+typedef struct _gckPulseEaterCounter * gckPulseEaterCounter;
+typedef struct _gckPulseEaterDB * gckPulseEaterDB;
+typedef struct _pulseEater_frequency_table * pulseEaterFTL;
+
+/*
+    hwPeriod --- setting data in register
+    hwMs --- 10*hw-period-time
+*/
+struct _pulseEater_frequency_table
+{
+    gctUINT32    index;
+    gctUINT32    hwPeriod;
+    gctUINT32    swPeriod;
+    gctUINT8     hwMs;
+    gctUINT32    frequency;
+};
+
+struct _gckPulseEaterCounter
+{
+    gctUINT32                   sfPeriod;
+    gctUINT32                   freq;
+    gctUINT32                   time;
+    gctUINT8                    hwMs;
+    gctUINT8                    pulseCount[4];
+};
+
+struct _gckPulseEaterDB
+{
+    gctUINT32                   lastIndex;
+    gctUINT32                   timeStamp;
+    gctUINT32                   timeStampInLastRound;
+    struct _gckPulseEaterCounter data[PULSE_EATER_COUNT];
+    gctUINT32                   startTime;
+    gctUINT32                   busyRatio[4];
+    gctUINT32                   totalTime[4];
+    gctUINT32                   startIndex;
+    gctBOOL                     moreRound;
+};
+
+typedef enum {
+    gcvHARDWARE_FUNCTION_MMU,
+    gcvHARDWARE_FUNCTION_FLUSH,
+
+    gcvHARDWARE_FUNCTION_NUM,
+}
+gceHARDWARE_FUNCTION;
+
+
+typedef struct _gcsHARWARE_FUNCTION
+{
+    /* Entry of the function. */
+    gctUINT32                   address;
+
+    /* Bytes of the function. */
+    gctUINT32                   bytes;
+}
+gcsHARDWARE_FUNCTION;
 
 /* gckHARDWARE object. */
 struct _gckHARDWARE
@@ -106,10 +163,33 @@ struct _gckHARDWARE
 
 #if MRVL_CONFIG_ENABLE_GPUFREQ
     struct gcsDEVOBJECT         devObj;
+#   if MRVL_CONFIG_SHADER_CLK_CONTROL
+    struct gcsDEVOBJECT         devShObj;
+#   endif
 
 #endif
 
     gctPOINTER                  clockMutex;
+
+    gckPulseEaterDB             pulseEaterDB[2];
+    gctPOINTER                  pulseEaterMutex;
+    gctPOINTER                  pulseEaterTimer;
+    gctINT                      hwPeriod;
+    gctUINT32                   sfPeriod;
+    gctUINT8                    hwMs;
+    gctUINT32                   freq;
+
+    gctUINT32                   minFscaleValue;
+
+    gctPOINTER                  pendingEvent;
+
+    /* Function used by gckHARDWARE. */
+    gctPHYS_ADDR                functionPhysical;
+    gctPOINTER                  functionLogical;
+    gctUINT32                   functionAddress;
+    gctSIZE_T                   functionBytes;
+
+    gcsHARDWARE_FUNCTION        functions[gcvHARDWARE_FUNCTION_NUM];
 };
 
 gceSTATUS

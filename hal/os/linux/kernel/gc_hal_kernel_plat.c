@@ -116,7 +116,7 @@ out:
     return ret;
 }
 
-int gpu_clk_init(struct gc_iface *iface)
+int gpu_clk_init(struct gc_iface *iface, void *ptr)
 {
     unsigned int chains_count = iface->chains_count;
 
@@ -129,11 +129,11 @@ int gpu_clk_init(struct gc_iface *iface)
     while(0 != chains_count)
     {
         chains_count--;
-        gpu_clk_init(iface->chains_clk[chains_count]);
+        gpu_clk_init(iface->chains_clk[chains_count], ptr);
     }
 
     if(iface->ops && iface->ops->init)
-        iface->ops->init(iface);
+        iface->ops->init(iface, ptr);
 
     return 0;
 }

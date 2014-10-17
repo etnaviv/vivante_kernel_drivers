@@ -47,7 +47,7 @@ struct gpufreq_governor gpufreq_gov_ondemand = {
 struct gpufreq_ondemand_info_s {
     int                     gpu;
     struct gpufreq_policy   *cur_policy;
-    struct delayed_work     work;
+    void                    *timer;
     struct mutex            timer_mutex;
     int                     ref;
 };
@@ -79,6 +79,14 @@ static struct ondemand_tuners ondemand_tuners_ins[] = {
         .sampling_down_factor = DEF_SAMPLING_DOWN_FACTOR,
         .down_differential = DEF_FREQUENCY_DOWN_DIFFERENTIAL,
     },
+
+#   if MRVL_CONFIG_SHADER_CLK_CONTROL
+    [2] = {
+        .up_threshold = DEF_FREQUENCY_UP_THRESHOLD,
+        .sampling_down_factor = DEF_SAMPLING_DOWN_FACTOR,
+        .down_differential = DEF_FREQUENCY_DOWN_DIFFERENTIAL,
+    },
+#   endif
 #endif
 };
 
@@ -195,10 +203,10 @@ static void gov_policy_gpubench(struct gpufreq_ondemand_info_s *ondemand_info)
     struct ondemand_tuners *ondem_tuners_ins = &ondemand_tuners_ins[gpu];
 
     load = gpufreq_get_gpu_load(gpu, ondem_tuners_ins->sampling_rate);
-    debug_log(GPUFREQ_LOG_DEBUG, "load %d\n", load);
+    debug_log(GPUFREQ_LOG_DEBUG, "gpu: %d, cur: %d, load %d\n", cur_policy->gpu, cur_policy->cur, load);
     if(load < 0)
     {
-        debug_log(GPUFREQ_LOG_WARNING, "fail to get gpu work load\n");
+        debug_log(GPUFREQ_LOG_WARNING, "fail to get gpu(%d) work load\n", gpu);
         return;
     }
 
@@ -340,11 +348,10 @@ static void gov_check_gpu_interval(struct gpufreq_ondemand_info_s *ondemand_info
 #endif
 }
 
-static void do_ondemand_timer(struct work_struct *work)
+static void do_ondemand_timer(void* data)
 {
-    struct gpufreq_ondemand_info_s *this_gov_info =
-        container_of(work, struct gpufreq_ondemand_info_s, work.work);
-    unsigned int delay = msecs_to_jiffies(ondemand_tuners_ins[this_gov_info->gpu].sampling_rate);
+    struct gpufreq_ondemand_info_s *this_gov_info = (struct gpufreq_ondemand_info_s *)data;
+    unsigned int delay = ondemand_tuners_ins[this_gov_info->gpu].sampling_rate;
 
     mutex_lock(&this_gov_info->timer_mutex);
 
@@ -352,19 +359,19 @@ static void do_ondemand_timer(struct work_struct *work)
     gov_check_gpu_interval(this_gov_info);
 
     /* schedule rountine for next time */
-    schedule_delayed_work(&this_gov_info->work, delay);
+    gpufreq_start_timer(this_gov_info->timer, delay);
     mutex_unlock(&this_gov_info->timer_mutex);
 }
 
 static inline void gov_ondemand_init(struct gpufreq_ondemand_info_s *ondemand_info)
 {
-    unsigned int delay = 0;
-    schedule_delayed_work(&ondemand_info->work, delay);
+    unsigned int delay = 1;
+    gpufreq_start_timer(ondemand_info->timer, delay);
 }
 
 static inline void gov_ondemand_exit(struct gpufreq_ondemand_info_s *ondemand_info)
 {
-    cancel_delayed_work_sync(&ondemand_info->work);
+    gpufreq_stop_timer(ondemand_info->timer);
 }
 
 static inline void gov_ondemand_suspend(struct gpufreq_ondemand_info_s *ondemand_info)
@@ -480,13 +487,9 @@ static int gpufreq_gov_ondemand_init(void)
     /* successfully registered, then init work. */
     for_each_gpu(gpu)
     {
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,7,0))
-        INIT_DEFERRABLE_WORK(&ondemand_info_s[gpu].work,
-                                 do_ondemand_timer);
-#else
-        INIT_DELAYED_WORK_DEFERRABLE(&ondemand_info_s[gpu].work,
-                                     do_ondemand_timer);
-#endif
+        gpufreq_create_timer(do_ondemand_timer,
+                            &ondemand_info_s[gpu],
+                            &ondemand_info_s[gpu].timer);
     }
 
     return 0;

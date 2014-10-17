@@ -21,8 +21,69 @@
 #include <linux/slab.h>
 
 #include "gc_hal_kernel_allocator_array.h"
+#include "gc_hal_kernel_platform.h"
 
 #define _GC_OBJ_ZONE    gcvZONE_OS
+
+typedef struct _gcsDEFAULT_PRIV * gcsDEFAULT_PRIV_PTR;
+typedef struct _gcsDEFAULT_PRIV {
+    gctUINT32 low;
+    gctUINT32 high;
+}
+gcsDEFAULT_PRIV;
+
+/******************************************************************************\
+************************** Default Allocator Debugfs ***************************
+\******************************************************************************/
+
+int gc_usage_show(struct seq_file* m, void* data)
+{
+    gcsINFO_NODE *node = m->private;
+    gckALLOCATOR Allocator = node->device;
+    gcsDEFAULT_PRIV_PTR priv = Allocator->privateData;
+
+    seq_printf(m, "low:  %u bytes\n", priv->low);
+    seq_printf(m, "high: %u bytes\n", priv->high);
+
+    return 0;
+}
+
+static gcsINFO InfoList[] =
+{
+    {"lowHighUsage", gc_usage_show},
+};
+
+static void
+_DefaultAllocatorDebugfsInit(
+    IN gckALLOCATOR Allocator,
+    IN gckDEBUGFS_DIR Root
+    )
+{
+    gcmkVERIFY_OK(
+        gckDEBUGFS_DIR_Init(&Allocator->debugfsDir, Root->root, "default"));
+
+    gcmkVERIFY_OK(gckDEBUGFS_DIR_CreateFiles(
+        &Allocator->debugfsDir,
+        InfoList,
+        gcmCOUNTOF(InfoList),
+        Allocator
+        ));
+}
+
+static void
+_DefaultAllocatorDebugfsCleanup(
+    IN gckALLOCATOR Allocator
+    )
+{
+    gcmkVERIFY_OK(gckDEBUGFS_DIR_RemoveFiles(
+        &Allocator->debugfsDir,
+        InfoList,
+        gcmCOUNTOF(InfoList)
+        ));
+
+    gckDEBUGFS_DIR_Deinit(&Allocator->debugfsDir);
+}
+
 
 static void
 _NonContiguousFree(
@@ -217,7 +278,7 @@ _UnmapUserLogical(
 /***************************************************************************\
 ************************ Default Allocator **********************************
 \***************************************************************************/
-
+#define C_MAX_PAGENUM  (50*1024)
 static gceSTATUS
 _DefaultAlloc(
     IN gckALLOCATOR Allocator,
@@ -235,6 +296,8 @@ _DefaultAlloc(
     gctUINT32 numPages;
     gctUINT i = 0;
     gctBOOL contiguous = Flags & gcvALLOC_FLAG_CONTIGUOUS;
+    struct sysinfo temsysinfo;
+    gcsDEFAULT_PRIV_PTR priv = (gcsDEFAULT_PRIV_PTR)Allocator->privateData;
 
     gcmkHEADER_ARG("Mdl=%p NumPages=%d", Mdl, NumPages);
 
@@ -242,11 +305,22 @@ _DefaultAlloc(
     bytes = NumPages * PAGE_SIZE;
     order = get_order(bytes);
 
+    si_meminfo(&temsysinfo);
+
+    if (Flags & gcvALLOC_FLAG_MEMLIMIT)
+    {
+        if ( (temsysinfo.freeram < NumPages) || ((temsysinfo.freeram-NumPages) < C_MAX_PAGENUM) )
+        {
+            gcmkONERROR(gcvSTATUS_OUT_OF_MEMORY);
+        }
+    }
+
     if (contiguous)
     {
         if (order >= MAX_ORDER)
         {
-            gcmkONERROR(gcvSTATUS_OUT_OF_MEMORY);
+            status = gcvSTATUS_OUT_OF_MEMORY;
+            goto OnError;
         }
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 27)
@@ -280,7 +354,8 @@ _DefaultAlloc(
 
     if (Mdl->u.contiguousPages == gcvNULL && Mdl->u.nonContiguousPages == gcvNULL)
     {
-        gcmkONERROR(gcvSTATUS_OUT_OF_MEMORY);
+        status = gcvSTATUS_OUT_OF_MEMORY;
+        goto OnError;
     }
 
     for (i = 0; i < numPages; i++)
@@ -305,6 +380,8 @@ _DefaultAlloc(
                                  page_to_phys(page),
                                  page_address(page),
                                  PAGE_SIZE));
+
+            priv->low += PAGE_SIZE;
         }
         else
         {
@@ -322,6 +399,8 @@ _DefaultAlloc(
                     );
             }
 #endif
+
+            priv->high += PAGE_SIZE;
         }
     }
 
@@ -340,16 +419,29 @@ _DefaultFree(
     )
 {
     gctINT i;
+    struct page * page;
+    gcsDEFAULT_PRIV_PTR priv = (gcsDEFAULT_PRIV_PTR)Allocator->privateData;
 
     for (i = 0; i < Mdl->numPages; i++)
     {
         if (Mdl->contiguous)
         {
-            ClearPageReserved(nth_page(Mdl->u.contiguousPages, i));
+            page = nth_page(Mdl->u.contiguousPages, i);
         }
         else
         {
-            ClearPageReserved(_NonContiguousToPage(Mdl->u.nonContiguousPages, i));
+            page = _NonContiguousToPage(Mdl->u.nonContiguousPages, i);
+        }
+
+        ClearPageReserved(page);
+
+        if (PageHighMem(page))
+        {
+            priv->high -= PAGE_SIZE;
+        }
+        else
+        {
+            priv->low -= PAGE_SIZE;
         }
     }
 
@@ -385,6 +477,8 @@ _DefaultMapUser(
     unsigned long   start;
     unsigned long   pfn;
     gctINT i;
+    gckOS           os = Allocator->os;
+    gcsPLATFORM *   platform = os->device->platform;
 
     PLINUX_MDL      mdl = Mdl;
     PLINUX_MDL_MAP  mdlMap = MdlMap;
@@ -459,6 +553,11 @@ _DefaultMapUser(
     {
         /* Make this mapping non-cached. */
         mdlMap->vma->vm_page_prot = gcmkPAGED_MEMROY_PROT(mdlMap->vma->vm_page_prot);
+    }
+
+    if (platform && platform->ops->adjustProt)
+    {
+        platform->ops->adjustProt(mdlMap->vma);
     }
 
     addr = mdl->addr;
@@ -592,6 +691,14 @@ _DefaultPhysical(
     return gcvSTATUS_OK;
 }
 
+void
+_DefaultAllocatorDestructor(
+    IN void* PrivateData
+    )
+{
+    kfree(PrivateData);
+}
+
 /* Default allocator operations. */
 gcsALLOCATOR_OPERATIONS DefaultAllocatorOperations = {
     .Alloc              = _DefaultAlloc,
@@ -614,9 +721,24 @@ _DefaultAlloctorInit(
 {
     gceSTATUS status;
     gckALLOCATOR allocator;
+    gcsDEFAULT_PRIV_PTR priv = gcvNULL;
 
     gcmkONERROR(
         gckALLOCATOR_Construct(Os, &DefaultAllocatorOperations, &allocator));
+
+    priv = kzalloc(gcmSIZEOF(gcsDEFAULT_PRIV), GFP_KERNEL | gcdNOWARN);
+
+    if (!priv)
+    {
+        gcmkONERROR(gcvSTATUS_OUT_OF_MEMORY);
+    }
+
+    /* Register private data. */
+    allocator->privateData = priv;
+    allocator->privateDataDestructor = _DefaultAllocatorDestructor;
+
+    allocator->debugfsInit = _DefaultAllocatorDebugfsInit;
+    allocator->debugfsCleanup = _DefaultAllocatorDebugfsCleanup;
 
     *Allocator = allocator;
 
@@ -659,15 +781,21 @@ gckALLOCATOR_Construct(
         );
 
     gcmkONERROR(
-        gckOS_Allocate(Os, gcmSIZEOF(gckALLOCATOR), (gctPOINTER *)&allocator));
+        gckOS_Allocate(Os, gcmSIZEOF(gcsALLOCATOR), (gctPOINTER *)&allocator));
 
-    gckOS_ZeroMemory(allocator, gcmSIZEOF(gckALLOCATOR));
+    gckOS_ZeroMemory(allocator, gcmSIZEOF(gcsALLOCATOR));
 
     /* Record os. */
     allocator->os = Os;
 
     /* Set operations. */
     allocator->ops = Operations;
+
+    allocator->capability = gcvALLOC_FLAG_CONTIGUOUS
+                          | gcvALLOC_FLAG_NON_CONTIGUOUS
+                          | gcvALLOC_FLAG_CACHEABLE
+                          | gcvALLOC_FLAG_MEMLIMIT;
+                          ;
 
     *Allocator = allocator;
 
@@ -677,6 +805,38 @@ gckALLOCATOR_Construct(
 OnError:
     gcmkFOOTER();
     return status;
+}
+
+/******************************************************************************\
+******************************** Debugfs Support *******************************
+\******************************************************************************/
+
+static gceSTATUS
+_AllocatorDebugfsInit(
+    IN gckOS Os
+    )
+{
+    gceSTATUS status;
+    gckGALDEVICE device = Os->device;
+
+    gckDEBUGFS_DIR dir = &Os->allocatorDebugfsDir;
+
+    gcmkONERROR(gckDEBUGFS_DIR_Init(dir, device->debugfsDir.root, "allocators"));
+
+    return gcvSTATUS_OK;
+
+OnError:
+    return status;
+}
+
+static void
+_AllocatorDebugfsCleanup(
+    IN gckOS Os
+    )
+{
+    gckDEBUGFS_DIR dir = &Os->allocatorDebugfsDir;
+
+    gckDEBUGFS_DIR_Deinit(dir);
 }
 
 /***************************************************************************\
@@ -691,6 +851,8 @@ gckOS_ImportAllocators(
     gceSTATUS status;
     gctUINT i;
     gckALLOCATOR allocator;
+
+    _AllocatorDebugfsInit(Os);
 
     INIT_LIST_HEAD(&Os->allocatorList);
 
@@ -709,9 +871,29 @@ gckOS_ImportAllocators(
                 continue;
             }
 
-            list_add(&allocator->head, &Os->allocatorList);
+            allocator->name = allocatorArray[i].name;
+
+            if (allocator->debugfsInit)
+            {
+                /* Init allocator's debugfs. */
+                allocator->debugfsInit(allocator, &Os->allocatorDebugfsDir);
+            }
+
+            list_add_tail(&allocator->head, &Os->allocatorList);
         }
     }
+
+#if gcdDEBUG
+    list_for_each_entry(allocator, &Os->allocatorList, head)
+    {
+        gcmkTRACE_ZONE(
+            gcvLEVEL_WARNING, gcvZONE_OS,
+            "%s(%d) Allocator: %s",
+            __FUNCTION__, __LINE__,
+            allocator->name
+            );
+    }
+#endif
 
     return gcvSTATUS_OK;
 }
@@ -728,6 +910,12 @@ gckOS_FreeAllocators(
     {
         list_del(&allocator->head);
 
+        if (allocator->debugfsCleanup)
+        {
+            /* Clean up allocator's debugfs. */
+            allocator->debugfsCleanup(allocator);
+        }
+
         /* Free private data. */
         if (allocator->privateDataDestructor && allocator->privateData)
         {
@@ -736,6 +924,8 @@ gckOS_FreeAllocators(
 
         gckOS_Free(Os, allocator);
     }
+
+    _AllocatorDebugfsCleanup(Os);
 
     return gcvSTATUS_OK;
 }

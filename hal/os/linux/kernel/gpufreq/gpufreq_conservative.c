@@ -80,6 +80,15 @@ static struct conservative_tuners conservative_tuners_ins[] = {
         .sampling_down_factor = DEF_SAMPLING_DOWN_FACTOR,
         .freq_step = DEF_FREQUENCY_FREQ_STEP,
     },
+
+#   if MRVL_CONFIG_SHADER_CLK_CONTROL
+    [2] = {
+        .up_threshold = DEF_FREQUENCY_UP_THRESHOLD,
+        .down_threshold = DEF_FREQUENCY_DOWN_THRESHOLD,
+        .sampling_down_factor = DEF_SAMPLING_DOWN_FACTOR,
+        .freq_step = DEF_FREQUENCY_FREQ_STEP,
+    },
+#   endif
 #endif
 };
 
@@ -244,6 +253,8 @@ static int gov_gpufreq_notifier_call(struct notifier_block *nb,
     if(this_gov_info->enabled == 0)
         return NOTIFY_DONE;
 
+    st_trans(action);
+
     /*
      * We only update internal tracked freq when it's out of the ranges
      * of available frequency, otherwise we leave it untouched.
@@ -252,8 +263,9 @@ static int gov_gpufreq_notifier_call(struct notifier_block *nb,
     {
     case GPUFREQ_PRECHANGE:
     case GPUFREQ_POSTCHANGE:
-        if(this_gov_info->requested_freq > policy->max
-           || this_gov_info->requested_freq < policy->min)
+        if((this_gov_info->requested_freq > policy->max
+            || this_gov_info->requested_freq < policy->min)
+           && (freqs->new_freq != freqs->old_freq))
         {
             this_gov_info->requested_freq = freqs->new_freq;
         }

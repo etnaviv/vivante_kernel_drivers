@@ -20,6 +20,29 @@
 #include <linux/pm_qos.h>
 #endif
 
+#if MRVL_CONFIG_DEVFREQ_GOV_THROUGHPUT || GPUFREQ_REQUEST_DDR_QOS
+static int gpu_high_threshold[GPUFREQ_GPU_NUMS] = {312000, 800000};
+#endif
+
+#if MRVL_CONFIG_DEVFREQ_GOV_THROUGHPUT
+#define _config_state(gpu, cur_freq, old_freq, state) \
+{ \
+    if((cur_freq) >= gpu_high_threshold[gpu]) \
+    { \
+        state = GPUFREQ_POSTCHANGE_UP; \
+    } \
+    else \
+    { \
+        state = GPUFREQ_POSTCHANGE_DOWN; \
+    } \
+}
+#else
+#define _config_state(gpu, cur_freq, old_freq, state) \
+{ \
+    state = GPUFREQ_POSTCHANGE; \
+}
+#endif
+
 #define GPUFREQ_FREQ_TABLE_MAX_NUM  10
 
 #define GPUFREQ_SET_FREQ_TABLE(_table, _index, _freq) \
@@ -40,6 +63,8 @@ struct gpufreq_eden {
     /* function pointer to get freqs table */
     PFUNC_GET_FREQS_TBL pf_get_freqs_table;
     PFUNC_GET_FREQS_TBL pf_get_sh_freqs_table;
+
+    int gpu_suspended;
 };
 
 static gckOS gpu_os;
@@ -219,12 +244,14 @@ static struct gpufreq_freq_attr *driver_attrs[] = {
     NULL
 };
 
-static int eden_gpufreq_init (struct gpufreq_policy *policy);
+static int eden_gpufreq_init (void * ft, struct gpufreq_policy *policy);
 static int eden_gpufreq_exit (struct gpufreq_policy *policy);
 static int eden_gpufreq_verify (struct gpufreq_policy *policy);
 static int eden_gpufreq_target (struct gpufreq_policy *policy, unsigned int target_freq, unsigned int relation);
 static int eden_gpufreq_set(unsigned int gpu, struct gpufreq_freqs *freq, struct gpufreq_freqs *freq_sh);
 static unsigned int eden_gpufreq_get (unsigned int chip);
+int eden_gpufreq_suspend(struct gpufreq_policy *policy);
+int eden_gpufreq_resume(struct gpufreq_policy *policy);
 
 #if MRVL_CONFIG_ENABLE_QOS_SUPPORT
 static unsigned int is_qos_inited = 0;
@@ -258,6 +285,21 @@ void eden_gpufreq_unregister_qos(unsigned int gpu)
 
 #endif /* MRVL_CONFIG_ENABLE_QOS_SUPPORT */
 
+#if GPUFREQ_REQUEST_DDR_QOS
+static DDR_QOS_NODE gpufreq_ddr_constraint[GPUFREQ_GPU_NUMS] = {
+        {
+            .qos_node = {
+                .name = "gpu3d_ddr_min",
+            }
+        },
+        {
+            .qos_node = {
+                .name = "gpu2d_ddr_min",
+            }
+        },
+    };
+#endif
+
 struct gpufreq_driver eden_gpufreq_driver = {
     .init   = eden_gpufreq_init,
     .verify = eden_gpufreq_verify,
@@ -265,6 +307,8 @@ struct gpufreq_driver eden_gpufreq_driver = {
     .target = eden_gpufreq_target,
     .name   = "eden-gpufreq",
     .exit   = eden_gpufreq_exit,
+    .suspend = eden_gpufreq_suspend,
+    .resume = eden_gpufreq_resume,
     .attr   = driver_attrs,
 };
 
@@ -312,7 +356,7 @@ extern int get_gc2d_freqs_table(unsigned long *gcu2d_freqs_table,
 #endif
 }
 
-static int eden_gpufreq_init (struct gpufreq_policy *policy)
+static int eden_gpufreq_init (void * ft, struct gpufreq_policy *policy)
 {
     unsigned gpu = policy->gpu;
 
@@ -344,6 +388,12 @@ static int eden_gpufreq_init (struct gpufreq_policy *policy)
     }
 #endif
 
+#if GPUFREQ_REQUEST_DDR_QOS
+    gpufreq_ddr_constraint_init(&gpufreq_ddr_constraint[gpu]);
+#endif
+
+    gpu_eden[gpu].gpu_suspended = 0;
+
     debug_log(GPUFREQ_LOG_INFO, "GPUFreq for Eden gpu %d initialized, cur_freq %u\n", gpu, policy->cur);
 
     return 0;
@@ -352,6 +402,11 @@ static int eden_gpufreq_init (struct gpufreq_policy *policy)
 static int eden_gpufreq_exit (struct gpufreq_policy *policy)
 {
     unsigned gpu = policy->gpu;
+
+#if GPUFREQ_REQUEST_DDR_QOS
+    gpufreq_ddr_constraint_deinit(&gpufreq_ddr_constraint[gpu]);
+#endif
+
     eden_gpufreq_unregister_qos(gpu);
 
     return 0;
@@ -371,6 +426,7 @@ static int eden_gpufreq_target (struct gpufreq_policy *policy, unsigned int targ
     struct gpufreq_freqs freq;
     struct gpufreq_freqs freq_sh = {0};
     unsigned int gpu = policy->gpu;
+    unsigned int state = GPUFREQ_POSTCHANGE;
     struct gpufreq_frequency_table *freq_table = gpu_eden[gpu].freq_table;
 
 #if MRVL_CONFIG_ENABLE_QOS_SUPPORT
@@ -425,7 +481,19 @@ static int eden_gpufreq_target (struct gpufreq_policy *policy, unsigned int targ
 
     eden_gpufreq_set(gpu, &freq, &freq_sh);
 
-    gpufreq_notify_transition(&freq, GPUFREQ_POSTCHANGE);
+    if (!gpu_eden[gpu].gpu_suspended)
+    {
+#if GPUFREQ_REQUEST_DDR_QOS
+        gpufreq_ddr_constraint_update(&gpufreq_ddr_constraint[gpu],
+                                       freq.new_freq,
+                                       freq.old_freq,
+                                       gpu_high_threshold[gpu]);
+#endif
+
+        _config_state(gpu, freq.new_freq, freq.old_freq, state);
+    }
+
+    gpufreq_notify_transition(&freq, state);
 
     return ret;
 }
@@ -488,15 +556,67 @@ static int eden_gpufreq_set(unsigned int gpu, struct gpufreq_freqs *freq, struct
 
 static unsigned int eden_gpufreq_get (unsigned int gpu)
 {
-    gceSTATUS status;
     unsigned int rate = ~0;
 
-    gcmkONERROR(gckOS_QueryClkRate(gpu_os, gpu, &rate));
-    return rate;
+    if (has_feat_dfc_protect_clk_op())
+        gpufreq_acquire_clock_mutex(gpu);
 
-OnError:
-    debug_log(GPUFREQ_LOG_ERROR, "failed to get clk rate of gpu %u\n", gpu);
-    return -EINVAL;
+    gcmkVERIFY_OK(gckOS_QueryClkRate(gpu_os, gpu, &rate));
+
+    if (has_feat_dfc_protect_clk_op())
+        gpufreq_release_clock_mutex(gpu);
+
+    return rate;
+}
+
+int eden_gpufreq_suspend(struct gpufreq_policy *policy)
+{
+#if MRVL_CONFIG_DEVFREQ_GOV_THROUGHPUT
+    struct gpufreq_freqs freqs = {0};
+#endif
+
+    gpu_eden[policy->gpu].gpu_suspended = 1;
+
+#if GPUFREQ_REQUEST_DDR_QOS
+    /*  Following parameter new = 156, old = 624, threshold = 312 is just to simulate
+        frequency change from high to low, doesn't have special meaning.
+    */
+    gpufreq_ddr_constraint_update(&gpufreq_ddr_constraint[policy->gpu],
+                                   156, 624, 312);
+#endif
+
+#if MRVL_CONFIG_DEVFREQ_GOV_THROUGHPUT
+    freqs.gpu      = policy->gpu;
+    gpufreq_notify_transition(&freqs, GPUFREQ_PRECHANGE);
+    gpufreq_notify_transition(&freqs, GPUFREQ_POSTCHANGE_DOWN);
+#endif
+
+    return 0;
+}
+
+int eden_gpufreq_resume(struct gpufreq_policy *policy)
+{
+#if MRVL_CONFIG_DEVFREQ_GOV_THROUGHPUT
+    struct gpufreq_freqs freqs = {0};
+#endif
+
+    gpu_eden[policy->gpu].gpu_suspended = 0;
+
+#if GPUFREQ_REQUEST_DDR_QOS
+    gpufreq_ddr_constraint_update(&gpufreq_ddr_constraint[policy->gpu],
+                                   policy->cur, 0, gpu_high_threshold[policy->gpu]);
+#endif
+
+#if MRVL_CONFIG_DEVFREQ_GOV_THROUGHPUT
+    if(policy->cur >= gpu_high_threshold[policy->gpu])
+    {
+        freqs.gpu      = policy->gpu;
+        gpufreq_notify_transition(&freqs, GPUFREQ_PRECHANGE);
+        gpufreq_notify_transition(&freqs, GPUFREQ_POSTCHANGE_UP);
+    }
+#endif
+
+    return 0;
 }
 
 #endif /* End of MRVL_CONFIG_ENABLE_GPUFREQ */

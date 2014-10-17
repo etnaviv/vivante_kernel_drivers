@@ -425,11 +425,31 @@ static ssize_t store_clk_rate (struct device *dev,
     SYSFS_VERIFY_INPUT_RANGE(core, 0, (gpu_count-1));
     SYSFS_VERIFY_INPUT_RANGE(frequency, 156, 624);
 
+    /* acquire clock mutex */
+    if(has_feat_dfc_protect_clk_op())
+    {
+        int realcore = core;
+        if(has_feat_3d_shader_clock() && core == gcvCORE_SH)
+            realcore = gcvCORE_MAJOR;
+
+        gcmkVERIFY_OK(gckOS_AcquireClockMutex(galDevice->os, realcore));
+    }
+
     status = gckOS_SetClkRate(galDevice->os, core, frequency*1000);
 
     if(gcmIS_ERROR(status))
     {
         printk("fail to set core[%d] frequency to %d MHZ\n", core, frequency);
+    }
+
+    /* release clock mutex */
+    if(has_feat_dfc_protect_clk_op())
+    {
+        int realcore = core;
+        if(has_feat_3d_shader_clock() && core == gcvCORE_SH)
+            realcore = gcvCORE_MAJOR;
+
+        gcmkVERIFY_OK(gckOS_ReleaseClockMutex(galDevice->os, realcore));
     }
 
     return count;
@@ -547,14 +567,84 @@ static ssize_t show_dutycycle (struct device *dev,
                     struct device_attribute *attr,
                     char * buf)
 {
-    return sprintf(buf, "Oops, %s is under working\n", __func__);
+    if(has_feat_pulse_eater_profiler())
+    {
+        return sprintf(buf, "options:\n"
+                            "(1|0) (0|1)      Start/End 3D/2D\n"
+                            "e.g.\n"
+                            "step1 # echo 1 0 > /sys/.../dutycycle\n"
+                            "step2 # echo 0 0 > /sys/.../dutycycle\n");
+    }
+    else
+    {
+        return sprintf(buf, "Oops, %s is under working\n", __func__);
+    }
 }
 
 static ssize_t store_dutycycle (struct device *dev,
                     struct device_attribute *attr,
                     const char *buf, size_t count)
 {
-    printk("Oops, %s is under working\n", __func__);
+    if(has_feat_pulse_eater_profiler())
+    {
+        gctBOOL start;
+        gctUINT core;
+        gctUINT32 busyRatio[4], totalTime[4], timeGap = 0;
+        gcePulseEaterDomain domain = gcvPulse_Core;
+        gceSTATUS status = gcvSTATUS_OK;
+
+        SYSFS_VERIFY_INPUT(sscanf(buf, "%d %d", &start, &core), 2);
+        SYSFS_VERIFY_INPUT_RANGE(start, 0, 1);
+#if gcdENABLE_VG
+        SYSFS_VERIFY_INPUT_RANGE(core, 0, 2);
+#else
+        SYSFS_VERIFY_INPUT_RANGE(core, 0, 1);
+#endif
+
+        for(; domain < 2; domain++)
+        {
+            status = gckKERNEL_QueryPulseEaterIdleProfile(galDevice->kernels[core],
+                                                          start,
+                                                          domain,
+                                                          busyRatio,
+                                                          &timeGap,
+                                                          totalTime);
+
+            if(!start && !status)
+            {
+                gctINT i = 0;
+                gcmkPRINT("\n|Domain: %6s    totalTime: %8d|", domain ==0 ?"Core":"Shader" ,timeGap);
+                gcmkPRINT("|Freq   RunTime|    BusyRatio|     DutyCycle|\n");
+                for(; i < gcmCOUNTOF(busyRatio); i++)
+                {
+                    gcmkPRINT("|%dM    %6u|     %8u|     %8d%%|\n", i==2?416: 156*(i+1),
+                                                                   totalTime[i],
+                                                                   busyRatio[i],
+                                                                   totalTime[i]==0?0: ((100*((gctINT)busyRatio[i]))/(gctINT)totalTime[i]));
+                }
+            }
+            else if(status)
+            {
+                switch(status)
+                {
+                    case gcvSTATUS_INVALID_ARGUMENT:
+                        printk("Invalidate argument: %d, cat /sys/../dutycycle for more info\n", status);
+                        break;
+                    case gcvSTATUS_INVALID_REQUEST:
+                        printk("Statistics has started alreay, echo 0 x > /sys/.../dutycycle to stop it\n");
+                        break;
+                    default:
+                        printk("cat /sys/../dutycycle for more info, status: %d\n", status);
+                }
+            }
+
+        }
+    }
+    else
+    {
+        printk("Oops, %s is under working\n", __func__);
+    }
+
     return count;
 }
 
@@ -709,6 +799,8 @@ static inline int __create_sysfs_file_gpufreq(void)
     {
         if(galDevice->kernels[i] != gcvNULL)
         {
+            gckHARDWARE hardware = galDevice->kernels[i]->hardware;
+
             len = sprintf(buf, "gpu%d", i);
             buf[len] = '\0';
 
@@ -719,9 +811,28 @@ static inline int __create_sysfs_file_gpufreq(void)
                 continue;
             }
 
-            galDevice->kernels[i]->hardware->devObj.kobj = kobj;
+            hardware->devObj.kobj = kobj;
+
+#if MRVL_CONFIG_SHADER_CLK_CONTROL
+            if(has_feat_shader_indept_dfc() && i == gcvCORE_MAJOR)
+            {
+                len = sprintf(buf, "gpu%d", (gctINT32)gcvCORE_SH);
+                buf[len] = '\0';
+
+                kobj = kobject_create_and_add(buf,&kset_gpu->kobj);
+                if (!kobj)
+                {
+                    printk("error: allocate kobj for shader core\n");
+                }
+                else
+                {
+                    hardware->devShObj.kobj = kobj;
+                }
+            }
+#endif
         }
     }
+
 
     return 0;
 }
@@ -734,10 +845,22 @@ static inline void __remove_sysfs_file_gpufreq(void)
     {
         if(galDevice->kernels[i] != gcvNULL)
         {
-            if(!galDevice->kernels[i]->hardware->devObj.kobj)
+            gckHARDWARE hardware = galDevice->kernels[i]->hardware;
+
+            if(!hardware->devObj.kobj)
                 continue ;
 
-            kobject_put((struct kobject *)galDevice->kernels[i]->hardware->devObj.kobj);
+            kobject_put((struct kobject *)hardware->devObj.kobj);
+
+#if MRVL_CONFIG_SHADER_CLK_CONTROL
+            if(has_feat_shader_indept_dfc() && i == gcvCORE_MAJOR)
+            {
+                if(!hardware->devShObj.kobj)
+                    continue ;
+
+                kobject_put((struct kobject *)hardware->devShObj.kobj);
+            }
+#endif
         }
     }
 }

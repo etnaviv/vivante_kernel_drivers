@@ -510,7 +510,8 @@ static int gpufreq_add_dev(struct gcsDEVOBJECT *pDevObj)
     /* HERE we need to initialize driver, hence on, gpufreq must
        be able to accept all calls ->verify and ->setpolicy for this gpu.
     */
-    ret = gpufreq_driver->init(policy);
+    ret = gpufreq_driver->init(pDevObj->freqt, policy);
+
     if(ret)
     {
         debug_log(GPUFREQ_LOG_ERROR, "initialize gpufreq driver failed.\n");
@@ -598,8 +599,20 @@ static int gpufreq_handle_gov_timer(struct gcsDEVOBJECT *pDevObj, unsigned long 
         policy->cur = gpufreq_driver->get(gpu);
     }
 
+    if(gpufreq_driver->resume &&
+        (action == GPUFREQ_GOV_EVENT_RESUME))
+    {
+        gpufreq_driver->resume(policy);
+    }
+
     if(gpufreq_driver->target)
         _gpufreq_governor_notifier(policy, action);
+
+    if(gpufreq_driver->suspend &&
+        (action == GPUFREQ_GOV_EVENT_SUSPEND))
+    {
+        gpufreq_driver->suspend(policy);
+    }
 
     gpufreq_policy_put(policy);
 
@@ -753,6 +766,40 @@ static int gpufreq_notifier_call(struct notifier_block * nb,
     return ret;
 }
 
+static int pulseEater_notifier_call (struct notifier_block *nb,
+                    unsigned long action, void *data)
+{
+    struct gpufreq_freqs *freqs = (struct gpufreq_freqs *)data;
+    int ret = NOTIFY_DONE;
+
+    if(!freqs ||
+        /*GC320 not support*/
+        freqs->gpu == gcvCORE_2D)
+    {
+        return ret;
+    }
+
+    st_trans(action);
+
+    switch(action)
+    {
+        case GPUFREQ_PRECHANGE:
+            break;
+        case GPUFREQ_POSTCHANGE:
+            if(gpu_os &&
+               (freqs->new_freq != freqs->old_freq))
+            {
+                gckOS_ModifyPulseEaterPollingPeriod(gpu_os, freqs->new_freq, freqs->gpu);
+            }
+            break;
+        default:
+            debug_log(GPUFREQ_LOG_WARNING, "[gpufreq] %s (%d)", __func__, __LINE__);
+            break;
+    }
+
+    return ret;
+}
+
 /*
 struct notifier_block {
     int (*notifier_call)(struct notifier_block *, unsigned long, void *);
@@ -762,6 +809,10 @@ struct notifier_block {
 */
 static struct notifier_block gpufreq_notifier_block = {
     .notifier_call = gpufreq_notifier_call,
+};
+
+static struct notifier_block pulseEater_gpufreq_notifier_block = {
+    .notifier_call = pulseEater_notifier_call,
 };
 
 static int gpufreq_update_policy(unsigned int gpu)
@@ -933,15 +984,17 @@ int gpufreq_unregister_notifier(struct notifier_block *nb, unsigned int list, un
 void gpufreq_notify_transition(struct gpufreq_freqs *freqs, unsigned int state)
 {
     struct gpufreq_policy *policy;
+    unsigned int action = state;
 
+    st_trans(action);
     policy = GPU_ELEM(gpufreq_policy_data, freqs->gpu);
-    switch(state)
+    switch(action)
     {
     case GPUFREQ_PRECHANGE:
         debug_log(GPUFREQ_LOG_INFO, "PRE_CHANGE : gpu %u, freq %u -> %u\n",
                                 freqs->gpu, freqs->old_freq, freqs->new_freq);
         srcu_notifier_call_chain(&gpufreq_trans_notifier_list[freqs->gpu],
-                        GPUFREQ_PRECHANGE, freqs);
+                        state, freqs);
         break;
 
     case GPUFREQ_POSTCHANGE:
@@ -949,10 +1002,11 @@ void gpufreq_notify_transition(struct gpufreq_freqs *freqs, unsigned int state)
                                 freqs->gpu, freqs->old_freq, freqs->new_freq);
 
         srcu_notifier_call_chain(&gpufreq_trans_notifier_list[freqs->gpu],
-                        GPUFREQ_POSTCHANGE, freqs);
+                        state, freqs);
 
         /* update current_freq of policy with new value */
-        if(likely(policy) && likely(policy->gpu == freqs->gpu))
+        if(likely(policy) && likely(policy->gpu == freqs->gpu)
+           && likely(freqs->new_freq != freqs->old_freq))
             policy->cur = freqs->new_freq;
         break;
     }
@@ -964,6 +1018,9 @@ void gpufreq_notify_transition(struct gpufreq_freqs *freqs, unsigned int state)
 int gpufreq_register_driver(gckOS Os, struct gpufreq_driver *driver_data)
 {
     unsigned long flags;
+#if MRVL_CONFIG_DEVFREQ_GOV_THROUGHPUT
+    unsigned int gpu;
+#endif
     int ret = 0;
 
     /* check gpufreq_driver callback functions */
@@ -984,6 +1041,18 @@ int gpufreq_register_driver(gckOS Os, struct gpufreq_driver *driver_data)
 
     if(!gpu_os)
         gpu_os = Os;
+
+    if(has_feat_pulse_eater_profiler())
+    {
+        gpufreq_register_notifier(&pulseEater_gpufreq_notifier_block,
+                                    GPUFREQ_TRANSITION_NOTIFIER,
+                                    0);
+    }
+
+#if MRVL_CONFIG_DEVFREQ_GOV_THROUGHPUT
+    for_each_gpu(gpu)
+        gpufeq_register_dev_notifier(&gpufreq_trans_notifier_list[gpu]);
+#endif
 
     gckOS_GPUFreqNotifierRegister(Os, &gpufreq_notifier_block);
     ret = cpufreq_register_notifier(&gpufreq_cpu_trans_nb,
@@ -1007,6 +1076,13 @@ int gpufreq_unregister_driver(gckOS Os, struct gpufreq_driver *driver)
         return -EINVAL;
 
     debug_log(GPUFREQ_LOG_INFO, "unregister driver %s\n", driver->name);
+
+    if(has_feat_pulse_eater_profiler())
+    {
+        gpufreq_unregister_notifier(&pulseEater_gpufreq_notifier_block,
+                                    GPUFREQ_TRANSITION_NOTIFIER,
+                                    0);
+    }
 
     gckOS_GPUFreqNotifierUnregister(Os, &gpufreq_notifier_block);
     ret = cpufreq_unregister_notifier(&gpufreq_cpu_trans_nb,
@@ -1247,13 +1323,42 @@ void gpufreq_policy_put(struct gpufreq_policy *policy_data)
     kobject_put(&policy_data->kobj);
 }
 
+void _cal_load_pulse(int gpu, int *workLoad, int dutycycle, gcePulseEaterDomain domain)
+{
+    if(has_feat_pulse_eater_profiler())
+    {
+        int load = *workLoad;
+
+        if(gpu != gcvCORE_2D)
+        {
+            debug_log(GPUFREQ_LOG_DEBUG, "domain(%d) On-suspend polling: %d, Pulse-Eater: %d\n", domain, load, dutycycle);
+            /*load fall in [90, 93), dutycycle fall in [0, 80], keep it.*/
+            if((load >= 90) && (load < 94) &&
+               (dutycycle <= 80))
+            {
+                load -= 5;
+            }
+            /*load fall in [85, 90), dutycycle fall in [95, 100], increase the freq*/
+            else if((load >= 85) && (load < 90) &&
+                (dutycycle >= 95))
+            {
+                load += 5;
+            }
+        }
+
+        *workLoad = load;
+    }
+}
+
 /***************************************************
  *  gpufreq frequency table interfaces
  ***************************************************/
 int gpufreq_get_gpu_load(unsigned int gpu, unsigned int t)
 {
-    int load = -EINVAL, ret = 0;
-    unsigned int idle, interval = t;
+    int load = -EINVAL, dutycycle = -EINVAL, ret = 0;
+    unsigned int idle, core = gpu, interval = t;
+    gcePulseEaterDomain domain = gcvPulse_Invali;
+
 
     if(!gpu_os)
     {
@@ -1261,11 +1366,42 @@ int gpufreq_get_gpu_load(unsigned int gpu, unsigned int t)
         return -EINVAL;
     }
 
-    ret = gckOS_QueryIdleProfile(gpu_os, gpu, &interval, &idle);
+    switch(gpu)
+    {
+        case gcvCORE_SH:
+            domain = gcvPulse_Shader;
+            core   = gcvCORE_MAJOR;
+            break;
+        case gcvCORE_MAJOR:
+            domain = gcvPulse_Core;
+            break;
+        case gcvCORE_2D:
+            break;
+        default:
+            debug_log(GPUFREQ_LOG_ERROR, "error: invalidate gpu num\n");
+            return -EINVAL;
+    }
+
+    /*2D core doesn't support HW counter*/
+    if(gpu != gcvCORE_2D)
+    {
+        ret = gckOS_QueryPulseCountProfile(gpu_os, 0, domain, &dutycycle);
+        if(ret)
+        {
+            debug_log(GPUFREQ_LOG_ERROR, "error: get domain: %d pulse count failed\n", domain);
+            return -EINVAL;
+        }
+    }
+
+    ret = gckOS_QueryIdleProfile(gpu_os, core, &interval, &idle);
+
     if(ret == 0)
     {
         load  = (100 * (interval - idle))/interval;
     }
+
+    _cal_load_pulse(gpu, &load, dutycycle, domain);
+
     return load;
 }
 
@@ -1435,12 +1571,77 @@ int gpufreq_frequency_table_target(struct gpufreq_policy *policy,
 
 void gpufreq_acquire_clock_mutex(unsigned int gpu)
 {
+    /* HACK: acquire mutex of major core for shader */
+    gpu = (gpu == gcvCORE_SH) ? gcvCORE_MAJOR : gpu;
     gckOS_AcquireClockMutex(gpu_os, gpu);
 }
 
 void gpufreq_release_clock_mutex(unsigned int gpu)
 {
+    /* HACK: release mutex of major core for shader */
+    gpu = (gpu == gcvCORE_SH) ? gcvCORE_MAJOR : gpu;
     gckOS_ReleaseClockMutex(gpu_os, gpu);
+}
+
+#if GPUFREQ_REQUEST_DDR_QOS
+void gpufreq_ddr_constraint_init(
+    DDR_QOS_NODE * qos_req)
+{
+    pm_qos_add_request(&(qos_req->qos_node),
+                       PM_QOS_DDR_DEVFREQ_MIN,
+                       GPUFREQ_REQ_DDR_LVL_DEFAULT);
+
+    mutex_init(&(qos_req->qos_mutex));
+}
+
+void gpufreq_ddr_constraint_deinit(
+    DDR_QOS_NODE * qos_req)
+{
+    mutex_destroy(&(qos_req->qos_mutex));
+    pm_qos_remove_request(&(qos_req->qos_node));
+}
+
+void gpufreq_ddr_constraint_update(
+    DDR_QOS_NODE * qos_req,
+    unsigned int new_freq,
+    unsigned int old_freq,
+    unsigned int gpu_high_threshold)
+{
+    if ((new_freq >= gpu_high_threshold) &&
+        (old_freq < gpu_high_threshold))
+    {
+        mutex_lock(&(qos_req->qos_mutex));
+        pm_qos_update_request(&(qos_req->qos_node),
+                              GPUFREQ_REQ_DDR_LVL_HIGH);
+        mutex_unlock(&(qos_req->qos_mutex));
+    }
+    else if ((new_freq < gpu_high_threshold) &&
+             (old_freq >= gpu_high_threshold))
+    {
+        mutex_lock(&(qos_req->qos_mutex));
+        pm_qos_update_request(&(qos_req->qos_node),
+                              GPUFREQ_REQ_DDR_LVL_DEFAULT);
+        mutex_unlock(&(qos_req->qos_mutex));
+    }
+}
+#endif
+
+void gpufreq_create_timer(void (*timer_func)(void*), void* timer_data, void** timer)
+{
+    WARN_ON(!gpu_os);
+    gckOS_CreateTimer(gpu_os, timer_func, timer_data, timer);
+}
+
+void gpufreq_start_timer(void* timer, unsigned int delay)
+{
+    WARN_ON(!gpu_os);
+    gckOS_StartTimer(gpu_os, timer, delay);
+}
+
+void gpufreq_stop_timer(void* timer)
+{
+    WARN_ON(!gpu_os);
+    gckOS_StopTimer(gpu_os, timer);
 }
 
 /***************************************************

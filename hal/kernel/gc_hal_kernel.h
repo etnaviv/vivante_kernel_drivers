@@ -11,7 +11,6 @@
 *****************************************************************************/
 
 
-
 #ifndef __gc_hal_kernel_h_
 #define __gc_hal_kernel_h_
 
@@ -24,6 +23,9 @@
 #include "gc_hal_kernel_vg.h"
 #endif
 
+#if gcdSECURITY
+#include "gc_hal_security_interface.h"
+#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -155,6 +157,7 @@ typedef enum _gceDATABASE_TYPE
     gcvDB_MAP_MEMORY,                   /* Map memory */
     gcvDB_MAP_USER_MEMORY,              /* Map user memory */
     gcvDB_SYNC_POINT,                   /* Sync point. */
+    gcvDB_SHBUF,                        /* Shared buffer. */
 }
 gceDATABASE_TYPE;
 
@@ -200,6 +203,7 @@ typedef struct _gcsDATABASE
     gcsDATABASE_COUNTERS                contiguous;
     gcsDATABASE_COUNTERS                mapUserMemory;
     gcsDATABASE_COUNTERS                mapMemory;
+    gcsDATABASE_COUNTERS                virtualCommandBuffer;
 
     gcsDATABASE_COUNTERS                vidMemType[gcvSURF_NUM_TYPES];
     /* Counter for each video memory pool. */
@@ -429,6 +433,16 @@ gckKERNEL_GetProcessDBCache(
     );
 #endif
 
+gceSTATUS
+gckKERNEL_QueryPulseEaterIdleProfile(
+    IN gckKERNEL      Kernel,
+    IN gctBOOL        Start,
+    IN gcePulseEaterDomain Domain,
+    OUT gctUINT32_PTR BusyRatio,
+    OUT gctUINT32_PTR TimeGap,
+    IN OUT gctUINT32_PTR TotalTime
+    );
+
 /*******************************************************************************
 ********* Timer Management ****************************************************/
 typedef struct _gcsTIMER *           gcsTIMER_PTR;
@@ -552,11 +566,7 @@ struct _gckKERNEL
     gctBOOL                     dbCreated;
     gctBOOL                     dbflag;
 
-#if gcdENABLE_RECOVERY
-    gctPOINTER                  resetFlagClearTimer;
-    gctPOINTER                  resetAtom;
     gctUINT64                   resetTimeStamp;
-#endif
 
     /* Pointer to gckEVENT object. */
     gcsTIMER                    timers[8];
@@ -591,6 +601,22 @@ struct _gckKERNEL
     /* Level of dump information after stuck. */
     gctUINT                     stuckDump;
 
+#if gcdSECURITY
+    gctUINT32                   securityChannel;
+#endif
+
+    /* Timer to monitor GPU stuck. */
+    gctPOINTER                  monitorTimer;
+
+    /* Flag to quit monitor timer. */
+    gctBOOL                     monitorTimerStop;
+
+    /* Monitor states. */
+    gctBOOL                     monitoring;
+    gctUINT32                   lastCommitStamp;
+    gctUINT32                   timer;
+    gctUINT32                   restoreAddress;
+    gctUINT32                   restoreMask;
 };
 
 struct _FrequencyHistory
@@ -782,7 +808,7 @@ struct _gckEVENT
 
     /* Time stamp. */
     gctUINT64                   stamp;
-    gctUINT64                   lastCommitStamp;
+    gctUINT32                   lastCommitStamp;
 
     /* Queue mutex. */
     gctPOINTER                  eventQueueMutex;
@@ -909,7 +935,7 @@ typedef union _gcuVIDMEM_NODE
         /* Surface type. */
         gceSURF_TYPE            type;
 
-#if gcdDYNAMIC_MAP_RESERVED_MEMORY && gcdENABLE_VG
+#if gcdENABLE_VG
         gctPOINTER              kernelVirtual;
 #endif
     }
@@ -930,6 +956,17 @@ typedef union _gcuVIDMEM_NODE
         /* do_mmap_pgoff address... mapped per-process. */
         gctPOINTER              logical;
 
+#if gcdENABLE_VG
+        /* Physical address of this node, only meaningful when it is contiguous. */
+        gctUINT32               physicalAddress;
+
+        /* Kernel logical of this node. */
+        gctPOINTER              kernelVirtual;
+#endif
+
+        /* Customer private handle */
+        gctUINT32               gid;
+
         /* Page table information. */
         /* Used only when node is not contiguous */
         gctSIZE_T               pageCount;
@@ -940,9 +977,6 @@ typedef union _gcuVIDMEM_NODE
         gckKERNEL               lockKernels[gcdMAX_GPU_COUNT];
         /* Actual physical address */
         gctUINT32               addresses[gcdMAX_GPU_COUNT];
-
-        /* Mutex. */
-        gctPOINTER              mutex;
 
         /* Locked counter. */
         gctINT32                lockeds[gcdMAX_GPU_COUNT];
@@ -984,11 +1018,13 @@ struct _gckVIDMEM
     gctPOINTER                  mutex;
 };
 
-typedef struct _gcsVIDMEM_NODE * gckVIDMEM_NODE;
 typedef struct _gcsVIDMEM_NODE
 {
     /* Pointer to gcuVIDMEM_NODE. */
     gcuVIDMEM_NODE_PTR          node;
+
+    /* Mutex to protect node. */
+    gctPOINTER                  mutex;
 
     /* Reference count. */
     gctPOINTER                  reference;
@@ -1027,6 +1063,23 @@ typedef struct _gcsVIDMEM_HANDLE
     gctPOINTER                  reference;
 }
 gcsVIDMEM_HANDLE;
+
+typedef struct _gcsSHBUF * gcsSHBUF_PTR;
+typedef struct _gcsSHBUF
+{
+    /* ID. */
+    gctUINT32                   id;
+
+    /* Reference count. */
+    gctPOINTER                  reference;
+
+    /* Data size. */
+    gctUINT32                   size;
+
+    /* Data. */
+    gctPOINTER                  data;
+}
+gcsSHBUF;
 
 gceSTATUS
 gckVIDMEM_HANDLE_Reference(
@@ -1261,6 +1314,104 @@ gckHARDWARE_QueryIdleEx(
     OUT gctUINT32_PTR RegData3D1,
     OUT gctBOOL_PTR IsIdle
     );
+
+#if gcdSECURITY
+gceSTATUS
+gckKERNEL_SecurityOpen(
+    IN gckKERNEL Kernel,
+    IN gctUINT32 GPU,
+    OUT gctUINT32 *Channel
+    );
+
+/*
+** Close a security service channel
+*/
+gceSTATUS
+gckKERNEL_SecurityClose(
+    IN gctUINT32 Channel
+    );
+
+/*
+** Security service interface.
+*/
+gceSTATUS
+gckKERNEL_SecurityCallService(
+    IN gctUINT32 Channel,
+    IN OUT gcsTA_INTERFACE * Interface
+    );
+
+gceSTATUS
+gckKERNEL_SecurityStartCommand(
+    IN gckKERNEL Kernel
+    );
+
+gceSTATUS
+gckKERNEL_SecurityAllocateSecurityMemory(
+    IN gckKERNEL Kernel,
+    IN gctUINT32 Bytes,
+    OUT gctUINT32 * Handle
+    );
+
+gceSTATUS
+gckKERNEL_SecurityExecute(
+    IN gckKERNEL Kernel,
+    IN gctPOINTER Buffer,
+    IN gctUINT32 Bytes
+    );
+
+gceSTATUS
+gckKERNEL_SecurityMapMemory(
+    IN gckKERNEL Kernel,
+    IN gctUINT32 *PhysicalArray,
+    IN gctUINT32 PageCount,
+    OUT gctUINT32 * GPUAddress
+    );
+
+gceSTATUS
+gckKERNEL_SecurityUnmapMemory(
+    IN gckKERNEL Kernel,
+    IN gctUINT32 GPUAddress,
+    IN gctUINT32 PageCount
+    );
+
+#endif
+
+gceSTATUS
+gckKERNEL_CreateShBuffer(
+    IN gckKERNEL Kernel,
+    IN gctUINT32 Size,
+    OUT gctSHBUF * ShBuf
+    );
+
+gceSTATUS
+gckKERNEL_DestroyShBuffer(
+    IN gckKERNEL Kernel,
+    IN gctSHBUF ShBuf
+    );
+
+gceSTATUS
+gckKERNEL_MapShBuffer(
+    IN gckKERNEL Kernel,
+    IN gctSHBUF ShBuf
+    );
+
+gceSTATUS
+gckKERNEL_WriteShBuffer(
+    IN gckKERNEL Kernel,
+    IN gctSHBUF ShBuf,
+    IN gctPOINTER UserData,
+    IN gctUINT32 ByteCount
+    );
+
+gceSTATUS
+gckKERNEL_ReadShBuffer(
+    IN gckKERNEL Kernel,
+    IN gctSHBUF ShBuf,
+    IN gctPOINTER UserData,
+    IN gctUINT32 ByteCount,
+    OUT gctUINT32 * BytesRead
+    );
+
 
 /******************************************************************************\
 ******************************* gckCONTEXT Object *******************************

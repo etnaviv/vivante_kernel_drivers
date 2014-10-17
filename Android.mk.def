@@ -42,9 +42,6 @@ ENABLE_GPU_CLOCK_BY_DRIVER   ?= 1
 # Enable platform driver model, available after linux 2.6.x.
 USE_PLATFORM_DRIVER          ?= 1
 
-# Build as vanilla Linux in Android environment with VDK backend.
-USE_LINUX_MODE_FOR_ANDROID   ?= 0
-
 # Force all video memory cached.
 FORCE_ALL_VIDEO_MEMORY_CACHED ?= 0
 
@@ -65,7 +62,11 @@ DEBUG                        ?= 0
 
 # Build OpenCL
 USE_OPENCL ?= 1
+ifeq ($(USE_OPENCL),1)
+BUILD_OPENCL_ICD             ?= 1
+else
 BUILD_OPENCL_ICD             ?= 0
+endif
 
 # Build libGLESv3x
 BUILD_HALTI                  ?= 1
@@ -74,7 +75,11 @@ BUILD_HALTI                  ?= 1
 ENABLE_OUTER_CACHE_PATCH     ?= 1
 
 # 2D VG
-VIVANTE_ENABLE_VG 			 ?= 0
+VIVANTE_ENABLE_VG			 ?= 0
+# 2D
+VIVANTE_ENABLE_2D 			 ?= 1
+# 3D VG
+VIVANTE_ENABLE_3D 			 ?= 1
 
 # Security
 SECURITY                     ?= 0
@@ -102,7 +107,11 @@ PROPERTY  := \
 
 AQROOT    := $(call my-dir)
 AQARCH    := $(AQROOT)/arch/$(GPU_TYPE)
+ifeq ($(VIVANTE_ENABLE_VG), 1)
 AQVGARCH  := $(AQROOT)/arch/GC350
+else
+AQVGARCH  :=
+endif
 
 ARCH_TYPE := $(TARGET_ARCH)
 TAG       := MRVL
@@ -118,17 +127,25 @@ CFLAGS        := -DLINUX
 
 CFLAGS        += -DEGL_API_ANDROID=1
 
-ifeq ($(VIVANTE_ENABLE_VG),1)
-CFLAGS        += -DgcdENABLE_VG=1
+ifeq ($(VIVANTE_ENABLE_3D),0)
+CFLAGS += -DgcdENABLE_3D=0
 else
-CFLAGS        += -DgcdENABLE_VG=0
+CFLAGS += -DgcdENABLE_3D=1
 endif
 
-ifeq ($(USE_LINUX_MODE_FOR_ANDROID),1)
-CFLAGS        += -DUSE_VDK=1 -DEGL_API_FB=1
+ifeq ($(VIVANTE_ENABLE_2D),0)
+CFLAGS += -DgcdENABLE_2D=0
 else
-CFLAGS        += -DUSE_VDK=0
+CFLAGS += -DgcdENABLE_2D=1
 endif
+
+ifeq ($(VIVANTE_ENABLE_VG),0)
+CFLAGS += -DgcdENABLE_VG=0
+else
+CFLAGS += -DgcdENABLE_VG=1
+endif
+
+CFLAGS        += -DUSE_VDK=0
 
 PLATFORM_SDK_VERSION ?= 12
 
@@ -169,6 +186,13 @@ ifeq ($(FORCE_ALL_VIDEO_MEMORY_CACHED), 1)
 CFLAGS        += -DgcdPAGED_MEMORY_CACHEABLE=1
 else
 CFLAGS        += -DgcdPAGED_MEMORY_CACHEABLE=0
+endif
+
+# G2D Compress feature support
+ifeq ($(strip $(MRVL_DISABLE_G2D_COMPRESS)), true)
+CFLAGS        += -DENABLE_COMPRESS=0
+else
+CFLAGS        += -DENABLE_COMPRESS=1
 endif
 
 USE_LOCAL_GRALLOC ?= 0

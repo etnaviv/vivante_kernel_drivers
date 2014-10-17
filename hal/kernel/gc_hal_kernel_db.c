@@ -11,7 +11,6 @@
 *****************************************************************************/
 
 
-
 #include "gc_hal_kernel_precomp.h"
 #ifdef LINUX
 #include <linux/kernel.h>
@@ -26,6 +25,9 @@
 
 #define _GetSlot(database, x) \
     (gctUINT32)(gcmPTR_TO_UINT64(x) % gcmCOUNTOF(database->list))
+
+#define PulseEaterDB(index) dbPulse->data[index]
+#define PulseIter gcmCOUNTOF(dbPulse->data[0].pulseCount)
 
 /*******************************************************************************
 **  gckKERNEL_NewDatabase
@@ -701,6 +703,9 @@ gckKERNEL_CreateProcessDB(
     database->mapUserMemory.bytes      = 0;
     database->mapUserMemory.maxBytes   = 0;
     database->mapUserMemory.totalBytes = 0;
+    database->virtualCommandBuffer.bytes = 0;
+    database->virtualCommandBuffer.maxBytes = 0;
+    database->virtualCommandBuffer.totalBytes = 0;
 
     for (i = 0; i < gcmCOUNTOF(database->list); i++)
     {
@@ -970,6 +975,10 @@ gckKERNEL_AddProcessDB(
         count = &database->mapUserMemory;
         break;
 
+    case gcvDB_COMMAND_BUFFER:
+        count = &database->virtualCommandBuffer;
+        break;
+
     default:
         count = gcvNULL;
         break;
@@ -1115,6 +1124,10 @@ gckKERNEL_RemoveProcessDB(
         database->mapUserMemory.bytes -= bytes;
         break;
 
+    case gcvDB_COMMAND_BUFFER:
+        database->virtualCommandBuffer.bytes -= bytes;
+        break;
+
     default:
         break;
     }
@@ -1242,12 +1255,21 @@ gctUINT32 _print_VIDMEM_by_pid(
         {
             if(record->type == gcvDB_VIDEO_MEMORY)
             {
+                gceSTATUS status = gcvSTATUS_OK;
+
                 gcmkVERIFY_OK(gckOS_AcquireMutex(Kernel->os, handleDatabaseMutex, gcvINFINITE));
 
-                gcmkVERIFY_OK(
+                status = (
                     gckKERNEL_QueryIntegerId(handleDatabase,
                                              gcmPTR2INT(record->data),
                                              (gctPOINTER *)&handleObject));
+
+                if(gcmIS_ERROR(status))
+                {
+                    gcmkVERIFY_OK(gckOS_ReleaseMutex(Kernel->os, handleDatabaseMutex));
+                    record = record->next;
+                    continue;
+                }
 
                 node = handleObject->node->node;
 
@@ -1364,12 +1386,22 @@ gctUINT32 _print_VIDMEM_by_type(
                 {
                     if(record->type == gcvDB_VIDEO_MEMORY)
                     {
+                        gceSTATUS status = gcvSTATUS_OK;
+
                         gcmkVERIFY_OK(gckOS_AcquireMutex(Kernel->os, handleDatabaseMutex, gcvINFINITE));
 
-                        gcmkVERIFY_OK(
+                        status = (
                             gckKERNEL_QueryIntegerId(handleDatabase,
                                                      gcmPTR2INT(record->data),
                                                      (gctPOINTER *)&handleObject));
+
+                        if(gcmIS_ERROR(status))
+                        {
+                            gcmkVERIFY_OK(gckOS_ReleaseMutex(Kernel->os, handleDatabaseMutex));
+                            record = record->next;
+                            continue;
+                        }
+
                         node = handleObject->node->node;
 
                         if((node->VidMem.memory != gcvNULL) &&
@@ -1484,12 +1516,22 @@ gctUINT32 _print_VIDMEM_by_type_sum(
                 {
                     if(record->type == gcvDB_VIDEO_MEMORY)
                     {
+                        gceSTATUS status = gcvSTATUS_OK;
+
                         gcmkVERIFY_OK(gckOS_AcquireMutex(Kernel->os, handleDatabaseMutex, gcvINFINITE));
 
-                        gcmkVERIFY_OK(
+                        status = (
                             gckKERNEL_QueryIntegerId(handleDatabase,
                                                      gcmPTR2INT(record->data),
                                                      (gctPOINTER *)&handleObject));
+
+                        if(gcmIS_ERROR(status))
+                        {
+                            gcmkVERIFY_OK(gckOS_ReleaseMutex(Kernel->os, handleDatabaseMutex));
+                            record = record->next;
+                            continue;
+                        }
+
                         node = handleObject->node->node;
 
                         if((node->VidMem.memory != gcvNULL) &&
@@ -1898,7 +1940,7 @@ gckKERNEL_DestroyProcessDB(
 
             /* Unlock what we still locked */
             status = gckVIDMEM_Unlock(record->kernel,
-                                      nodeObject->node,
+                                      nodeObject,
                                       nodeObject->type,
                                       &asynchronous);
 
@@ -1909,7 +1951,7 @@ gckKERNEL_DestroyProcessDB(
                 {
                     /* TODO: we maybe need to schedule a event here */
                     status = gckVIDMEM_Unlock(record->kernel,
-                                              nodeObject->node,
+                                              nodeObject,
                                               nodeObject->type,
                                               gcvNULL);
                 }
@@ -1995,6 +2037,16 @@ gckKERNEL_DestroyProcessDB(
                            (gctINT)(gctUINTPTR_T)record->data, status);
             break;
 #endif
+
+        case gcvDB_SHBUF:
+            /* Free shared buffer. */
+            status = gckKERNEL_DestroyShBuffer(Kernel,
+                                               (gctSHBUF) record->data);
+
+            gcmkTRACE_ZONE(gcvLEVEL_WARNING, gcvZONE_DATABASE,
+                           "DB: SHBUF %u (status=%d)",
+                           (gctUINT32)(gctUINTPTR_T) record->data, status);
+            break;
 
         default:
             gcmkTRACE_ZONE(gcvLEVEL_ERROR, gcvZONE_DATABASE,
@@ -2126,6 +2178,12 @@ gckKERNEL_QueryProcessDB(
         gckOS_MemCopy(&Info->counters,
                                   &database->mapUserMemory,
                                   gcmSIZEOF(database->mapUserMemory));
+        break;
+
+    case gcvDB_COMMAND_BUFFER:
+        gckOS_MemCopy(&Info->counters,
+                                  &database->virtualCommandBuffer,
+                                  gcmSIZEOF(database->virtualCommandBuffer));
         break;
 
     default:
@@ -2595,6 +2653,164 @@ OnError:
     return status;
 }
 
+gceSTATUS
+gckKERNEL_QueryPulseEaterIdleProfile(
+    IN gckKERNEL      Kernel,
+    IN gctBOOL        Start,
+    IN gcePulseEaterDomain Domain,
+    OUT gctUINT32_PTR BusyRatio,
+    IN OUT gctUINT32_PTR TimeGap,
+    OUT gctUINT32_PTR TotalTime)
+{
+    if(has_feat_pulse_eater_profiler())
+    {
+        gckHARDWARE hardware;
+        gckPulseEaterDB dbPulse;
+        gctUINT64 tick;
+        gceSTATUS status = gcvSTATUS_OK;
+
+        gcmkHEADER_ARG("Kernel=0x%x Start=%d", Kernel, Start);
+
+        /* Verify the arguments. */
+        gcmkVERIFY_OBJECT(Kernel, gcvOBJ_KERNEL);
+        gcmkVERIFY_ARGUMENT(BusyRatio != gcvNULL);
+        gcmkVERIFY_ARGUMENT(TimeGap != gcvNULL);
+        gcmkVERIFY_ARGUMENT(TotalTime != gcvNULL);
+
+        hardware = Kernel->hardware;
+
+        gcmkVERIFY_OK(gckOS_AcquireMutex(hardware->os, hardware->pulseEaterMutex, gcvINFINITE));
+
+        dbPulse = hardware->pulseEaterDB[Domain];
+        gcmkVERIFY_OK(gckOS_GetProfileTick(&tick));
+
+        /* this path is for gpufreq polling*/
+        if(*TimeGap == DEF_MIN_SAMPLING_RATE)
+        {
+            gctINT index, pole = -1, j = 0, k = 0;
+            gctUINT32 curTime, busyRatio = 0, totalTime = 0;
+            gctINT32 diff;
+
+            curTime = gckOS_ProfileToMS(tick);
+            index   = dbPulse->lastIndex?(dbPulse->lastIndex -1):(gcmCOUNTOF(dbPulse->data)-1);
+            diff    = (gctUINT32)(curTime - PulseEaterDB(index).time);
+
+            do
+            {
+                gctINT i = 0, tmp = index;
+
+                /*find the record in Sampling Window*/
+                if(diff > DEF_MIN_SAMPLING_RATE || j == gcmCOUNTOF(dbPulse->data))
+                {
+                     break;
+                }
+
+                j++;
+                if(pole > 0)
+                {
+                    if(((PulseEaterDB(pole).time)*10 - (PulseEaterDB(index).time)*10) < PulseEaterDB(index).hwMs)
+                    {
+                        /*polling interval is less than one hardware period
+                                       which causes the data is useless,
+                                       update index and continue*/
+                        index = (tmp > 0)? (--tmp):(gcmCOUNTOF(dbPulse->data)-1);
+                        continue;
+                    }
+                }
+
+                while(i < PulseIter)
+                {
+                    busyRatio += PulseEaterDB(index).pulseCount[i];
+                    i++;
+                }
+                totalTime += PulseEaterDB(index).sfPeriod;
+                k++;
+
+                /*index couldn't be negative*/
+                pole = index;
+                index = (tmp > 0)? (--tmp):(gcmCOUNTOF(dbPulse->data)-1);
+                diff    = (gctUINT32)(curTime - dbPulse->data[index].time);
+            }while(gcvTRUE);
+
+            *TotalTime = totalTime;
+            *BusyRatio = (k==0)?0:(((busyRatio * 100)/(64*4*k))* totalTime)/100;
+        }
+        /*set start time*/
+        else if(Start)
+        {
+            gctUINT32 startTime;
+
+            /*Avoid re-type "echo 1 0 > .../dutycycle"*/
+            if(dbPulse->startTime == 0)
+            {
+                startTime = gckOS_ProfileToMS(tick);
+
+                dbPulse->startTime    = startTime;
+                //gckOS_StartTimer(hardware->os, hardware->pulseEaterTimer, hardware->sfPeriod);
+            }
+            else
+            {
+                status = gcvSTATUS_INVALID_REQUEST;
+            }
+        }
+        /*set end time and calculate idle Time and Time Gap*/
+        else if(dbPulse->startTime != 0)
+        {
+            gctUINT32 timeGap, diff, endTime, i = 0;
+            gctUINT32_PTR busyRatio = gcvNULL, totalTime = gcvNULL;
+
+            endTime= gckOS_ProfileToMS(tick);
+
+            busyRatio = BusyRatio;
+            totalTime = TotalTime;
+
+            timeGap = endTime - dbPulse->startTime;
+
+            /* recordsNum > PULSE_EATER_COUNT*/
+            if(dbPulse->moreRound)
+            {
+                diff    = endTime - PulseEaterDB(0).time + PulseEaterDB(0).sfPeriod;
+            }
+            /* recordsNum < PULSE_EATER_COUNT*/
+            else
+            {
+                diff    = timeGap;
+            }
+
+            gckHARDWARE_QueryPulseEaterIdleProfile(hardware, endTime, &diff, Domain);
+
+            while(i < PulseIter)
+            {
+                busyRatio[i]         = dbPulse->busyRatio[i];
+                totalTime[i]         = dbPulse->totalTime[i];
+                dbPulse->busyRatio[i] = 0;
+                dbPulse->totalTime[i]= 0;
+                i++;
+            }
+
+            dbPulse->moreRound = gcvFALSE;
+            dbPulse->startTime = 0;
+            dbPulse->startIndex = ~0;
+
+            *TimeGap  = timeGap;
+        }
+        else
+        {
+            status = gcvSTATUS_INVALID_ARGUMENT;
+        }
+
+        gcmkVERIFY_OK(gckOS_ReleaseMutex(hardware->os, hardware->pulseEaterMutex));
+
+        /* Success. */
+        gcmkFOOTER_ARG("*IdleTime=%d, *TimeGap=%d", *BusyRatio, *TimeGap);
+        return status;
+    }
+    else
+    {
+        return gcvSTATUS_OK;
+    }
+}
+
 #if gcdPROCESS_ADDRESS_SPACE
 gceSTATUS
 gckKERNEL_GetProcessMMU(
@@ -2734,10 +2950,10 @@ gckKERNEL_DumpVidMemUsage(
     IN gctINT32 ProcessID
     )
 {
-    gctUINT32 i = 0;
     gceSTATUS status;
     gcsDATABASE_PTR database;
     gcsDATABASE_COUNTERS * counter;
+    gctUINT32 i = 0;
 
     static gctCONST_STRING surfaceTypes[] = {
         "UNKNOWN",

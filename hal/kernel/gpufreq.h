@@ -22,6 +22,43 @@
 #include <linux/sysfs.h>
 #include <linux/cputype.h>
 
+/* disable it firstly
+  * because kernel doesn't support  this right now
+  */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0)
+#define GPUFREQ_REQUEST_DDR_QOS     0
+#else
+#define GPUFREQ_REQUEST_DDR_QOS     1
+#endif
+
+#if GPUFREQ_REQUEST_DDR_QOS
+#include <linux/pm_qos.h>
+#include <linux/platform_data/devfreq-pxa.h>
+
+/* request DDR in KHz */
+#define GPUFREQ_REQ_DDR_LVL_HIGH        312000
+#define GPUFREQ_REQ_DDR_LVL_DEFAULT     78000
+
+typedef struct _DDR_QOS_NODE {
+    struct pm_qos_request   qos_node;
+    struct mutex            qos_mutex;
+} DDR_QOS_NODE;
+
+#endif /* if GPUFREQ_REQUEST_DDR_QOS */
+
+/* disable it firstly
+  * because kernel doesn't support  this right now
+  */
+#if defined(CONFIG_DEVFREQ_GOV_THROUGHPUT) && (LINUX_VERSION_CODE < KERNEL_VERSION(3, 14, 0))
+#define MRVL_CONFIG_DEVFREQ_GOV_THROUGHPUT      1
+#else
+#define MRVL_CONFIG_DEVFREQ_GOV_THROUGHPUT      0
+#endif
+
+#if MRVL_CONFIG_DEVFREQ_GOV_THROUGHPUT
+#include <linux/platform_data/gpu4dev.h>
+#endif
+
 #define IN
 #define OUT
 #define INOUT
@@ -29,10 +66,18 @@
 
 #define GPUFREQ_HAVE_MULTI_CORES     1
 
+#if MRVL_CONFIG_SHADER_CLK_CONTROL
+#if GPUFREQ_HAVE_MULTI_CORES
+#   define GPUFREQ_GPU_NUMS     3
+#else /* default */
+#   define GPUFREQ_GPU_NUMS     2
+#endif
+#else
 #if GPUFREQ_HAVE_MULTI_CORES
 #   define GPUFREQ_GPU_NUMS     2
 #else /* default */
 #   define GPUFREQ_GPU_NUMS     1
+#endif
 #endif
 
 #define GPUFREQ_NAME_LEN        16
@@ -88,6 +133,17 @@ struct gpufreq_real_policy {
 
 #define GPUFREQ_PRECHANGE   (0)
 #define GPUFREQ_POSTCHANGE  (1)
+
+#if MRVL_CONFIG_DEVFREQ_GOV_THROUGHPUT
+#define st_trans(action)                         \
+    if(((action) == (GPUFREQ_POSTCHANGE_UP))||  \
+        ((action) == (GPUFREQ_POSTCHANGE_DOWN)))\
+    {                                            \
+        action = GPUFREQ_POSTCHANGE;             \
+    }
+#else
+#define st_trans(action)
+#endif
 
 struct gpufreq_freqs {
     unsigned int gpu;
@@ -177,7 +233,7 @@ struct gpufreq_driver {
     struct module   *owner;
     char        name[GPUFREQ_NAME_LEN];
 
-    int (*init) (struct gpufreq_policy *policy);
+    int (*init) (void* ft, struct gpufreq_policy *policy);
     int (*verify) (struct gpufreq_policy *policy);
 
     /*
@@ -193,6 +249,9 @@ struct gpufreq_driver {
     unsigned int (*get) (unsigned int chip);
 
     int (*exit) (struct gpufreq_policy *policy);
+
+    int (*suspend) (struct gpufreq_policy *policy);
+    int (*resume) (struct gpufreq_policy *policy);
     struct gpufreq_freq_attr    **attr;
 };
 
@@ -316,6 +375,9 @@ extern struct gpufreq_governor gpufreq_gov_ondemand;
 struct gpufreq_frequency_table {
     unsigned int    index;
     unsigned int    frequency;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0)
+    unsigned int    busfreq;
+#endif
 };
 
 int gpufreq_frequency_table_gpuinfo(struct gpufreq_policy *policy,
@@ -332,6 +394,24 @@ void gpufreq_policy_put(struct gpufreq_policy *policy_data);
 
 void gpufreq_acquire_clock_mutex(unsigned int gpu);
 void gpufreq_release_clock_mutex(unsigned int gpu);
+
+#if GPUFREQ_REQUEST_DDR_QOS
+void gpufreq_ddr_constraint_init(
+    DDR_QOS_NODE * qos_req);
+
+void gpufreq_ddr_constraint_deinit(
+    DDR_QOS_NODE * qos_req);
+
+void gpufreq_ddr_constraint_update(
+    DDR_QOS_NODE * qos_req,
+    unsigned int new_freq,
+    unsigned int old_freq,
+    unsigned int gpu_high_threshold);
+#endif
+
+void gpufreq_create_timer(void (*timer_func)(void*), void* timer_data, void** timer);
+void gpufreq_start_timer(void* timer, unsigned int delay);
+void gpufreq_stop_timer(void* timer);
 
 #endif /* END of MRVL_CONFIG_ENABLE_GPUFREQ */
 #endif /* END of __GPUFREQ_H__ */

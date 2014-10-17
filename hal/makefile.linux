@@ -18,6 +18,8 @@
 
 ################################################################################
 # Define build directories.
+include $(AQROOT)/makefile.linux.def
+
 ifeq ($(VIVANTE_ENABLE_VG), 1)
 ifeq ($(USE_ARCH_REG), 1)
 HAL_USER_DRV_ARCH   := $(AQROOT)/hal/user/arch_reg $(AQROOT)/hal/user/archvg_reg

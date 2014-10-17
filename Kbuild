@@ -31,7 +31,25 @@ endif
 HAL_KERNEL_DIR  := hal/kernel
 GPUFREQ_DIR     := $(OS_KERNEL_DIR)/gpufreq
 
-CUSTOMER_ALLOCATOR_OBJS :=
+# Check and include platform config.
+ifneq ($(PLATFORM),)
+
+# Get platform config path.
+PLATFORM_CONFIG ?= $(AQROOT)/$(OS_KERNEL_DIR)/platform/$(PLATFORM).config
+
+# Check whether it exists.
+PLATFORM_CONFIG := $(wildcard $(PLATFORM_CONFIG))
+
+# Include it if exists.
+ifneq ($(PLATFORM_CONFIG),)
+include $(PLATFORM_CONFIG)
+endif
+
+endif
+
+MODULE_NAME ?= galcore
+CUSTOMER_ALLOCATOR_OBJS    ?=
+ALLOCATOR_ARRAY_H_LOCATION ?= $(OS_KERNEL_DIR)/allocator/default/
 
 EXTRA_CFLAGS += -Werror
 EXTRA_CFLAGS += -fno-pic
@@ -42,8 +60,13 @@ ifneq ($(USE_MULTI_GPU), )
     EXTRA_CFLAGS += -DgcdMULTI_GPU=$(USE_MULTI_GPU)
 endif
 
+ifeq ($(USE_LOCAL_GRALLOC), 1)
+    EXTRA_CFLAGS += -DUSE_LOCAL_GRALLOC=1
+else
+    EXTRA_CFLAGS += -DUSE_LOCAL_GRALLOC=0
+endif
+
 OBJS := $(OS_KERNEL_DIR)/gc_hal_kernel_device.o \
-        $(OS_KERNEL_DIR)/gc_hal_kernel_driver.o \
         $(OS_KERNEL_DIR)/gc_hal_kernel_linux.o \
         $(OS_KERNEL_DIR)/gc_hal_kernel_math.o \
         $(OS_KERNEL_DIR)/gc_hal_kernel_os.o \
@@ -51,6 +74,13 @@ OBJS := $(OS_KERNEL_DIR)/gc_hal_kernel_device.o \
         $(OS_KERNEL_DIR)/gc_hal_kernel_sysfs_test.o \
         $(OS_KERNEL_DIR)/gc_hal_kernel_debugfs.o \
         $(OS_KERNEL_DIR)/gc_hal_kernel_allocator.o \
+
+ifneq ($(PLATFORM),)
+OBJS += $(OS_KERNEL_DIR)/gc_hal_kernel_probe.o
+OBJS += $(OS_KERNEL_DIR)/platform/$(PLATFORM).o
+else
+OBJS += $(OS_KERNEL_DIR)/gc_hal_kernel_driver.o
+endif
 
 OBJS += $(OS_KERNEL_DIR)/gc_hal_kernel_plat.o \
         $(OS_KERNEL_DIR)/gc_hal_kernel_plat_common.o \
@@ -102,9 +132,15 @@ OBJS +=\
 endif
 
 ifneq ($(CONFIG_SYNC),)
+EXTRA_CFLAGS += -Idrivers/staging/android
+
 OBJS += $(OS_KERNEL_DIR)/gc_hal_kernel_sync.o
 endif
 
+ifeq ($(SECURITY), 1)
+OBJS += $(OS_KERNEL_DIR)/gc_hal_kernel_security_channel.o \
+        $(HAL_KERNEL_DIR)/gc_hal_kernel_security.o
+endif
 
 ifneq ($(CUSTOMER_ALLOCATOR_OBJS),)
 OBJS += $(CUSTOMER_ALLOCATOR_OBJS)
@@ -130,7 +166,7 @@ clean:
 
 install: all
 	@mkdir -p $(SDK_DIR)/drivers
-	@cp $(DRIVER_OUT_DIR)/galcore.ko $(SDK_DIR)/drivers
+	@cp $(DRIVER_OUT_DIR)/$(MODULE_NAME).ko $(SDK_DIR)/drivers
 
 else
 
@@ -209,20 +245,28 @@ else
 EXTRA_CFLAGS += -DgcdCACHE_FUNCTION_UNIMPLEMENTED=0
 endif
 
-ifeq ($(VIVANTE_ENABLE_VG), 1)
-EXTRA_CFLAGS += -DgcdENABLE_VG=1
-else
-EXTRA_CFLAGS += -DgcdENABLE_VG=0
-endif
-
 ifeq ($(CONFIG_SMP), y)
 EXTRA_CFLAGS += -DgcdSMP=1
 else
 EXTRA_CFLAGS += -DgcdSMP=0
 endif
 
-ifeq ($(VIVANTE_NO_3D),1)
-EXTRA_CFLAGS += -DVIVANTE_NO_3D
+ifeq ($(VIVANTE_ENABLE_3D),0)
+EXTRA_CFLAGS += -DgcdENABLE_3D=0
+else
+EXTRA_CFLAGS += -DgcdENABLE_3D=1
+endif
+
+ifeq ($(VIVANTE_ENABLE_2D),0)
+EXTRA_CFLAGS += -DgcdENABLE_2D=0
+else
+EXTRA_CFLAGS += -DgcdENABLE_2D=1
+endif
+
+ifeq ($(VIVANTE_ENABLE_VG),0)
+EXTRA_CFLAGS += -DgcdENABLE_VG=0
+else
+EXTRA_CFLAGS += -DgcdENABLE_VG=1
 endif
 
 ifeq ($(ENABLE_OUTER_CACHE_PATCH), 1)
@@ -251,6 +295,9 @@ else
 EXTRA_CFLAGS += -DgcdFPGA_BUILD=0
 endif
 
+ifeq ($(SECURITY), 1)
+EXTRA_CFLAGS += -DgcdSECURITY=1
+endif
 
 EXTRA_CFLAGS += -I$(AQROOT)/hal/inc
 EXTRA_CFLAGS += -I$(AQROOT)/hal/kernel
@@ -262,6 +309,7 @@ endif
 EXTRA_CFLAGS += -I$(AQARCH)/cmodel/inc
 EXTRA_CFLAGS += -I$(AQROOT)/hal/kernel/inc
 EXTRA_CFLAGS += -I$(AQROOT)/hal/os/linux/kernel
+EXTRA_CFLAGS += -I$(AQROOT)/$(ALLOCATOR_ARRAY_H_LOCATION)
 
 ifeq ($(VIVANTE_ENABLE_VG), 1)
     ifeq ($(USE_ARCH_REG), 1)
@@ -271,8 +319,8 @@ ifeq ($(VIVANTE_ENABLE_VG), 1)
     endif
 endif
 
-obj-m = $(DRIVER_OUT_DIR)/galcore.o
+obj-m = $(DRIVER_OUT_DIR)/$(MODULE_NAME).o
 
-$(DRIVER_OUT_DIR)/galcore-objs  = $(OBJS)
+$(DRIVER_OUT_DIR)/$(MODULE_NAME)-objs  = $(OBJS)
 
 endif

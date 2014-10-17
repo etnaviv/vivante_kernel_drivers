@@ -19,11 +19,20 @@
 
 #define GPUFREQ_FREQ_TABLE_MAX_NUM  10
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0)
+#define GPUFREQ_SET_FREQ_TABLE(_table, _index, _freq, _afreq) \
+{ \
+    _table[_index].index     = _index; \
+    _table[_index].frequency = _freq;  \
+    _table[_index].busfreq   = _afreq; \
+}
+#else
 #define GPUFREQ_SET_FREQ_TABLE(_table, _index, _freq) \
 { \
     _table[_index].index     = _index; \
     _table[_index].frequency = _freq;  \
 }
+#endif
 
 typedef int (*PFUNC_GET_FREQS_TBL)(unsigned long *, unsigned int *, unsigned int);
 
@@ -38,8 +47,29 @@ struct gpufreq_pxa988 {
 struct gpufreq_pxa988 gh[GPUFREQ_GPU_NUMS];
 static gckOS gpu_os;
 
-static int gpufreq_frequency_table_get(unsigned int gpu, struct gpufreq_frequency_table *table_freqs)
+static int gpufreq_frequency_table_get(unsigned int gpu, struct gpufreq_frequency_table *table_freqs, void * srcFreqTable)
 {
+    int rnt = 0;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0)
+    struct gpufreq_frequency_table * gft = (struct gpufreq_frequency_table *)srcFreqTable;
+    int i = 0;
+
+    if(!gft || (gft+i)->index == GPUFREQ_ENTRY_INVALID)
+    {
+        /* failed to get freq table, return error*/
+        debug_log(GPUFREQ_LOG_ERROR, "[%d] freqtable is not found, gft(%p), index: %d\n", gpu, gft, (gft+i)->index);
+        rnt = -1;
+        goto out;
+    }
+
+    while((gft+i)->index != GPUFREQ_TABLE_END)
+    {
+        debug_log(GPUFREQ_LOG_INFO, "%d[%d], gft: %p, fclk: %d, bclk: %d\n", gpu, (gft+i)->index, gft, (gft+i)->frequency, (gft+i)->busfreq);
+        GPUFREQ_SET_FREQ_TABLE(table_freqs, i, (gft+i)->frequency, (gft+i)->busfreq);
+        i++;
+    }
+    GPUFREQ_SET_FREQ_TABLE(table_freqs, i, GPUFREQ_TABLE_END, GPUFREQ_TABLE_END);
+#else
     int ret, i;
     unsigned long gcu_freqs_table[GPUFREQ_FREQ_TABLE_MAX_NUM];
     unsigned int freq_table_item_count = 0;
@@ -68,10 +98,10 @@ static int gpufreq_frequency_table_get(unsigned int gpu, struct gpufreq_frequenc
         GPUFREQ_SET_FREQ_TABLE(table_freqs, i, HZ_TO_KHZ(gcu_freqs_table[i]));
     }
     GPUFREQ_SET_FREQ_TABLE(table_freqs, i, GPUFREQ_TABLE_END);
+#endif
 
 out:
-    debug_log(GPUFREQ_LOG_DEBUG, "[%d] tbl[0] = %lu, %u\n", gpu, gcu_freqs_table[0], freq_table_item_count);
-    return 0;
+    return rnt;
 }
 
 /* [RO] attr: scaling_available_frequencies */
@@ -102,7 +132,7 @@ static struct gpufreq_freq_attr *driver_attrs[] = {
     NULL
 };
 
-static int pxa988_gpufreq_init (struct gpufreq_policy *policy);
+static int pxa988_gpufreq_init (gctPOINTER freqTable ,struct gpufreq_policy *policy);
 static int pxa988_gpufreq_exit (struct gpufreq_policy *policy);
 static int pxa988_gpufreq_verify (struct gpufreq_policy *policy);
 static int pxa988_gpufreq_target (struct gpufreq_policy *policy, unsigned int target_freq, unsigned int relation);
@@ -166,6 +196,16 @@ static void pxa988_init_freqs_table_func(unsigned int gpu)
     case 1:
         gh[gpu].pf_get_freqs_table = (PFUNC_GET_FREQS_TBL)kallsyms_lookup_name("get_gcu2d_freqs_table");
         break;
+#if MRVL_CONFIG_SHADER_CLK_CONTROL
+    case 2:
+        if(has_feat_shader_indept_dfc())
+        {
+            gh[gpu].pf_get_freqs_table = (PFUNC_GET_FREQS_TBL)kallsyms_lookup_name("get_gc_shader_freqs_table");
+            break;
+        }
+        /* else bail through */
+#endif
+
     default:
         debug_log(GPUFREQ_LOG_ERROR, "cannot get func pointer for gpu %u\n", gpu);
     }
@@ -176,6 +216,10 @@ extern int get_gcu_freqs_table(unsigned long *gcu_freqs_table,
 
 extern int get_gcu2d_freqs_table(unsigned long *gcu2d_freqs_table,
                         unsigned int *item_counts, unsigned int max_item_counts);
+
+extern int get_gc_shader_freqs_table(unsigned long *gcush_freqs_table,
+                        unsigned int *item_counts, unsigned int max_item_counts);
+
     switch (gpu) {
     case 0:
         gh[gpu].pf_get_freqs_table = get_gcu_freqs_table;
@@ -183,6 +227,16 @@ extern int get_gcu2d_freqs_table(unsigned long *gcu2d_freqs_table,
     case 1:
         gh[gpu].pf_get_freqs_table = get_gcu2d_freqs_table;
         break;
+#if MRVL_CONFIG_SHADER_CLK_CONTROL
+    case 2:
+        if(has_feat_shader_indept_dfc())
+        {
+            gh[gpu].pf_get_freqs_table = get_gc_shader_freqs_table;
+            break;
+        }
+        /* else bail through */
+#endif
+
     default:
         debug_log(GPUFREQ_LOG_ERROR, "cannot get func pointer for gpu %u\n", gpu);
     }
@@ -191,7 +245,7 @@ extern int get_gcu2d_freqs_table(unsigned long *gcu2d_freqs_table,
 #endif
 }
 
-static int pxa988_gpufreq_init (struct gpufreq_policy *policy)
+static int pxa988_gpufreq_init (gctPOINTER freqTable, struct gpufreq_policy *policy)
 {
     unsigned int gpu = policy->gpu;
 
@@ -199,7 +253,12 @@ static int pxa988_gpufreq_init (struct gpufreq_policy *policy)
     pxa988_init_freqs_table_func(gpu);
 
     /* build freqs table */
-    gpufreq_frequency_table_get(gpu, gh[gpu].freq_table);
+    if(gpufreq_frequency_table_get(gpu, gh[gpu].freq_table, freqTable))
+    {
+        debug_log(GPUFREQ_LOG_ERROR, "failed to get core(%d) freq table, initialize failed", gpu);
+        return -1;
+    }
+
     gpufreq_frequency_table_gpuinfo(policy, gh[gpu].freq_table);
 
     policy->cur = pxa988_gpufreq_get(policy->gpu);
@@ -291,6 +350,9 @@ static int pxa988_gpufreq_set(unsigned int gpu, struct gpufreq_freqs* freqs)
     unsigned int rate = 0;
     gceSTATUS status;
 
+    if (has_feat_dfc_protect_clk_op())
+        gpufreq_acquire_clock_mutex(gpu);
+
     /* update new frequency to hw */
     status = gckOS_SetClkRate(gpu_os, gpu, freqs->new_freq);
     if(gcmIS_ERROR(status))
@@ -298,6 +360,9 @@ static int pxa988_gpufreq_set(unsigned int gpu, struct gpufreq_freqs* freqs)
         debug_log(GPUFREQ_LOG_WARNING, "[%d] failed to set target rate %u KHZ\n",
                         gpu, freqs->new_freq);
     }
+
+    if (has_feat_dfc_protect_clk_op())
+        gpufreq_release_clock_mutex(gpu);
 
     /* update current frequency after adjustment */
     rate = pxa988_gpufreq_get(gpu);
