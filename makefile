@@ -3,7 +3,7 @@ PWD := $(shell pwd)
 ARCH := arm64
 ARCH_TYPE := arm64
 CROSS_COMPILE := aarch64-linux-android-
-KERNEL_DIR := ${ANDROID_PRODUCT_OUT}/obj/kernel/
+KERNEL_DIR ?= ${ANDROID_PRODUCT_OUT}/obj/kernel/
 GPU_TYPE ?= XAQ2
 
 DEBUG = 0

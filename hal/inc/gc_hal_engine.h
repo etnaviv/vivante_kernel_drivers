@@ -1229,6 +1229,9 @@ gco3D_DrawInstancedPrimitives(
     IN gctSIZE_T StartIndex,
     IN gctSIZE_T PrimitiveCount,
     IN gctSIZE_T VertexCount,
+    IN gctBOOL SpilitDraw,
+    IN gctSIZE_T SpliltCount,
+    IN gcePRIMITIVE SpilitType,
     IN gctSIZE_T InstanceCount
     );
 
@@ -1948,6 +1951,7 @@ gcoTEXTURE_IsRenderable(
 gceSTATUS
 gcoTEXTURE_IsComplete(
     IN gcoTEXTURE Texture,
+    IN gcsTEXTURE_PTR Info,
     IN gctINT BaseLevel,
     IN gctINT MaxLevel
     );
@@ -2020,6 +2024,17 @@ typedef enum _gceVERTEX_FORMAT
     gcvVERTEX_INT32,
 }
 gceVERTEX_FORMAT;
+
+/* What the SW converting scheme to create temp attrib */
+typedef enum _gceATTRIB_SCHEME
+{
+    gcvATTRIB_SCHEME_KEEP = 0,
+    gcvATTRIB_SCHEME_2_10_10_10_REV_TO_FLOAT,
+    gcvATTRIB_SCHEME_BYTE_TO_INT,
+    gcvATTRIB_SCHEME_SHORT_TO_INT,
+    gcvATTRIB_SCHEME_UBYTE_TO_UINT,
+    gcvATTRIB_SCHEME_USHORT_TO_UINT,
+} gceATTRIB_SCHEME;
 
 gceSTATUS
 gcoSTREAM_Construct(
@@ -2226,6 +2241,8 @@ typedef struct _gcsATTRIBUTE
     /* Index to vertex array */
     gctINT              arrayIdx;
 
+    gceATTRIB_SCHEME    convertScheme;
+
     /* Pointer to the temporary buffer to be freed */
     gcoBUFOBJ           tempStream;
 
@@ -2315,13 +2332,17 @@ gcoVERTEXARRAY_Bind_Ex2(
     IN gctUINT32 EnableBits,
     IN gcsATTRIBUTE_PTR VertexArray,
     IN gctSIZE_T First,
-    IN gctSIZE_T Count,
+    IN gctSIZE_T * Count,
     IN gctBOOL DrawArraysInstanced,
     IN gctSIZE_T InstanceCount,
     IN gceINDEX_TYPE IndexType,
     IN gcoBUFOBJ IndexObject,
     IN gctPOINTER IndexMemory,
+    IN gctBOOL PrimtiveRestart,
     IN OUT gcePRIMITIVE * PrimitiveType,
+    IN OUT gctBOOL * SpilitDraw,
+    IN OUT gctSIZE_T * SpilitCount,
+    IN OUT gcePRIMITIVE * SpilitPrimitiveType,
 #if gcdUSE_WCLIP_PATCH
     IN OUT gctSIZE_T * PrimitiveCount,
     IN OUT gctFLOAT * wLimitRms,

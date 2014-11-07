@@ -64,21 +64,8 @@ typedef struct _DDR_QOS_NODE {
 #define INOUT
 #define __GPUFREQ_EXPORT_TO_GC
 
-#define GPUFREQ_HAVE_MULTI_CORES     1
+#define GPUFREQ_GPU_NUMS     3
 
-#if MRVL_CONFIG_SHADER_CLK_CONTROL
-#if GPUFREQ_HAVE_MULTI_CORES
-#   define GPUFREQ_GPU_NUMS     3
-#else /* default */
-#   define GPUFREQ_GPU_NUMS     2
-#endif
-#else
-#if GPUFREQ_HAVE_MULTI_CORES
-#   define GPUFREQ_GPU_NUMS     2
-#else /* default */
-#   define GPUFREQ_GPU_NUMS     1
-#endif
-#endif
 
 #define GPUFREQ_NAME_LEN        16
 
@@ -149,6 +136,10 @@ struct gpufreq_freqs {
     unsigned int gpu;
     unsigned int old_freq;
     unsigned int new_freq;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0)
+    unsigned int axi_old_freq;
+    unsigned int axi_new_freq;
+#endif
 };
 
 /* enum for "setpolicy" type policy */
@@ -166,6 +157,9 @@ struct gpufreq_policy {
     unsigned int        min;
     unsigned int        max;
     unsigned int        cur;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0)
+    unsigned int        axi_cur;
+#endif
     struct gpufreq_governor     *governor;
 
     /* hold the actual setting gpu's running */

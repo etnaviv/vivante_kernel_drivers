@@ -52,7 +52,7 @@ typedef struct _DFBPixmap *  HALNativePixmapType;
 /* Wayland platform. */
 #include <wayland-egl.h>
 
-#define WL_EGL_NUM_BACKBUFFERS 2
+#define WL_EGL_NUM_BACKBUFFERS 3
 
 typedef struct _gcsWL_VIV_BUFFER
 {
@@ -67,6 +67,7 @@ typedef struct _gcsWL_EGL_DISPLAY
    struct wl_viv* wl_viv;
    struct wl_registry *registry;
    struct wl_event_queue    *wl_queue;
+   gctINT swapInterval;
 } gcsWL_EGL_DISPLAY;
 
 typedef struct _gcsWL_EGL_BUFFER_INFO
@@ -79,7 +80,9 @@ typedef struct _gcsWL_EGL_BUFFER_INFO
    gcePOOL pool;
    gctUINT bytes;
    gcoSURF surface;
+   gcoSURF attached_surface;
    gctINT32 invalidate;
+   gctBOOL locked;
 } gcsWL_EGL_BUFFER_INFO;
 
 typedef struct _gcsWL_EGL_BUFFER
@@ -102,10 +105,10 @@ typedef struct _gcsWL_EGL_WINDOW_INFO
 
 struct wl_egl_window
 {
+   gcsWL_EGL_DISPLAY* display;
    gcsWL_EGL_BUFFER backbuffers[WL_EGL_NUM_BACKBUFFERS];
    gcsWL_EGL_WINDOW_INFO info;
    gctUINT current;
-   gcoSURF attached_surface;
    struct wl_surface* surface;
    struct wl_callback* frame_callback;
 };
@@ -283,6 +286,12 @@ gcoOS_SetSwapInterval(
     IN HALNativeDisplayType Display,
     IN gctINT Interval
 );
+
+gceSTATUS
+gcoOS_SetSwapIntervalEx(
+    IN HALNativeDisplayType Display,
+    IN gctINT Interval,
+    IN gctPOINTER localDisplay);
 
 gceSTATUS
 gcoOS_GetSwapInterval(

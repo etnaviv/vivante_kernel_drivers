@@ -76,7 +76,7 @@ static unsigned int gpufreq_3d_shader_freq_get(void)
     gceSTATUS status;
     unsigned int rate = ~0;
 
-    gcmkONERROR(gckOS_QueryClkRate(gpu_os, gcvCORE_SH, &rate));
+    gcmkONERROR(gckOS_QueryClkRate(gpu_os, gcvCORE_SH, gcvFALSE, &rate));
     return rate;
 
 OnError:
@@ -520,7 +520,7 @@ static int eden_gpufreq_set(unsigned int gpu, struct gpufreq_freqs *freq, struct
 
     if(gpu == gcvCORE_MAJOR)
     {
-        status = gckOS_SetClkRate(gpu_os, gcvCORE_SH, freq_sh->new_freq);
+        status = gckOS_SetClkRate(gpu_os, gcvCORE_SH, gcvFALSE, freq_sh->new_freq);
         if(gcmIS_ERROR(status))
         {
             debug_log(GPUFREQ_LOG_WARNING, "[%d] failed to set target rate %u KHZ\n",
@@ -528,7 +528,7 @@ static int eden_gpufreq_set(unsigned int gpu, struct gpufreq_freqs *freq, struct
         }
     }
 
-    status = gckOS_SetClkRate(gpu_os, gpu, freq->new_freq);
+    status = gckOS_SetClkRate(gpu_os, gpu, gcvFALSE, freq->new_freq);
     if(gcmIS_ERROR(status))
     {
         debug_log(GPUFREQ_LOG_WARNING, "[%d] failed to set target rate %u KHZ\n",
@@ -561,7 +561,7 @@ static unsigned int eden_gpufreq_get (unsigned int gpu)
     if (has_feat_dfc_protect_clk_op())
         gpufreq_acquire_clock_mutex(gpu);
 
-    gcmkVERIFY_OK(gckOS_QueryClkRate(gpu_os, gpu, &rate));
+    gcmkVERIFY_OK(gckOS_QueryClkRate(gpu_os, gpu, gcvFALSE, &rate));
 
     if (has_feat_dfc_protect_clk_op())
         gpufreq_release_clock_mutex(gpu);

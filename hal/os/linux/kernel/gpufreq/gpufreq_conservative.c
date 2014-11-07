@@ -73,7 +73,6 @@ static struct conservative_tuners conservative_tuners_ins[] = {
         .freq_step = DEF_FREQUENCY_FREQ_STEP,
     },
 
-#if GPUFREQ_HAVE_MULTI_CORES
     [1] = {
         .up_threshold = DEF_FREQUENCY_UP_THRESHOLD,
         .down_threshold = DEF_FREQUENCY_DOWN_THRESHOLD,
@@ -81,14 +80,13 @@ static struct conservative_tuners conservative_tuners_ins[] = {
         .freq_step = DEF_FREQUENCY_FREQ_STEP,
     },
 
-#   if MRVL_CONFIG_SHADER_CLK_CONTROL
+#if MRVL_CONFIG_SHADER_CLK_CONTROL
     [2] = {
         .up_threshold = DEF_FREQUENCY_UP_THRESHOLD,
         .down_threshold = DEF_FREQUENCY_DOWN_THRESHOLD,
         .sampling_down_factor = DEF_SAMPLING_DOWN_FACTOR,
         .freq_step = DEF_FREQUENCY_FREQ_STEP,
     },
-#   endif
 #endif
 };
 

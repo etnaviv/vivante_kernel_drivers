@@ -60,12 +60,6 @@ ifneq ($(USE_MULTI_GPU), )
     EXTRA_CFLAGS += -DgcdMULTI_GPU=$(USE_MULTI_GPU)
 endif
 
-ifeq ($(USE_LOCAL_GRALLOC), 1)
-    EXTRA_CFLAGS += -DUSE_LOCAL_GRALLOC=1
-else
-    EXTRA_CFLAGS += -DUSE_LOCAL_GRALLOC=0
-endif
-
 OBJS := $(OS_KERNEL_DIR)/gc_hal_kernel_device.o \
         $(OS_KERNEL_DIR)/gc_hal_kernel_linux.o \
         $(OS_KERNEL_DIR)/gc_hal_kernel_math.o \
@@ -74,6 +68,10 @@ OBJS := $(OS_KERNEL_DIR)/gc_hal_kernel_device.o \
         $(OS_KERNEL_DIR)/gc_hal_kernel_sysfs_test.o \
         $(OS_KERNEL_DIR)/gc_hal_kernel_debugfs.o \
         $(OS_KERNEL_DIR)/gc_hal_kernel_allocator.o \
+
+ifneq ($(CONFIG_IOMMU_SUPPORT),)
+OBJS += $(OS_KERNEL_DIR)/gc_hal_kernel_iommu.o
+endif
 
 ifneq ($(PLATFORM),)
 OBJS += $(OS_KERNEL_DIR)/gc_hal_kernel_probe.o
@@ -120,6 +118,10 @@ OBJS += $(HAL_KERNEL_DIR)/gc_hal_kernel.o \
 
 OBJS += $(ARCH_KERNEL_DIR)/gc_hal_kernel_context.o \
         $(ARCH_KERNEL_DIR)/gc_hal_kernel_hardware.o
+
+ifeq ($(VIVANTE_ENABLE_3D), 1)
+OBJS += $(ARCH_KERNEL_DIR)/gc_hal_kernel_recorder.o
+endif
 
 ifeq ($(VIVANTE_ENABLE_VG), 1)
 OBJS +=\

@@ -340,7 +340,7 @@ _DefaultAlloc(
         if (Mdl->u.contiguousPages == gcvNULL)
         {
             Mdl->u.contiguousPages =
-                alloc_pages(GFP_KERNEL | __GFP_HIGHMEM | gcdNOWARN, order);
+                alloc_pages(GFP_KERNEL | __GFP_HIGHMEM | gcdNOWARN | __GFP_NORETRY, order);
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 27)
             Mdl->exact = gcvFALSE;

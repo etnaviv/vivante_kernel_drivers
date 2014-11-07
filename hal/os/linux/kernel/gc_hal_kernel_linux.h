@@ -102,6 +102,8 @@
 /******************************************************************************\
 ********************************** Structures **********************************
 \******************************************************************************/
+typedef struct _gcsIOMMU * gckIOMMU;
+
 typedef struct _gcsUSER_MAPPING * gcsUSER_MAPPING_PTR;
 typedef struct _gcsUSER_MAPPING
 {
@@ -217,6 +219,9 @@ struct _gckOS
 
     /* External clock states. */
     gctBOOL                     clockStates[gcdMAX_GPU_COUNT];
+
+    /* IOMMU. */
+    gckIOMMU                    iommu;
 
     /* store unparse freq-table*/
     gctPOINTER                  freqTable[gcdMAX_GPU_COUNT];
@@ -383,6 +388,33 @@ is_vmalloc_addr(
 }
 #endif
 
+#ifdef CONFIG_IOMMU_SUPPORT
+void
+gckIOMMU_Destory(
+    IN gckOS Os,
+    IN gckIOMMU Iommu
+    );
 
+gceSTATUS
+gckIOMMU_Construct(
+    IN gckOS Os,
+    OUT gckIOMMU * Iommu
+    );
+
+gceSTATUS
+gckIOMMU_Map(
+    IN gckIOMMU Iommu,
+    IN gctUINT32 DomainAddress,
+    IN gctUINT32 Physical,
+    IN gctUINT32 Bytes
+    );
+
+gceSTATUS
+gckIOMMU_Unmap(
+    IN gckIOMMU Iommu,
+    IN gctUINT32 DomainAddress,
+    IN gctUINT32 Bytes
+    );
+#endif
 
 #endif /* __gc_hal_kernel_linux_h_ */

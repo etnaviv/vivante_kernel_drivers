@@ -28,6 +28,10 @@
 #endif
 #include <linux/delay.h>
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,22)
+#include <linux/anon_inodes.h>
+#endif
+
 #if gcdANDROID_NATIVE_FENCE_SYNC
 #include <linux/file.h>
 #include "gc_hal_kernel_sync.h"
@@ -69,6 +73,7 @@ extern void get_gc2d_reg_lock(unsigned int lock, unsigned long *flags);
 
 #define MEMORY_MAP_UNLOCK(os) \
     gcmkVERIFY_OK(gckOS_ReleaseMutex((os), (os)->memoryMapLock))
+
 /******************************************************************************\
 ******************************* Private Functions ******************************
 \******************************************************************************/
@@ -746,6 +751,23 @@ gckOS_Construct(
 
     gckOS_ImportAllocators(os);
 
+#ifdef CONFIG_IOMMU_SUPPORT
+    if (((gckGALDEVICE)(os->device))->mmu == gcvFALSE)
+    {
+        /* Only use IOMMU when internal MMU is not enabled. */
+        status = gckIOMMU_Construct(os, &os->iommu);
+
+        if (gcmIS_ERROR(status))
+        {
+            gcmkTRACE_ZONE(
+                gcvLEVEL_INFO, gcvZONE_OS,
+                "%s(%d): Fail to setup IOMMU",
+                __FUNCTION__, __LINE__
+                );
+        }
+    }    
+#endif
+
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0)
     /* get frequency table*/
     for(i = 0; i<gcdMAX_GPU_COUNT; i++)
@@ -869,6 +891,13 @@ gckOS_Destroy(
     destroy_workqueue(Os->workqueue);
 
     gckOS_FreeAllocators(Os);
+
+#ifdef CONFIG_IOMMU_SUPPORT
+    if (Os->iommu)
+    {
+        gckIOMMU_Destory(Os, Os->iommu);
+    }
+#endif
 
     /* Flush the debug cache. */
     gcmkDEBUGFLUSH(~0U);
@@ -4752,9 +4781,7 @@ gckOS_MapPages(
                             gcvCORE_MAJOR,
                             Physical,
                             PageCount,
-#if gcdPROCESS_ADDRESS_SPACE
                             0,
-#endif
                             PageTable);
 }
 
@@ -4764,9 +4791,7 @@ gckOS_MapPagesEx(
     IN gceCORE Core,
     IN gctPHYS_ADDR Physical,
     IN gctSIZE_T PageCount,
-#if gcdPROCESS_ADDRESS_SPACE
     IN gctUINT32 Address,
-#endif
     IN gctPOINTER PageTable
     )
 {
@@ -4852,35 +4877,54 @@ gckOS_MapPagesEx(
 
         gcmkVERIFY_OK(gckOS_CPUPhysicalToGPUPhysical(Os, phys, &phys));
 
-#if gcdENABLE_VG
-        if (Core == gcvCORE_VG)
+#ifdef CONFIG_IOMMU_SUPPORT
+        if (Os->iommu)
         {
-            for (i = 0; i < (PAGE_SIZE / 4096); i++)
-            {
-                gcmkONERROR(
-                    gckVGMMU_SetPage(Os->device->kernels[Core]->vg->mmu,
-                        phys + (i * 4096),
-                        table++));
-            }
+            gcmkTRACE_ZONE(
+                gcvLEVEL_INFO, gcvZONE_OS,
+                "%s(%d): Setup mapping in IOMMU %x => %x",
+                __FUNCTION__, __LINE__,
+                Address + (offset * PAGE_SIZE), phys
+                );
+
+            /* When use IOMMU, GPU use system PAGE_SIZE. */
+            gcmkONERROR(gckIOMMU_Map(
+                Os->iommu, Address + (offset * PAGE_SIZE), phys, PAGE_SIZE));
         }
         else
 #endif
         {
-            for (i = 0; i < (PAGE_SIZE / 4096); i++)
+
+#if gcdENABLE_VG
+            if (Core == gcvCORE_VG)
             {
-#if gcdPROCESS_ADDRESS_SPACE
-                gctUINT32_PTR pageTableEntry;
-                gckMMU_GetPageEntry(mmu, Address + (offset * 4096), &pageTableEntry);
-                gcmkONERROR(
-                    gckMMU_SetPage(mmu,
-                        phys + (i * 4096),
-                        pageTableEntry));
-#else
-                gcmkONERROR(
-                    gckMMU_SetPage(Os->device->kernels[Core]->mmu,
-                        phys + (i * 4096),
-                        table++));
+                for (i = 0; i < (PAGE_SIZE / 4096); i++)
+                {
+                    gcmkONERROR(
+                        gckVGMMU_SetPage(Os->device->kernels[Core]->vg->mmu,
+                            phys + (i * 4096),
+                            table++));
+                }
+            }
+            else
 #endif
+            {
+                for (i = 0; i < (PAGE_SIZE / 4096); i++)
+                {
+#if gcdPROCESS_ADDRESS_SPACE
+                    gctUINT32_PTR pageTableEntry;
+                    gckMMU_GetPageEntry(mmu, Address + (offset * 4096), &pageTableEntry);
+                    gcmkONERROR(
+                        gckMMU_SetPage(mmu,
+                            phys + (i * 4096),
+                            pageTableEntry));
+#else
+                    gcmkONERROR(
+                        gckMMU_SetPage(Os->device->kernels[Core]->mmu,
+                            phys + (i * 4096),
+                            table++));
+#endif
+                }
             }
         }
 
@@ -4908,6 +4952,24 @@ OnError:
     /* Return the status. */
     gcmkFOOTER();
     return status;
+}
+
+gceSTATUS
+gckOS_UnmapPages(
+    IN gckOS Os,
+    IN gctSIZE_T PageCount,
+    IN gctUINT32 Address
+    )
+{
+#ifdef CONFIG_IOMMU_SUPPORT
+    if (Os->iommu)
+    {
+        gcmkVERIFY_OK(gckIOMMU_Unmap(
+            Os->iommu, Address, PageCount * PAGE_SIZE));
+    }
+#endif
+
+    return gcvSTATUS_OK;
 }
 
 /*******************************************************************************
@@ -6291,31 +6353,49 @@ OnError:
 #endif
             phys = page_to_phys(pages[i]);
 
-#if gcdENABLE_VG
-            if (Core == gcvCORE_VG)
+#ifdef CONFIG_IOMMU_SUPPORT
+            if (Os->iommu)
             {
-                gcmkVERIFY_OK(
-                    gckOS_CPUPhysicalToGPUPhysical(Os, phys, &phys));
+                gcmkTRACE_ZONE(
+                    gcvLEVEL_INFO, gcvZONE_OS,
+                    "%s(%d): Setup mapping in IOMMU %x => %x",
+                    __FUNCTION__, __LINE__,
+                    Address + (i * PAGE_SIZE), phys
+                    );
 
-                /* Get the physical address from page struct. */
-                gcmkONERROR(
-                    gckVGMMU_SetPage(Os->device->kernels[Core]->vg->mmu,
-                                   phys,
-                                   tab));
+                gcmkONERROR(gckIOMMU_Map(
+                    Os->iommu, address + i * PAGE_SIZE, phys, PAGE_SIZE));
             }
             else
 #endif
             {
-                /* Get the physical address from page struct. */
-                gcmkONERROR(
-                    gckMMU_SetPage(Os->device->kernels[Core]->mmu,
-                                   phys,
-                                   tab));
-            }
 
-            for (j = 1; j < (PAGE_SIZE/4096); j++)
-            {
-                pageTable[i * (PAGE_SIZE/4096) + j] = pageTable[i * (PAGE_SIZE/4096)] + 4096 * j;
+#if gcdENABLE_VG
+                if (Core == gcvCORE_VG)
+                {
+                    gcmkVERIFY_OK(
+                        gckOS_CPUPhysicalToGPUPhysical(Os, phys, &phys));
+
+                    /* Get the physical address from page struct. */
+                    gcmkONERROR(
+                        gckVGMMU_SetPage(Os->device->kernels[Core]->vg->mmu,
+                                       phys,
+                                       tab));
+                }
+                else
+#endif
+                {
+                    /* Get the physical address from page struct. */
+                    gcmkONERROR(
+                        gckMMU_SetPage(Os->device->kernels[Core]->mmu,
+                                       phys,
+                                       tab));
+                }
+
+                for (j = 1; j < (PAGE_SIZE/4096); j++)
+                {
+                    pageTable[i * (PAGE_SIZE/4096) + j] = pageTable[i * (PAGE_SIZE/4096)] + 4096 * j;
+                }
             }
 
 #if !gcdPROCESS_ADDRESS_SPACE
@@ -6607,6 +6687,12 @@ OnError:
                                           pageCount * (PAGE_SIZE/4096)
                                           ));
 #endif
+
+            gcmkERR_BREAK(gckOS_UnmapPages(
+                Os,
+                pageCount * (PAGE_SIZE/4096),
+                info->address
+                ));
         }
 #endif
 
@@ -8697,16 +8783,14 @@ gckOS_UserSignal(
     )
 {
     gceSTATUS status;
-    gctSIGNAL signal;
 
     gcmkHEADER_ARG("Os=0x%X Signal=0x%X Process=%d",
                    Os, Signal, (gctINT32)(gctUINTPTR_T)Process);
 
-    /* Map the signal into kernel space. */
-    gcmkONERROR(gckOS_MapSignal(Os, Signal, Process, &signal));
+    /* MapSignal and increase the ref has been done in gckEVENT_AddList*/
 
     /* Signal. */
-    status = gckOS_Signal(Os, signal, gcvTRUE);
+    gcmkONERROR(gckOS_Signal(Os, Signal, gcvTRUE));
 
     /* Unmap the signal */
     gcmkVERIFY_OK(gckOS_UnmapSignal(Os, Signal));
@@ -9317,6 +9401,7 @@ gceSTATUS
 gckOS_GetIfaceMapping(
     IN gckOS Os,
     IN gceCORE Core,
+    IN gctBOOL Axi,
     OUT gctPOINTER *Iface
     )
 {
@@ -9328,7 +9413,19 @@ gckOS_GetIfaceMapping(
     if(iface == gcvNULL)
         return gcvSTATUS_NOT_SUPPORTED;
 
-    *Iface = (gctPOINTER) iface;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0)
+    if(Axi && has_feat_axi_freq_change())
+    {
+        if(gcvNULL == iface->axi_clk)
+            return gcvSTATUS_NOT_SUPPORTED;
+
+        *Iface = (gctPOINTER) iface->axi_clk;
+    }
+    else
+#endif
+    {
+        *Iface = (gctPOINTER) iface;
+    }
 
     gcmkFOOTER_NO();
     return gcvSTATUS_OK;
@@ -9338,6 +9435,7 @@ gceSTATUS
 gckOS_QueryClkRate(
     IN gckOS Os,
     IN gceCORE Core,
+    IN gctBOOL AXI,
     OUT gctUINT32_PTR Rate
     )
 {
@@ -9345,7 +9443,7 @@ gckOS_QueryClkRate(
     unsigned long rate;
     struct gc_iface *iface;
 
-    gcmkONERROR(gckOS_GetIfaceMapping(Os, Core, (gctPOINTER *)&iface));
+    gcmkONERROR(gckOS_GetIfaceMapping(Os, Core, AXI, (gctPOINTER *)&iface));
 
     gpu_clk_getrate(iface, &rate);
     *Rate = rate;
@@ -9359,15 +9457,17 @@ gceSTATUS
 gckOS_SetClkRate(
     IN gckOS Os,
     IN gceCORE Core,
+    IN gctBOOL Axi,
     IN gctUINT32 Rate
     )
 {
     gceSTATUS status;
     struct gc_iface *iface;
 
-    gcmkONERROR(gckOS_GetIfaceMapping(Os, Core, (gctPOINTER *)&iface));
+    gcmkONERROR(gckOS_GetIfaceMapping(Os, Core, Axi, (gctPOINTER *)&iface));
 
     gpu_clk_setrate(iface, (unsigned long)Rate);
+
     return gcvSTATUS_OK;
 
 OnError:
@@ -9389,7 +9489,7 @@ gckOS_SetGPUPowerOnBeforeInit(
     int ret = 0;
     gcmkHEADER_ARG("Core=%d EnableClk=%d EnablePwr=%d", Core, EnableClk, EnablePwr);
 
-    gcmkONERROR(gckOS_GetIfaceMapping(NULL, Core, (gctPOINTER *)&iface));
+    gcmkONERROR(gckOS_GetIfaceMapping(NULL, Core, gcvFALSE, (gctPOINTER *)&iface));
 
     ret = gpu_clk_init(iface, Ptr4dev);
     if(ret == -1)
@@ -9416,7 +9516,7 @@ gckOS_SetGPUPowerOnBeforeInit(
         if (has_feat_3d_shader_clock()
             && (Core == gcvCORE_MAJOR))
         {
-            gcmkONERROR(gckOS_GetIfaceMapping(NULL, gcvCORE_SH, (gctPOINTER *)&ifaceShader));
+            gcmkONERROR(gckOS_GetIfaceMapping(NULL, gcvCORE_SH, gcvFALSE, (gctPOINTER *)&ifaceShader));
             gpu_clk_setrate(ifaceShader, clkRate);
         }
     }
@@ -9440,7 +9540,7 @@ gckOS_SetGPUPowerOnMRVL(
     gcmkHEADER_ARG("Os=0x%X Core=%d EnableClk=%d EnablePwr=%d", Os, Core, EnableClk, EnablePwr);
 
     gcmkVERIFY_OBJECT(Os, gcvOBJ_OS);
-    gcmkONERROR(gckOS_GetIfaceMapping(Os, Core, (gctPOINTER *)&iface));
+    gcmkONERROR(gckOS_GetIfaceMapping(Os, Core, gcvFALSE, (gctPOINTER *)&iface));
 
     down_write(&Os->rwsem_clk_pwr);
 
@@ -9489,7 +9589,7 @@ gckOS_SetGPUPowerOffMRVL(
     gcmkHEADER_ARG("Os=0x%X Core=%d DisableClk=%d DisablePwr=%d", Os, Core, DisableClk, DisablePwr);
 
     gcmkVERIFY_OBJECT(Os, gcvOBJ_OS);
-    gcmkONERROR(gckOS_GetIfaceMapping(Os, Core, (gctPOINTER *)&iface));
+    gcmkONERROR(gckOS_GetIfaceMapping(Os, Core, gcvFALSE, (gctPOINTER *)&iface));
 
     down_write(&Os->rwsem_clk_pwr);
 
@@ -9726,97 +9826,6 @@ OnError:
     /* Return status. */
     gcmkFOOTER();
     return status;
-}
-
-gceSTATUS
-gckOS_QueryRegisterStats(
-    IN gckOS Os,
-    IN gctBOOL Type,
-    IN gctUINT32 Offset,
-    OUT gctUINT32* ClkState)
-{
-    gckKERNEL kernel[gcdMAX_GPU_COUNT];
-    gctUINT32 clkstate = 0, clockControl = ~0, clockRate = ~0, i;
-
-    gcmkHEADER_ARG("Os=0x%x Type=%d, Offset=%d", Os, Type, Offset);
-
-    for (i = 0; i < gcdMAX_GPU_COUNT; i++)
-    {
-        kernel[i] = Os->device->kernels[i];
-    }
-
-    down_read(&Os->rwsem_clk_pwr);
-    /* check external clock on/off*/
-    if (!Os->clockDepth)
-    {
-        clkstate = 1;
-
-        /*check internal clock on/off*/
-        if(!kernel[gcvCORE_MAJOR]->hardware->clk2D3D_Enable)
-        {
-            clkstate = (clkstate == 0)? 1<<1: 1|(1<<1);
-        }
-    }
-    up_read(&Os->rwsem_clk_pwr);
-
-    *ClkState = clkstate;
-
-    /*get clk-rate anyway*/
-    if (kernel[gcvCORE_MAJOR] != gcvNULL)
-    {
-        gcmkVERIFY_OK(gckOS_DirectReadRegister(Os, gcvCORE_MAJOR, 0x00000, &clockControl));
-        gcmkPRINT("3D clock register: [0x%08X]\n", clockControl);
-
-        gcmkVERIFY_OK(gckOS_QueryClkRate(Os, gcvCORE_MAJOR, &clockRate));
-        gcmkPRINT("3D clock rate: [%d] MHz\n", (gctUINT32)clockRate/1000/1000);
-
-        if (has_feat_3d_shader_clock())
-        {
-            gcmkVERIFY_OK(gckOS_QueryClkRate(Os, gcvCORE_SH, &clockRate));
-            gcmkPRINT("SH clock rate: [%d] MHz\n", (gctUINT32)clockRate/1000/1000);
-        }
-
-        if (kernel[gcvCORE_2D] != gcvNULL)
-        {
-            gcmkVERIFY_OK(gckOS_DirectReadRegister(Os, gcvCORE_2D, 0x00000, &clockControl));
-            gcmkPRINT("2D clock register: [0x%08X]\n", clockControl);
-
-            gcmkVERIFY_OK(gckOS_QueryClkRate(Os, gcvCORE_2D, &clockRate));
-            gcmkPRINT("2D clock rate: [%d] MHz\n", (gctUINT32)clockRate/1000/1000);
-        }
-    }
-
-    if (Type)
-    {
-        gctUINT32 value;
-
-        gcmkVERIFY_OK(gckOS_ReadRegister(Os, Offset, &value));
-        gcmkPRINT("Register[0x%X] value is 0x%08X", Offset, value);
-    }
-    else
-    {
-        gctUINT32 idle;
-        gctUINT32 idle3D1;
-        gctBOOL   isIdle;
-
-        for (i = 0; i < gcdMAX_GPU_COUNT; i++)
-        {
-            kernel[i] = Os->device->kernels[i];
-
-            if (kernel[i] != gcvNULL)
-            {
-                gcmkVERIFY_OK(gckHARDWARE_QueryIdleEx(kernel[i]->hardware,
-                                                      &idle,
-                                                      &idle3D1,
-                                                      &isIdle));
-                gcmkPRINT("idle register: Core[%d][0x%02X][0x%02X][%s]\n",
-                           i, idle, idle3D1, (gcvTRUE == isIdle)?"idle":"busy");
-            }
-        }
-    }
-
-    gcmkFOOTER_NO();
-    return gcvSTATUS_OK;
 }
 
 #if MRVL_CONFIG_ENABLE_GPUFREQ
@@ -11158,5 +11167,78 @@ gckOS_GetFreqTablePointer(
 #endif
 
     return gcvSTATUS_OK;
+}
+
+gceSTATUS
+gckOS_QueryOption(
+    IN gckOS Os,
+    IN gctCONST_STRING Option,
+    OUT gctUINT32 * Value
+    )
+{
+    gckGALDEVICE device = Os->device;
+
+    if (!strcmp(Option, "physBase"))
+    {
+        *Value = device->physBase;
+        return gcvSTATUS_OK;
+    }
+    else if (!strcmp(Option, "physSize"))
+    {
+        *Value = device->physSize;
+        return gcvSTATUS_OK;
+    }
+    else if (!strcmp(Option, "mmu"))
+    {
+#if gcdSECURITY
+        *Value = 0;
+#else
+        *Value = device->mmu;
+#endif
+        return gcvSTATUS_OK;
+    }
+
+    return gcvSTATUS_NOT_SUPPORTED;
+}
+
+static int
+fd_release(
+    struct inode *inode,
+    struct file *file
+    )
+{
+    gcsFDPRIVATE_PTR private = (gcsFDPRIVATE_PTR)file->private_data;
+
+    if (private && private->release)
+    {
+        return private->release(private);
+    }
+
+    return 0;
+}
+
+static const struct file_operations fd_fops = {
+    .release = fd_release,
+};
+
+gceSTATUS
+gckOS_GetFd(
+    IN gctSTRING Name,
+    IN gcsFDPRIVATE_PTR Private,
+    OUT gctINT *Fd
+    )
+{
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,22)
+    *Fd = anon_inode_getfd(Name, &fd_fops, Private, O_RDWR);
+
+    if (*Fd < 0)
+    {
+        return gcvSTATUS_OUT_OF_RESOURCES;
+    }
+
+    return gcvSTATUS_OK;
+#else
+    return gcvSTATUS_NOT_SUPPORTED;
+#endif
 }
 

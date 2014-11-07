@@ -263,6 +263,11 @@ _DumpState(
 
     /* Dump Process DB. */
     gcmkVERIFY_OK(gckKERNEL_DumpProcessDB(Kernel));
+
+#if gcdRECORD_COMMAND
+    /* Dump record. */
+    gckRECORDER_Dump(Kernel->command->recorder);
+#endif
 }
 
 /*******************************************************************************
@@ -428,6 +433,8 @@ gckKERNEL_Construct(
         /* Construct the gckMMU object. */
         gcmkONERROR(
             gckVGKERNEL_Construct(Os, Context, kernel, &kernel->vg));
+
+        kernel->timeOut = gcdGPU_TIMEOUT;
     }
     else
 #endif
@@ -439,9 +446,10 @@ gckKERNEL_Construct(
         /* Set pointer to gckKERNEL object in gckHARDWARE object. */
         kernel->hardware->kernel = kernel;
 
-        /* Initialize the hardware. */
-        gcmkONERROR(
-            gckHARDWARE_InitializeHardware(kernel->hardware));
+        kernel->timeOut = kernel->hardware->type == gcvHARDWARE_2D
+                        ? gcdGPU_2D_TIMEOUT
+                        : gcdGPU_TIMEOUT
+                        ;
 
         /* Initialize virtual command buffer. */
         /* TODO: Remove platform limitation after porting. */
@@ -469,6 +477,12 @@ gckKERNEL_Construct(
 
         gcmkVERIFY_OK(gckOS_GetTime(&kernel->resetTimeStamp));
 
+        gcmkONERROR(gckHARDWARE_PrepareFunctions(kernel->hardware));
+
+        /* Initialize the hardware. */
+        gcmkONERROR(
+            gckHARDWARE_InitializeHardware(kernel->hardware));
+
 #if gcdDVFS
         if (gckHARDWARE_IsFeatureAvailable(kernel->hardware,
                                            gcvFEATURE_DYNAMIC_FREQUENCY_SCALING))
@@ -477,8 +491,6 @@ gckKERNEL_Construct(
             gcmkONERROR(gckDVFS_Start(kernel->dvfs));
         }
 #endif
-
-        gcmkONERROR(gckHARDWARE_PrepareFunctions(kernel->hardware));
     }
 
 #if VIVANTE_PROFILER
@@ -490,20 +502,6 @@ gckKERNEL_Construct(
 #if gcdANDROID_NATIVE_FENCE_SYNC
     gcmkONERROR(gckOS_CreateSyncTimeline(Os, &kernel->timeline));
 #endif
-
-#if gcdENABLE_VG
-    if (Core == gcvCORE_VG)
-    {
-        kernel->timeOut = gcdGPU_TIMEOUT;
-    }
-    else
-#endif
-    {
-        kernel->timeOut = kernel->hardware->type == gcvHARDWARE_2D
-                        ? gcdGPU_2D_TIMEOUT
-                        : gcdGPU_TIMEOUT
-                        ;
-    }
 
     kernel->recovery      = gcvTRUE;
     kernel->stuckDump     = 1;
@@ -2633,6 +2631,18 @@ gckKERNEL_Dispatch(
                                    0));
         break;
 
+    case gcvHAL_GET_VIDEO_MEMORY_FD:
+        gcmkONERROR(gckVIDMEM_NODE_GetFd(
+            Kernel,
+            Interface->u.GetVideoMemoryFd.handle,
+            &Interface->u.GetVideoMemoryFd.fd
+            ));
+
+        /* No need to add it to processDB because OS will release all fds when
+        ** process quits.
+        */
+        break;
+
     case gcvHAL_QUERY_RESET_TIME_STAMP:
         Interface->u.QueryResetTimeStamp.timeStamp = Kernel->resetTimeStamp;
         break;
@@ -3576,6 +3586,9 @@ gckKERNEL_Recovery(
 
     if (Kernel->recovery == gcvFALSE)
     {
+        gcmkPRINT("[galcore]: Force kernel panic to trigger EMMD Dump.");
+        BUG_ON(1);
+
         gcmkPRINT("[galcore]: Stop driver to keep scene.");
 
         for (;;)
@@ -3867,9 +3880,7 @@ gckKERNEL_AllocateVirtualCommandBuffer(
     gctSIZE_T pageCount;
     gctSIZE_T bytes                      = *Bytes;
     gckVIRTUAL_COMMAND_BUFFER_PTR buffer = gcvNULL;
-#if gcdPROCESS_ADDRESS_SPACE
     gckMMU mmu;
-#endif
     gctUINT32 flag = gcvALLOC_FLAG_NON_CONTIGUOUS;
 
     gcmkHEADER_ARG("Os=0x%X InUserSpace=%d *Bytes=%lu",
@@ -3926,13 +3937,16 @@ gckKERNEL_AllocateVirtualCommandBuffer(
 
 #if gcdPROCESS_ADDRESS_SPACE
     gcmkONERROR(gckKERNEL_GetProcessMMU(Kernel, &mmu));
+    buffer->mmu = mmu;
+#else
+    mmu = Kernel->mmu;
+#endif
 
     gcmkONERROR(gckMMU_AllocatePages(mmu,
                                      pageCount,
                                      &buffer->pageTable,
                                      &buffer->gpuAddress));
 
-    buffer->mmu = mmu;
 
     gcmkONERROR(gckOS_MapPagesEx(os,
                                  Kernel->core,
@@ -3940,24 +3954,8 @@ gckKERNEL_AllocateVirtualCommandBuffer(
                                  pageCount,
                                  buffer->gpuAddress,
                                  buffer->pageTable));
-#else
-    gcmkONERROR(gckMMU_AllocatePages(Kernel->mmu,
-                                     pageCount,
-                                     &buffer->pageTable,
-                                     &buffer->gpuAddress));
 
-    gcmkONERROR(gckOS_MapPagesEx(os,
-                                 Kernel->core,
-                                 buffer->physical,
-                                 pageCount,
-                                 buffer->pageTable));
-#endif
-
-#if gcdPROCESS_ADDRESS_SPACE
-    gcmkONERROR(gckMMU_Flush(mmu));
-#else
-    gcmkONERROR(gckMMU_Flush(Kernel->mmu, gcvSURF_INDEX));
-#endif
+    gcmkONERROR(gckMMU_Flush(mmu, gcvSURF_INDEX));
 
     *Physical = buffer;
 
@@ -4057,6 +4055,8 @@ gckKERNEL_DestroyVirtualCommandBuffer(
     gcmkVERIFY_OK(
         gckMMU_FreePages(kernel->mmu, buffer->pageTable, buffer->pageCount));
 #endif
+
+    gcmkVERIFY_OK(gckOS_UnmapPages(os, buffer->pageCount, buffer->gpuAddress));
 
     gcmkVERIFY_OK(gckOS_FreePagedMemory(os, buffer->physical, Bytes));
 

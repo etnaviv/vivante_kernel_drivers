@@ -39,23 +39,6 @@ typedef int (*PFUNC_GC_PWR)(PARAM_TYPE_PWR);
 static PFUNC_GC_PWR GC3D_PWR = gcvNULL;
 static PFUNC_GC_PWR GC2D_PWR = gcvNULL;
 
-/**
- * gc3d shader definition
- */
-static struct gc_ops gc3dsh_ops = {
-    .init       = gpu_lock_init_dft,
-    .enableclk  = gpu_clk_enable_dft,
-    .disableclk = gpu_clk_disable_dft,
-    .setclkrate = gpu_clk_setrate_dft,
-    .getclkrate = gpu_clk_getrate_dft,
-};
-
-static struct gc_iface gc3dsh_iface = {
-    .name               = "gc3dsh",
-    .con_id             = clk_sh_name,
-    .ops                = &gc3dsh_ops,
-};
-
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0)
 /**
 * gc3D AXI CLK definition
@@ -74,6 +57,26 @@ static struct gc_iface gc3daxi_iface = {
     .ops                = &gc3daxi_ops,
 };
 #endif
+
+/**
+ * gc3d shader definition
+ */
+static struct gc_ops gc3dsh_ops = {
+    .init       = gpu_lock_init_dft,
+    .enableclk  = gpu_clk_enable_dft,
+    .disableclk = gpu_clk_disable_dft,
+    .setclkrate = gpu_clk_setrate_dft,
+    .getclkrate = gpu_clk_getrate_dft,
+};
+
+static struct gc_iface gc3dsh_iface = {
+    .name               = "gc3dsh",
+    .con_id             = clk_sh_name,
+    .ops                = &gc3dsh_ops,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0)
+    .axi_clk            = &gc3daxi_iface,
+#endif
+};
 
 /**
  * gc3d definition
@@ -152,26 +155,10 @@ static struct gc_iface gc3d_iface = {
     .ops                = &gc3d_ops,
     .chains_count       = chain_num_3D,
     .chains_clk         = gc3d_iface_chains,
-};
-
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0)
-/**
-* gc2D AXI CLK definition
-*/
-static struct gc_ops gc2daxi_ops = {
-    .init       = gpu_lock_init_dft,
-    .enableclk  = gpu_clk_enable_dft,
-    .disableclk = gpu_clk_disable_dft,
-    .setclkrate = gpu_clk_setrate_dft,
-    .getclkrate = gpu_clk_getrate_dft,
-};
-
-static struct gc_iface gc2daxi_iface = {
-    .name               = "gc2da",
-    .con_id             = "GC2DACLK",
-    .ops                = &gc2daxi_ops,
-};
+    .axi_clk            = &gc3daxi_iface,
 #endif
+};
 
 /**
  * gc2d definition
@@ -238,7 +225,7 @@ static struct gc_ops gc2d_ops = {
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0)
 static struct gc_iface *gc2d_iface_chains[] = {
-    &gc2daxi_iface,
+    &gc3daxi_iface,
 };
 #endif
 
@@ -249,6 +236,7 @@ static struct gc_iface gc2d_iface = {
     .chains_count       = chain_num_2D,
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0)
     .chains_clk         = gc2d_iface_chains,
+    .axi_clk            = &gc3daxi_iface,
 #endif
 };
 

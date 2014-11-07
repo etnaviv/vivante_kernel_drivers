@@ -38,6 +38,7 @@ EGL_API_WL      ?= 0
 EGL_API_DRI     ?= 0
 EGL_API_DFB     ?= 0
 EGL_API_X       ?= 0
+GC355_MEM_PRINT ?= 0
 USE_MOVG        ?= 0
 USE_VDK         ?= 0
 USE_PROFILER    ?= 0
@@ -217,9 +218,16 @@ ifeq ($(ANDROID), 1)
     endif
 
     ifeq ($(USE_LOCAL_GRALLOC), 1)
-        CFLAGS += -DUSE_LOCAL_GRALLOC=1
+        CFLAGS += -DUSE_LOCAL_GRALLOC=1 -I $(AQROOT)/driver/android/gralloc
+    else
+        CFLAGS += -DUSE_LOCAL_GRALLOC=0 -I $(ANDROID_HOME)/vendor/marvell/generic/marvell-gralloc
     endif
-    CFLAGS += -I $(ANDROID_HOME)/vendor/marvell/generic/marvell-gralloc
+
+    ifeq ($(USE_HWC_GCU),1)
+        CFLAGS += -DUSE_HWC_GCU=1
+    else
+        CFLAGS += -DUSE_HWC_GCU=0
+    endif
 
     ifeq ($(ARCH_TYPE), arm)
         CFLAGS += -fno-builtin-sin -fomit-frame-pointer -msoft-float -march=armv7-a -mfloat-abi=softfp -mfpu=neon -mthumb-interwork -mthumb
@@ -294,7 +302,7 @@ ifeq ($(EGL_API_FB), 1)
 endif
 
 ifeq ($(EGL_API_WL), 1)
-   CFLAGS += -DEGL_API_WL -DWL_EGL_PLATFORM
+   CFLAGS += -DEGL_API_WL -DWL_EGL_PLATFORM -Wno-deprecated-declarations
    LFLAGS += -L$(ROOTFS_USR)/lib
 endif
 
@@ -395,6 +403,12 @@ ifeq ($(USE_MOVG), 1)
 CFLAGS += -DgcdMOVG=1
 else
 CFLAGS += -DgcdMOVG=0
+endif
+
+ifeq ($(GC355_MEM_PRINT), 1)
+CFLAGS += -DgcdGC355_MEM_PRINT=1
+else
+CFLAGS += -DgcdGC355_MEM_PRINT=0
 endif
 
 ################################################################################

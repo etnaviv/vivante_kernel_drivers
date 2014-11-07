@@ -1690,6 +1690,8 @@ gckHARDWARE_Construct(
         hardware->endAfterFlushMmuCache = gcvFALSE;
     }
 
+    gcmkONERROR(gckOS_QueryOption(Os, "mmu", (gctUINT32_PTR)&hardware->enableMMU));
+
 #if MRVL_CONFIG_ENABLE_GPUFREQ
     hardware->devObj.id       = (gctINT32)Core;
     hardware->devObj.kobj     = gcvNULL;
@@ -2108,7 +2110,8 @@ gckHARDWARE_InitializeHardware(
 	    }
 
     if (Hardware->identity.chipModel == gcv1000 &&
-        Hardware->identity.chipRevision == 0x5039)
+        (Hardware->identity.chipRevision == 0x5039 ||
+        Hardware->identity.chipRevision == 0x5040))
     {
         gctUINT32 pulseEater;
 
@@ -2157,19 +2160,9 @@ gckHARDWARE_InitializeHardware(
                                   data));
     }
 
-    /* Test if MMU is initialized. */
-    if ((Hardware->kernel      != gcvNULL)
-    &&  (Hardware->kernel->mmu != gcvNULL)
-    )
-    {
-        /* Reset MMU. */
-        if (Hardware->mmuVersion == 0)
-        {
-            gcmkONERROR(
-                    gckHARDWARE_SetMMU(Hardware,
-                        Hardware->kernel->mmu->pageTableLogical));
-        }
-    }
+    gcmkONERROR(
+        gckHARDWARE_SetMMU(Hardware,
+                           Hardware->kernel->mmu->pageTableLogical));
 
     if (Hardware->identity.chipModel >= gcv400
         && Hardware->identity.chipModel != gcv420
@@ -2299,22 +2292,19 @@ gckHARDWARE_InitializeHardware(
     if ((Hardware->identity.chipRevision > 0x5420)
      && gckHARDWARE_IsFeatureAvailable(Hardware, gcvFEATURE_PIPE_3D))
     {
-        gctUINT clock =
-	((((gctUINT32)(0)) & ~(((gctUINT32)(((gctUINT32) ((((1 ? 7:1) - (0 ? 7:1) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 7:1) - (0 ? 7:1) + 1))))))) << (0 ? 7:1))) | (((gctUINT32)((gctUINT32)(64)&((gctUINT32) ((((1 ? 7:1) - (0 ? 7:1) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 7:1) - (0 ? 7:1) + 1))))))) << (0 ? 7:1)));
+        gcmkONERROR(gckOS_ReadRegisterEx(Hardware->os,
+                                     Hardware->core,
+                                     0x0010C,
+                                     &data));
+
+        /* Disable internal DFS. */
+	data = ((((gctUINT32)(data)) & ~(((gctUINT32)(((gctUINT32) ((((1 ? 18:18) - (0 ? 18:18) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 18:18) - (0 ? 18:18) + 1))))))) << (0 ? 18:18))) | (((gctUINT32)((gctUINT32)(1)&((gctUINT32) ((((1 ? 18:18) - (0 ? 18:18) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 18:18) - (0 ? 18:18) + 1))))))) << (0 ? 18:18)));
 	
-	clock |= ((((gctUINT32)(0)) & ~(((gctUINT32)(((gctUINT32) ((((1 ? 16:16) - (0 ? 16:16) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 16:16) - (0 ? 16:16) + 1))))))) << (0 ? 16:16))) | (((gctUINT32)((gctUINT32)(0)&((gctUINT32) ((((1 ? 16:16) - (0 ? 16:16) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 16:16) - (0 ? 16:16) + 1))))))) << (0 ? 16:16)));
-		clock |= ((((gctUINT32)(0)) & ~(((gctUINT32)(((gctUINT32) ((((1 ? 17:17) - (0 ? 17:17) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 17:17) - (0 ? 17:17) + 1))))))) << (0 ? 17:17))) | (((gctUINT32)((gctUINT32)(1)&((gctUINT32) ((((1 ? 17:17) - (0 ? 17:17) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 17:17) - (0 ? 17:17) + 1))))))) << (0 ? 17:17)));
-	
-        /* Write the clock control register. */
-        gckOS_WriteRegister(Hardware->os,
-                            0x0010C,
-	((((gctUINT32)(clock)) & ~(((gctUINT32)(((gctUINT32) ((((1 ? 0:0) - (0 ? 0:0) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 0:0) - (0 ? 0:0) + 1))))))) << (0 ? 0:0))) | (((gctUINT32)((gctUINT32)(1)&((gctUINT32) ((((1 ? 0:0) - (0 ? 0:0) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 0:0) - (0 ? 0:0) + 1))))))) << (0 ? 0:0))));
-	
-        /* Done loading the frequency scaler. */
-        gckOS_WriteRegister(Hardware->os,
-                            0x0010C,
-	((((gctUINT32)(clock)) & ~(((gctUINT32)(((gctUINT32) ((((1 ? 0:0) - (0 ? 0:0) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 0:0) - (0 ? 0:0) + 1))))))) << (0 ? 0:0))) | (((gctUINT32)((gctUINT32)(0)&((gctUINT32) ((((1 ? 0:0) - (0 ? 0:0) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 0:0) - (0 ? 0:0) + 1))))))) << (0 ? 0:0))));
-	    }
+        gcmkONERROR(gckOS_WriteRegisterEx(Hardware->os,
+                                      Hardware->core,
+                                      0x0010C,
+                                      data));
+    }
 
 #endif
 
@@ -3981,59 +3971,111 @@ gckHARDWARE_SetMMU(
 {
     gceSTATUS status;
     gctUINT32 address = 0;
+    gctUINT32 idle;
+    gctUINT32 timer = 0, delay = 1;
 
     gcmkHEADER_ARG("Hardware=0x%x Logical=0x%x", Hardware, Logical);
 
     /* Verify the arguments. */
     gcmkVERIFY_OBJECT(Hardware, gcvOBJ_HARDWARE);
-    gcmkVERIFY_ARGUMENT(Logical != gcvNULL);
 
-    /* Convert the logical address into physical address. */
-    gcmkONERROR(gckOS_GetPhysicalAddress(Hardware->os, Logical, &address));
+    if (Hardware->mmuVersion == 0)
+    {
+        gcmkVERIFY_ARGUMENT(Logical != gcvNULL);
 
-    gcmkTRACE_ZONE(gcvLEVEL_INFO, gcvZONE_HARDWARE,
-                   "Setting page table to 0x%08X",
-                   address);
+        /* Convert the logical address into physical address. */
+        gcmkONERROR(gckOS_GetPhysicalAddress(Hardware->os, Logical, &address));
 
-    /* Write the AQMemoryFePageTable register. */
-    gcmkONERROR(
-        gckOS_WriteRegisterEx(Hardware->os,
-                              Hardware->core,
-                              0x00400,
-                              address));
+        gcmkTRACE_ZONE(gcvLEVEL_INFO, gcvZONE_HARDWARE,
+                       "Setting page table to 0x%08X",
+                       address);
 
-    /* Write the AQMemoryRaPageTable register. */
-    gcmkONERROR(
-        gckOS_WriteRegisterEx(Hardware->os,
-                              Hardware->core,
-                              0x00410,
-                              address));
+        /* Write the AQMemoryFePageTable register. */
+        gcmkONERROR(
+            gckOS_WriteRegisterEx(Hardware->os,
+                                  Hardware->core,
+                                  0x00400,
+                                  address));
 
-    /* Write the AQMemoryTxPageTable register. */
-    gcmkONERROR(
-        gckOS_WriteRegisterEx(Hardware->os,
-                              Hardware->core,
-                              0x00404,
-                              address));
+        /* Write the AQMemoryRaPageTable register. */
+        gcmkONERROR(
+            gckOS_WriteRegisterEx(Hardware->os,
+                                  Hardware->core,
+                                  0x00410,
+                                  address));
+
+        /* Write the AQMemoryTxPageTable register. */
+        gcmkONERROR(
+            gckOS_WriteRegisterEx(Hardware->os,
+                                  Hardware->core,
+                                  0x00404,
+                                  address));
 
 
-    /* Write the AQMemoryPePageTable register. */
-    gcmkONERROR(
-        gckOS_WriteRegisterEx(Hardware->os,
-                              Hardware->core,
-                              0x00408,
-                              address));
+        /* Write the AQMemoryPePageTable register. */
+        gcmkONERROR(
+            gckOS_WriteRegisterEx(Hardware->os,
+                                  Hardware->core,
+                                  0x00408,
+                                  address));
 
-    /* Write the AQMemoryPezPageTable register. */
-    gcmkONERROR(
-        gckOS_WriteRegisterEx(Hardware->os,
-                              Hardware->core,
-                              0x0040C,
-                              address));
+        /* Write the AQMemoryPezPageTable register. */
+        gcmkONERROR(
+            gckOS_WriteRegisterEx(Hardware->os,
+                                  Hardware->core,
+                                  0x0040C,
+                                  address));
+    }
+    else if (Hardware->enableMMU == gcvTRUE)
+    {
+        /* Execute prepared command sequence. */
+        gcmkONERROR(gckHARDWARE_Execute(
+            Hardware,
+            Hardware->functions[gcvHARDWARE_FUNCTION_MMU].address,
+            Hardware->functions[gcvHARDWARE_FUNCTION_MMU].bytes,
+            gcvFALSE
+            ));
+
+        /* Wait until MMU configure finishes. */
+        do
+        {
+            gckOS_Delay(Hardware->os, delay);
+
+            gcmkONERROR(gckOS_ReadRegisterEx(
+                Hardware->os,
+                Hardware->core,
+                0x00004,
+                &idle));
+
+            timer += delay;
+            delay *= 2;
+
+#if gcdGPU_TIMEOUT
+            if (timer >= Hardware->kernel->timeOut)
+            {
+                /* Even if hardware is not reset correctly, let software
+                ** continue to avoid software stuck. Software will timeout again
+                ** and try to recover GPU in next timeout.
+                */
+                gcmkONERROR(gcvSTATUS_DEVICE);
+            }
+
+#endif
+        }
+	while (!(((((gctUINT32)(idle)) >> (0 ? 0:0)) &((gctUINT32) ((((1 ? 0:0) - (0 ? 0:0) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 0:0) - (0 ? 0:0) + 1))))))));
+	
+        /* Enable MMU. */
+        gcmkONERROR(gckOS_WriteRegisterEx(
+            Hardware->os,
+            Hardware->core,
+            0x0018C,
+	((((gctUINT32)(0)) & ~(((gctUINT32)(((gctUINT32) ((((1 ? 0:0) - (0 ? 0:0) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 0:0) - (0 ? 0:0) + 1))))))) << (0 ? 0:0))) | (((gctUINT32)((gctUINT32)(gcvTRUE)&((gctUINT32) ((((1 ? 0:0) - (0 ? 0:0) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 0:0) - (0 ? 0:0) + 1))))))) << (0 ? 0:0)))
+	            ));
+    }
 
     /* Return the status. */
     gcmkFOOTER_NO();
-    return status;
+    return gcvSTATUS_OK;
 
 OnError:
     /* Return the status. */
@@ -4368,252 +4410,6 @@ OnError:
     /* Return the status. */
     gcmkFOOTER();
     return status;
-}
-
-
-/*******************************************************************************
-**
-**  gckHARDWARE_SetMMUv2
-**
-**  Set the page table base address.
-**
-**  INPUT:
-**
-**      gckHARDWARE Harwdare
-**          Pointer to an gckHARDWARE object.
-**
-**  OUTPUT:
-**
-**      Nothing.
-*/
-gceSTATUS
-gckHARDWARE_SetMMUv2(
-    IN gckHARDWARE Hardware,
-    IN gctBOOL Enable,
-    IN gctPOINTER MtlbAddress,
-    IN gceMMU_MODE Mode,
-    IN gctPOINTER SafeAddress,
-    IN gctBOOL FromPower
-    )
-{
-#if 1 
-    gceSTATUS status;
-    gctUINT32 config, address;
-    gckCOMMAND command;
-    gctUINT32_PTR buffer;
-    gctUINT32 bufferSize;
-    gctBOOL commitEntered = gcvFALSE;
-    gctPOINTER pointer = gcvNULL;
-    gctBOOL ace;
-    gctUINT32 reserveBytes = 16;
-
-    gctBOOL config2D;
-
-    gcmkHEADER_ARG("Hardware=0x%x Enable=%d", Hardware, Enable);
-
-    /* Verify the arguments. */
-    gcmkVERIFY_OBJECT(Hardware, gcvOBJ_HARDWARE);
-
-    ace = gckHARDWARE_IsFeatureAvailable(Hardware, gcvFEATURE_ACE);
-
-    if (ace)
-    {
-        reserveBytes += 8;
-    }
-
-    config2D =  gckHARDWARE_IsFeatureAvailable(Hardware, gcvFEATURE_PIPE_3D)
-             && gckHARDWARE_IsFeatureAvailable(Hardware, gcvFEATURE_PIPE_2D);
-
-    if (config2D)
-    {
-        reserveBytes +=
-            /* Pipe Select. */
-            4 * 4
-            /* Configure MMU States. */
-          + 4 * 4
-            /* Semaphore stall */
-          + 4 * 12;
-    }
-
-    /* Convert logical address into physical address. */
-    gcmkONERROR(
-        gckOS_GetPhysicalAddress(Hardware->os, MtlbAddress, &config));
-
-    gcmkONERROR(
-        gckOS_GetPhysicalAddress(Hardware->os, SafeAddress, &address));
-
-    if (address & 0x3F)
-    {
-        gcmkONERROR(gcvSTATUS_NOT_ALIGNED);
-    }
-
-    switch (Mode)
-    {
-    case gcvMMU_MODE_1K:
-        if (config & 0x3FF)
-        {
-            gcmkONERROR(gcvSTATUS_NOT_ALIGNED);
-        }
-
-	config |= ((((gctUINT32)(0)) & ~(((gctUINT32)(((gctUINT32) ((((1 ? 0:0) - (0 ? 0:0) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 0:0) - (0 ? 0:0) + 1))))))) << (0 ? 0:0))) | (((gctUINT32)(0x1 & ((gctUINT32) ((((1 ? 0:0) - (0 ? 0:0) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 0:0) - (0 ? 0:0) + 1))))))) << (0 ? 0:0)));
-	
-        break;
-
-    case gcvMMU_MODE_4K:
-        if (config & 0xFFF)
-        {
-            gcmkONERROR(gcvSTATUS_NOT_ALIGNED);
-        }
-
-	config |= ((((gctUINT32)(0)) & ~(((gctUINT32)(((gctUINT32) ((((1 ? 0:0) - (0 ? 0:0) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 0:0) - (0 ? 0:0) + 1))))))) << (0 ? 0:0))) | (((gctUINT32)(0x0 & ((gctUINT32) ((((1 ? 0:0) - (0 ? 0:0) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 0:0) - (0 ? 0:0) + 1))))))) << (0 ? 0:0)));
-	
-        break;
-
-    default:
-        gcmkONERROR(gcvSTATUS_INVALID_ARGUMENT);
-    }
-
-    /* Verify the gckCOMMAND object pointer. */
-    command = Hardware->kernel->command;
-
-    /* Acquire the command queue. */
-    gcmkONERROR(gckCOMMAND_EnterCommit(command, FromPower));
-    commitEntered = gcvTRUE;
-
-    gcmkONERROR(gckCOMMAND_Reserve(
-        command, reserveBytes, &pointer, &bufferSize
-        ));
-
-    buffer = pointer;
-
-    *buffer++
-	= ((((gctUINT32)(0)) & ~(((gctUINT32)(((gctUINT32) ((((1 ? 31:27) - (0 ? 31:27) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 31:27) - (0 ? 31:27) + 1))))))) << (0 ? 31:27))) | (((gctUINT32)(0x01 & ((gctUINT32) ((((1 ? 31:27) - (0 ? 31:27) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 31:27) - (0 ? 31:27) + 1))))))) << (0 ? 31:27)))
-		| ((((gctUINT32)(0)) & ~(((gctUINT32)(((gctUINT32) ((((1 ? 15:0) - (0 ? 15:0) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 15:0) - (0 ? 15:0) + 1))))))) << (0 ? 15:0))) | (((gctUINT32)((gctUINT32)(0x0061)&((gctUINT32) ((((1 ? 15:0) - (0 ? 15:0) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 15:0) - (0 ? 15:0) + 1))))))) << (0 ? 15:0)))
-		| ((((gctUINT32)(0)) & ~(((gctUINT32)(((gctUINT32) ((((1 ? 25:16) - (0 ? 25:16) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 25:16) - (0 ? 25:16) + 1))))))) << (0 ? 25:16))) | (((gctUINT32)((gctUINT32)(1)&((gctUINT32) ((((1 ? 25:16) - (0 ? 25:16) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 25:16) - (0 ? 25:16) + 1))))))) << (0 ? 25:16)));
-	
-    *buffer++ = config;
-
-    *buffer++
-	= ((((gctUINT32)(0)) & ~(((gctUINT32)(((gctUINT32) ((((1 ? 31:27) - (0 ? 31:27) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 31:27) - (0 ? 31:27) + 1))))))) << (0 ? 31:27))) | (((gctUINT32)(0x01 & ((gctUINT32) ((((1 ? 31:27) - (0 ? 31:27) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 31:27) - (0 ? 31:27) + 1))))))) << (0 ? 31:27)))
-		| ((((gctUINT32)(0)) & ~(((gctUINT32)(((gctUINT32) ((((1 ? 15:0) - (0 ? 15:0) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 15:0) - (0 ? 15:0) + 1))))))) << (0 ? 15:0))) | (((gctUINT32)((gctUINT32)(0x0060)&((gctUINT32) ((((1 ? 15:0) - (0 ? 15:0) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 15:0) - (0 ? 15:0) + 1))))))) << (0 ? 15:0)))
-		| ((((gctUINT32)(0)) & ~(((gctUINT32)(((gctUINT32) ((((1 ? 25:16) - (0 ? 25:16) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 25:16) - (0 ? 25:16) + 1))))))) << (0 ? 25:16))) | (((gctUINT32)((gctUINT32)(1)&((gctUINT32) ((((1 ? 25:16) - (0 ? 25:16) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 25:16) - (0 ? 25:16) + 1))))))) << (0 ? 25:16)));
-	
-    *buffer++ = address;
-
-    if (ace)
-    {
-        *buffer++
-	= ((((gctUINT32)(0)) & ~(((gctUINT32)(((gctUINT32) ((((1 ? 31:27) - (0 ? 31:27) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 31:27) - (0 ? 31:27) + 1))))))) << (0 ? 31:27))) | (((gctUINT32)(0x01 & ((gctUINT32) ((((1 ? 31:27) - (0 ? 31:27) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 31:27) - (0 ? 31:27) + 1))))))) << (0 ? 31:27)))
-		| ((((gctUINT32)(0)) & ~(((gctUINT32)(((gctUINT32) ((((1 ? 15:0) - (0 ? 15:0) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 15:0) - (0 ? 15:0) + 1))))))) << (0 ? 15:0))) | (((gctUINT32)((gctUINT32)(0x0068)&((gctUINT32) ((((1 ? 15:0) - (0 ? 15:0) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 15:0) - (0 ? 15:0) + 1))))))) << (0 ? 15:0)))
-		| ((((gctUINT32)(0)) & ~(((gctUINT32)(((gctUINT32) ((((1 ? 25:16) - (0 ? 25:16) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 25:16) - (0 ? 25:16) + 1))))))) << (0 ? 25:16))) | (((gctUINT32)((gctUINT32)(1)&((gctUINT32) ((((1 ? 25:16) - (0 ? 25:16) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 25:16) - (0 ? 25:16) + 1))))))) << (0 ? 25:16)));
-	
-        *buffer++ = 0;
-    }
-
-    if (config2D)
-    {
-        gcmSEMAPHORESTALL(buffer);
-
-        /* LoadState(AQPipeSelect, 1), pipe. */
-        *buffer++
-	= ((((gctUINT32)(0)) & ~(((gctUINT32)(((gctUINT32) ((((1 ? 31:27) - (0 ? 31:27) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 31:27) - (0 ? 31:27) + 1))))))) << (0 ? 31:27))) | (((gctUINT32)(0x01 & ((gctUINT32) ((((1 ? 31:27) - (0 ? 31:27) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 31:27) - (0 ? 31:27) + 1))))))) << (0 ? 31:27)))
-		| ((((gctUINT32)(0)) & ~(((gctUINT32)(((gctUINT32) ((((1 ? 15:0) - (0 ? 15:0) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 15:0) - (0 ? 15:0) + 1))))))) << (0 ? 15:0))) | (((gctUINT32)((gctUINT32)(0x0E00)&((gctUINT32) ((((1 ? 15:0) - (0 ? 15:0) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 15:0) - (0 ? 15:0) + 1))))))) << (0 ? 15:0)))
-		| ((((gctUINT32)(0)) & ~(((gctUINT32)(((gctUINT32) ((((1 ? 25:16) - (0 ? 25:16) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 25:16) - (0 ? 25:16) + 1))))))) << (0 ? 25:16))) | (((gctUINT32)((gctUINT32)(1)&((gctUINT32) ((((1 ? 25:16) - (0 ? 25:16) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 25:16) - (0 ? 25:16) + 1))))))) << (0 ? 25:16)));
-	
-        *buffer++ = 0x1;
-
-        *buffer++
-	= ((((gctUINT32)(0)) & ~(((gctUINT32)(((gctUINT32) ((((1 ? 31:27) - (0 ? 31:27) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 31:27) - (0 ? 31:27) + 1))))))) << (0 ? 31:27))) | (((gctUINT32)(0x01 & ((gctUINT32) ((((1 ? 31:27) - (0 ? 31:27) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 31:27) - (0 ? 31:27) + 1))))))) << (0 ? 31:27)))
-		| ((((gctUINT32)(0)) & ~(((gctUINT32)(((gctUINT32) ((((1 ? 15:0) - (0 ? 15:0) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 15:0) - (0 ? 15:0) + 1))))))) << (0 ? 15:0))) | (((gctUINT32)((gctUINT32)(0x0061)&((gctUINT32) ((((1 ? 15:0) - (0 ? 15:0) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 15:0) - (0 ? 15:0) + 1))))))) << (0 ? 15:0)))
-		| ((((gctUINT32)(0)) & ~(((gctUINT32)(((gctUINT32) ((((1 ? 25:16) - (0 ? 25:16) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 25:16) - (0 ? 25:16) + 1))))))) << (0 ? 25:16))) | (((gctUINT32)((gctUINT32)(1)&((gctUINT32) ((((1 ? 25:16) - (0 ? 25:16) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 25:16) - (0 ? 25:16) + 1))))))) << (0 ? 25:16)));
-	
-        *buffer++ = config;
-
-        *buffer++
-	= ((((gctUINT32)(0)) & ~(((gctUINT32)(((gctUINT32) ((((1 ? 31:27) - (0 ? 31:27) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 31:27) - (0 ? 31:27) + 1))))))) << (0 ? 31:27))) | (((gctUINT32)(0x01 & ((gctUINT32) ((((1 ? 31:27) - (0 ? 31:27) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 31:27) - (0 ? 31:27) + 1))))))) << (0 ? 31:27)))
-		| ((((gctUINT32)(0)) & ~(((gctUINT32)(((gctUINT32) ((((1 ? 15:0) - (0 ? 15:0) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 15:0) - (0 ? 15:0) + 1))))))) << (0 ? 15:0))) | (((gctUINT32)((gctUINT32)(0x0060)&((gctUINT32) ((((1 ? 15:0) - (0 ? 15:0) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 15:0) - (0 ? 15:0) + 1))))))) << (0 ? 15:0)))
-		| ((((gctUINT32)(0)) & ~(((gctUINT32)(((gctUINT32) ((((1 ? 25:16) - (0 ? 25:16) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 25:16) - (0 ? 25:16) + 1))))))) << (0 ? 25:16))) | (((gctUINT32)((gctUINT32)(1)&((gctUINT32) ((((1 ? 25:16) - (0 ? 25:16) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 25:16) - (0 ? 25:16) + 1))))))) << (0 ? 25:16)));
-	
-        *buffer++ = address;
-
-        gcmSEMAPHORESTALL(buffer);
-
-        /* LoadState(AQPipeSelect, 1), pipe. */
-        *buffer++
-	= ((((gctUINT32)(0)) & ~(((gctUINT32)(((gctUINT32) ((((1 ? 31:27) - (0 ? 31:27) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 31:27) - (0 ? 31:27) + 1))))))) << (0 ? 31:27))) | (((gctUINT32)(0x01 & ((gctUINT32) ((((1 ? 31:27) - (0 ? 31:27) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 31:27) - (0 ? 31:27) + 1))))))) << (0 ? 31:27)))
-		| ((((gctUINT32)(0)) & ~(((gctUINT32)(((gctUINT32) ((((1 ? 15:0) - (0 ? 15:0) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 15:0) - (0 ? 15:0) + 1))))))) << (0 ? 15:0))) | (((gctUINT32)((gctUINT32)(0x0E00)&((gctUINT32) ((((1 ? 15:0) - (0 ? 15:0) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 15:0) - (0 ? 15:0) + 1))))))) << (0 ? 15:0)))
-		| ((((gctUINT32)(0)) & ~(((gctUINT32)(((gctUINT32) ((((1 ? 25:16) - (0 ? 25:16) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 25:16) - (0 ? 25:16) + 1))))))) << (0 ? 25:16))) | (((gctUINT32)((gctUINT32)(1)&((gctUINT32) ((((1 ? 25:16) - (0 ? 25:16) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 25:16) - (0 ? 25:16) + 1))))))) << (0 ? 25:16)));
-	
-        *buffer++ = 0x0;
-
-        gcmSEMAPHORESTALL(buffer);
-    }
-
-    gcmkTRACE_ZONE(gcvLEVEL_INFO, gcvZONE_HARDWARE,
-        "Setup MMU: config=%08x, Safe Address=%08x\n.", config, address);
-
-    gcmkONERROR(gckCOMMAND_Execute(command, reserveBytes));
-
-    /* Release the command queue. */
-    gcmkONERROR(gckCOMMAND_ExitCommit(command, FromPower));
-    commitEntered = gcvFALSE;
-
-    gcmkTRACE_ZONE(gcvLEVEL_INFO, gcvZONE_HARDWARE,
-        "call gckCOMMAND_Stall to make sure the config is done.\n ");
-
-#if gcdMULTI_GPU
-    gcmkONERROR(gckCOMMAND_Stall(command, FromPower, gcvCORE_3D_ALL_MASK));
-#else
-    gcmkONERROR(gckCOMMAND_Stall(command, FromPower));
-
-#endif
-
-    gcmkTRACE_ZONE(gcvLEVEL_INFO, gcvZONE_HARDWARE,
-        "Enable MMU through GCREG_MMU_CONTROL.");
-
-    /* Enable MMU. */
-    gcmkONERROR(
-        gckOS_WriteRegisterEx(Hardware->os,
-                              Hardware->core,
-                              0x0018C,
-	((((gctUINT32)(0)) & ~(((gctUINT32)(((gctUINT32) ((((1 ? 0:0) - (0 ? 0:0) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 0:0) - (0 ? 0:0) + 1))))))) << (0 ? 0:0))) | (((gctUINT32)((gctUINT32)(Enable)&((gctUINT32) ((((1 ? 0:0) - (0 ? 0:0) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 0:0) - (0 ? 0:0) + 1))))))) << (0 ? 0:0)))));
-	    gcmkTRACE_ZONE(gcvLEVEL_INFO, gcvZONE_HARDWARE,
-        "call gckCOMMAND_Stall to check MMU available.\n");
-
-#if gcdMULTI_GPU
-    gcmkONERROR(gckCOMMAND_Stall(command, FromPower, gcvCORE_3D_ALL_MASK));
-#else
-    gcmkONERROR(gckCOMMAND_Stall(command, FromPower));
-
-#endif
-
-#if gcdPROCESS_ADDRESS_SPACE
-    command->currentMmu = gcvNULL;
-
-#endif
-
-    gcmkTRACE_ZONE(gcvLEVEL_INFO, gcvZONE_HARDWARE,
-        "The MMU is available.\n");
-
-    /* Return the status. */
-    gcmkFOOTER_NO();
-    return status;
-
-OnError:
-    if (commitEntered)
-    {
-        /* Release the command queue mutex. */
-        gcmkVERIFY_OK(gckCOMMAND_ExitCommit(Hardware->kernel->command,
-                                            FromPower));
-    }
-
-    /* Return the status. */
-    gcmkFOOTER();
-    return status;
-#else
-    return gcvSTATUS_NOT_SUPPORTED;
-
-#endif
 }
 
 #if gcdPROCESS_ADDRESS_SPACE
@@ -5045,7 +4841,6 @@ gckHARDWARE_Flush(
     gctBOOL flushTileStatus;
     gctUINT32_PTR logical = (gctUINT32_PTR) Logical;
     gceSTATUS status;
-    gctBOOL fcFlushStall;
     gctUINT32 reserveBytes
         /* Semaphore/Stall */
         = 4 * gcmSIZEOF(gctUINT32);
@@ -5059,11 +4854,8 @@ gckHARDWARE_Flush(
     /* Get current pipe. */
     pipe = Hardware->kernel->command->pipeSelect;
 
-    fcFlushStall
-	= ((((gctUINT32) (Hardware->identity.chipMinorFeatures1)) >> (0 ? 31:31) & ((gctUINT32) ((((1 ? 31:31) - (0 ? 31:31) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 31:31) - (0 ? 31:31) + 1)))))) == (0x1 & ((gctUINT32) ((((1 ? 31:31) - (0 ? 31:31) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 31:31) - (0 ? 31:31) + 1)))))));
-	
     /* Flush tile status cache. */
-    flushTileStatus = (Flush & gcvFLUSH_TILE_STATUS) && fcFlushStall;
+    flushTileStatus = Flush & gcvFLUSH_TILE_STATUS;
 
     /* Flush 3D color cache. */
     if ((Flush & gcvFLUSH_COLOR) && (pipe == 0x0))
@@ -6104,23 +5896,6 @@ gckHARDWARE_SetPowerManagementState(
             gcmkONERROR(Hardware->startIsr(Hardware->isrContext));
             isrStarted = gcvTRUE;
         }
-
-#if !gcdSECURITY
-        /* Set NEW MMU. */
-        if (Hardware->mmuVersion != 0 && configMmu)
-        {
-            gcmkONERROR(
-                    gckHARDWARE_SetMMUv2(
-                        Hardware,
-                        gcvTRUE,
-                        Hardware->kernel->mmu->mtlbLogical,
-                        gcvMMU_MODE_4K,
-                        (gctUINT8_PTR)Hardware->kernel->mmu->mtlbLogical + gcdMMU_MTLB_SIZE,
-                        gcvTRUE
-                        ));
-        }
-
-#endif
     }
 
 #if MRVL_CONFIG_ENABLE_GPUFREQ
@@ -7868,10 +7643,7 @@ gckHARDWARE_Reset(
     IN gckHARDWARE Hardware
     )
 {
-#if 1 
     gceSTATUS status;
-    gctUINT32 idle;
-    gctUINT32 timer = 0, delay = 1;
 
     gcmkHEADER_ARG("Hardware=0x%x", Hardware);
 
@@ -7897,54 +7669,6 @@ gckHARDWARE_Reset(
     /* Initialize hardware. */
     gcmkONERROR(gckHARDWARE_InitializeHardware(Hardware));
 
-    /* TODO: Move mmu setting to gckHARDWARE_InitializeHardware. */
-    if (Hardware->mmuVersion)
-    {
-        /* Execute prepared command sequence. */
-        gcmkONERROR(gckHARDWARE_Execute(
-            Hardware,
-            Hardware->functions[gcvHARDWARE_FUNCTION_MMU].address,
-            Hardware->functions[gcvHARDWARE_FUNCTION_MMU].bytes,
-            gcvFALSE
-            ));
-
-        /* Wait until MMU configure finishes. */
-        do
-        {
-            gckOS_Delay(Hardware->os, delay);
-
-            gcmkONERROR(gckOS_ReadRegisterEx(
-                Hardware->os,
-                Hardware->core,
-                0x00004,
-                &idle));
-
-            timer += delay;
-            delay *= 2;
-
-#if gcdGPU_TIMEOUT
-            if (timer >= Hardware->kernel->timeOut)
-            {
-                /* Even if hardware is not reset correctly, let software
-                ** continue to avoid software stuck. Software will timeout again
-                ** and try to recover GPU in next timeout.
-                */
-                gcmkONERROR(gcvSTATUS_DEVICE);
-            }
-
-#endif
-        }
-	while (!(((((gctUINT32)(idle)) >> (0 ? 0:0)) &((gctUINT32) ((((1 ? 0:0) - (0 ? 0:0) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 0:0) - (0 ? 0:0) + 1))))))));
-	
-        /* Enable MMU. */
-        gcmkONERROR(gckOS_WriteRegisterEx(
-            Hardware->os,
-            Hardware->core,
-            0x0018C,
-	((((gctUINT32)(0)) & ~(((gctUINT32)(((gctUINT32) ((((1 ? 0:0) - (0 ? 0:0) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 0:0) - (0 ? 0:0) + 1))))))) << (0 ? 0:0))) | (((gctUINT32)((gctUINT32)(gcvTRUE)&((gctUINT32) ((((1 ? 0:0) - (0 ? 0:0) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 0:0) - (0 ? 0:0) + 1))))))) << (0 ? 0:0)))
-	            ));
-    }
-
     /* Jump to address into which GPU should run if it doesn't stuck. */
     gcmkONERROR(gckHARDWARE_Execute(Hardware, Hardware->kernel->restoreAddress, 16, gcvFALSE));
 
@@ -7960,11 +7684,6 @@ OnError:
     /* Return the error. */
     gcmkFOOTER();
     return status;
-#else
-    /* Not supported. */
-    return gcvSTATUS_NOT_SUPPORTED;
-
-#endif
 }
 
 gceSTATUS
@@ -8235,7 +7954,8 @@ gckHARDWARE_IsFeatureAvailable(
 		&&      ((((gctUINT32) (Hardware->identity.chipFeatures)) >> (0 ? 2:2) & ((gctUINT32) ((((1 ? 2:2) - (0 ? 2:2) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 2:2) - (0 ? 2:2) + 1)))))) == (0x1 & ((gctUINT32) ((((1 ? 2:2) - (0 ? 2:2) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 2:2) - (0 ? 2:2) + 1)))))));
 	
         if (Hardware->identity.chipModel == gcv1000 &&
-            Hardware->identity.chipRevision == 0x5039)
+            (Hardware->identity.chipRevision == 0x5039 ||
+            Hardware->identity.chipRevision == 0x5040))
         {
             available = gcvFALSE;
         }
@@ -8492,10 +8212,13 @@ gckHARDWARE_DumpGPUState(
 
     kernel = Hardware->kernel;
 
-    gcmkPRINT_N(12, "GPU[%d](ChipModel=0x%x ChipRevision=0x%x):\n",
+    gcmkPRINT_N(24, "GPU[%d](ChipModel=0x%x ChipRevision=0x%x ChipPowerStates=%d, ClkRefCntEx: %d, IntClk: %d):\n",
                 core,
                 Hardware->identity.chipModel,
-                Hardware->identity.chipRevision);
+                Hardware->identity.chipRevision,
+                Hardware->chipPowerState,
+                Hardware->refExtClock,
+                Hardware->clk2D3D_Enable);
 
     pixelPipes = Hardware->identity.pixelPipes
                ? Hardware->identity.pixelPipes

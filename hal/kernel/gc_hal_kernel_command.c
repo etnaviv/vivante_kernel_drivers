@@ -597,6 +597,10 @@ gckCOMMAND_Construct(
             ));
     }
 
+#if gcdRECORD_COMMAND
+    gcmkONERROR(gckRECORDER_Construct(os, Kernel->hardware, &command->recorder));
+#endif
+
     /* No command queue in use yet. */
     command->index    = -1;
     command->logical  = gcvNULL;
@@ -762,6 +766,10 @@ gckCOMMAND_Destroy(
         gcmkVERIFY_OK(gcmkOS_SAFE_FREE(Command->os, gcmUINT64_TO_PTR(Command->hintArray)));
         Command->hintArrayAllocated = gcvFALSE;
     }
+#endif
+
+#if gcdRECORD_COMMAND
+    gckRECORDER_Destory(Command->os, Command->recorder);
 #endif
 
     /* Mark object as unknown. */
@@ -1862,6 +1870,16 @@ gckCOMMAND_Commit(
             entryBytes - 8
             );
 #endif
+
+#if gcdRECORD_COMMAND
+        gckRECORDER_Record(
+            Command->recorder,
+            gcvNULL,
+            0xFFFFFFFF,
+            entryLogical,
+            entryBytes - 8
+            );
+#endif
     }
 
     /* Same context. */
@@ -2214,6 +2232,20 @@ gckCOMMAND_Commit(
         commandBufferLogical,
         commandBufferSize
         ));
+#endif
+
+#if gcdRECORD_COMMAND
+    gckRECORDER_Record(
+        Command->recorder,
+        commandBufferLogical + offset,
+        commandBufferSize - offset - 8,
+        gcvNULL,
+        0xFFFFFFFF
+        );
+
+    gckRECORDER_AdvanceIndex(Command->recorder, Command->commitStamp);
+
+    Command->commitStamp++;
 #endif
 
 #if gcdSECURITY

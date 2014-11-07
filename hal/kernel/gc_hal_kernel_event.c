@@ -1038,6 +1038,9 @@ gckEVENT_AddList(
     gcsEVENT_QUEUE_PTR queue;
     gckVIRTUAL_COMMAND_BUFFER_PTR buffer;
     gckKERNEL kernel = Event->kernel;
+    gctBOOL mapped = gcvFALSE;
+    gctSIGNAL mapSignal = gcvNULL;
+    gctBOOL referenced = gcvFALSE;
 
     gcmkHEADER_ARG("Event=0x%x Interface=0x%x",
                    Event, Interface);
@@ -1070,6 +1073,35 @@ gckEVENT_AddList(
     {
         /* Invalid argument. */
         gcmkONERROR(gcvSTATUS_INVALID_ARGUMENT);
+    }
+
+    if (Interface->command == gcvHAL_SIGNAL)
+    {
+        /* Add the reference if event a signal */
+        status = gckOS_MapSignal(Event->os,
+                                    gcmUINT64_TO_PTR(Interface->u.Signal.signal),
+                                    gcmUINT64_TO_PTR(Interface->u.Signal.process),
+                                    &mapSignal);
+
+        if (status == gcvSTATUS_NOT_FOUND)
+        {
+            return gcvSTATUS_OK;
+        }
+
+        mapped = gcvTRUE;
+    }
+    else if (Interface->command == gcvHAL_SYNC_POINT)
+    {
+        /* Add the reference if event a sync point */
+        status = gckOS_ReferenceSyncPoint(Event->os,
+                                            gcmUINT64_TO_PTR(Interface->u.SyncPoint.syncPoint));
+
+        if (status == gcvSTATUS_NOT_FOUND)
+        {
+            return gcvSTATUS_OK;
+        }
+
+        referenced = gcvTRUE;
     }
 
     /* Allocate a free record. */
@@ -1204,6 +1236,20 @@ OnError:
     if (record != gcvNULL)
     {
         gcmkVERIFY_OK(gckEVENT_FreeRecord(Event, record));
+    }
+
+    if (referenced)
+    {
+        gcmkVERIFY_OK(
+            gckOS_DestroySyncPoint(Event->os,
+                                    gcmUINT64_TO_PTR(Interface->u.SyncPoint.syncPoint)));
+    }
+
+    if (mapped)
+    {
+        gcmkVERIFY_OK(
+            gckOS_UnmapSignal(Event->os,
+                                gcmUINT64_TO_PTR(Interface->u.Signal.signal)));
     }
 
     /* Return the status. */
@@ -2963,6 +3009,11 @@ gckEVENT_Notify(
                         gckOS_Signal(Event->os,
                                      signal,
                                      gcvTRUE));
+
+                    /* Dereference Signal, Destroy it if need */
+                    gcmkERR_BREAK(
+                        gckOS_UnmapSignal(Event->os,
+                                          signal));
                 }
                 else
                 {
@@ -3055,7 +3106,13 @@ gckEVENT_Notify(
                     gctSYNC_POINT syncPoint;
 
                     syncPoint = gcmUINT64_TO_PTR(record->info.u.SyncPoint.syncPoint);
-                    status = gckOS_SignalSyncPoint(Event->os, syncPoint);
+                    gcmkERR_BREAK(
+                        gckOS_SignalSyncPoint(Event->os,
+                                              syncPoint));
+                    /* Dereference sync point, Destroy it if need */
+                    gcmkERR_BREAK(
+                        gckOS_DestroySyncPoint(Event->os,
+                                               syncPoint));
                 }
                 break;
 #endif

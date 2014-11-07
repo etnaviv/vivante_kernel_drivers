@@ -64,6 +64,8 @@ struct gc_iface
 
     struct mutex pwr_mutex;
     spinlock_t pwr_spinlock;
+
+    struct gc_iface *axi_clk;
 };
 
 int gpu_clk_init(struct gc_iface *iface, void *ptr);

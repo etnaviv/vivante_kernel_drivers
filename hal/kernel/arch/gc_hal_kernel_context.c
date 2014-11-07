@@ -499,7 +499,7 @@ _SwitchPipe(
     IN gcePIPE_SELECT Pipe
     )
 {
-    gctUINT32 slots = 2;
+    gctUINT32 slots = 6;
 
     if (Context->buffer != gcvNULL)
     {
@@ -514,11 +514,29 @@ _SwitchPipe(
 		| ((((gctUINT32)(0)) & ~(((gctUINT32)(((gctUINT32) ((((1 ? 15:0) - (0 ? 15:0) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 15:0) - (0 ? 15:0) + 1))))))) << (0 ? 15:0))) | (((gctUINT32)((gctUINT32)(0x0E00)&((gctUINT32) ((((1 ? 15:0) - (0 ? 15:0) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 15:0) - (0 ? 15:0) + 1))))))) << (0 ? 15:0)))
 		| ((((gctUINT32)(0)) & ~(((gctUINT32)(((gctUINT32) ((((1 ? 25:16) - (0 ? 25:16) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 25:16) - (0 ? 25:16) + 1))))))) << (0 ? 25:16))) | (((gctUINT32)((gctUINT32)(1)&((gctUINT32) ((((1 ? 25:16) - (0 ? 25:16) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 25:16) - (0 ? 25:16) + 1))))))) << (0 ? 25:16)));
 	
-        *buffer
+        *buffer++
             = (Pipe == gcvPIPE_2D)
                 ? 0x1
                 : 0x0;
-    }
+
+        /* Semaphore from FE to PE. */
+        *buffer++
+	= ((((gctUINT32)(0)) & ~(((gctUINT32)(((gctUINT32) ((((1 ? 31:27) - (0 ? 31:27) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 31:27) - (0 ? 31:27) + 1))))))) << (0 ? 31:27))) | (((gctUINT32)(0x01 & ((gctUINT32) ((((1 ? 31:27) - (0 ? 31:27) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 31:27) - (0 ? 31:27) + 1))))))) << (0 ? 31:27)))
+		| ((((gctUINT32)(0)) & ~(((gctUINT32)(((gctUINT32) ((((1 ? 25:16) - (0 ? 25:16) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 25:16) - (0 ? 25:16) + 1))))))) << (0 ? 25:16))) | (((gctUINT32)((gctUINT32)(1)&((gctUINT32) ((((1 ? 25:16) - (0 ? 25:16) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 25:16) - (0 ? 25:16) + 1))))))) << (0 ? 25:16)))
+		| ((((gctUINT32)(0)) & ~(((gctUINT32)(((gctUINT32) ((((1 ? 15:0) - (0 ? 15:0) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 15:0) - (0 ? 15:0) + 1))))))) << (0 ? 15:0))) | (((gctUINT32)((gctUINT32)(0x0E02)&((gctUINT32) ((((1 ? 15:0) - (0 ? 15:0) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 15:0) - (0 ? 15:0) + 1))))))) << (0 ? 15:0)));
+	
+        *buffer++
+	= ((((gctUINT32)(0)) & ~(((gctUINT32)(((gctUINT32) ((((1 ? 4:0) - (0 ? 4:0) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 4:0) - (0 ? 4:0) + 1))))))) << (0 ? 4:0))) | (((gctUINT32)(0x01 & ((gctUINT32) ((((1 ? 4:0) - (0 ? 4:0) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 4:0) - (0 ? 4:0) + 1))))))) << (0 ? 4:0)))
+		| ((((gctUINT32)(0)) & ~(((gctUINT32)(((gctUINT32) ((((1 ? 12:8) - (0 ? 12:8) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 12:8) - (0 ? 12:8) + 1))))))) << (0 ? 12:8))) | (((gctUINT32)(0x07 & ((gctUINT32) ((((1 ? 12:8) - (0 ? 12:8) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 12:8) - (0 ? 12:8) + 1))))))) << (0 ? 12:8)));
+	
+        /* Stall from FE to PE. */
+        *buffer++
+	= ((((gctUINT32)(0)) & ~(((gctUINT32)(((gctUINT32) ((((1 ? 31:27) - (0 ? 31:27) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 31:27) - (0 ? 31:27) + 1))))))) << (0 ? 31:27))) | (((gctUINT32)(0x09 & ((gctUINT32) ((((1 ? 31:27) - (0 ? 31:27) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 31:27) - (0 ? 31:27) + 1))))))) << (0 ? 31:27)));
+	
+        *buffer++
+	= ((((gctUINT32)(0)) & ~(((gctUINT32)(((gctUINT32) ((((1 ? 4:0) - (0 ? 4:0) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 4:0) - (0 ? 4:0) + 1))))))) << (0 ? 4:0))) | (((gctUINT32)(0x01 & ((gctUINT32) ((((1 ? 4:0) - (0 ? 4:0) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 4:0) - (0 ? 4:0) + 1))))))) << (0 ? 4:0)))
+		| ((((gctUINT32)(0)) & ~(((gctUINT32)(((gctUINT32) ((((1 ? 12:8) - (0 ? 12:8) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 12:8) - (0 ? 12:8) + 1))))))) << (0 ? 12:8))) | (((gctUINT32)(0x07 & ((gctUINT32) ((((1 ? 12:8) - (0 ? 12:8) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 12:8) - (0 ? 12:8) + 1))))))) << (0 ? 12:8)));
+	    }
 
     Context->pipeSelectBytes = slots * gcmSIZEOF(gctUINT32);
 
@@ -693,7 +711,7 @@ _InitializeContextBuffer(
 #if gcdENABLE_3D
     gctBOOL halti0, halti1, halti2, halti3;
     gctUINT i;
-    gctUINT vertexUniforms, fragmentUniforms, unifiedConst, vsConstBase, psConstBase, constMax;
+    gctUINT vertexUniforms, fragmentUniforms, vsConstBase, psConstBase, constMax;
     gctBOOL unifiedUniform;
     gctUINT fe2vsCount;
 
@@ -725,16 +743,17 @@ _InitializeContextBuffer(
 		halti3 = (((((gctUINT32)(Context->hardware->identity.chipMinorFeatures5)) >> (0 ? 9:9)) &((gctUINT32) ((((1 ? 9:9) - (0 ? 9:9) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 9:9) - (0 ? 9:9) + 1)))))));
 	
     /* Query how many uniforms can support for non-unified uniform mode. */
-    gcmGET_UNIFORM_INFO_FOR_NONUNIFIEDMODE(Context->hardware->identity.chipModel,
-                            Context->hardware->identity.chipRevision,
-                            Context->hardware->identity.numConstants,
-                            unifiedConst,
-                            vsConstBase,
-                            psConstBase,
-                            vertexUniforms,
-                            fragmentUniforms,
-                            constMax);
+    gcmCONFIGUREUNIFORMS(Context->hardware->identity.chipModel,
+                         Context->hardware->identity.chipRevision,
+                         Context->hardware->identity.numConstants,
+                         unifiedUniform,
+                         vsConstBase,
+                         psConstBase,
+                         vertexUniforms,
+                         fragmentUniforms,
+                         constMax);
 
+#if !gcdENABLE_UNIFIED_CONSTANT
     if (Context->hardware->identity.numConstants > 256)
     {
         unifiedUniform = gcvTRUE;
@@ -743,6 +762,8 @@ _InitializeContextBuffer(
     {
         unifiedUniform = gcvFALSE;
     }
+
+#endif
 
     /* Store the 3D entry index. */
     Context->entryOffset3D = (gctUINT)index * gcmSIZEOF(gctUINT32);
@@ -1116,10 +1137,15 @@ _InitializeContextBuffer(
             index += _CLOSE_RANGE();
         }
     }
+#if gcdENABLE_UNIFIED_CONSTANT
+    else
 
+#endif
+    {
 	index += _State( Context, index,0x05000 >> 2,0x00000000,vertexUniforms * 4,gcvFALSE,gcvFALSE);
 		index += _State( Context, index,0x07000 >> 2,0x00000000,fragmentUniforms * 4,gcvFALSE,gcvFALSE);
-	
+	    }
+
     /* Store the index of the "XD" entry. */
     Context->entryOffsetXDFrom3D = (gctUINT)index * gcmSIZEOF(gctUINT32);
 

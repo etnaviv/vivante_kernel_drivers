@@ -145,20 +145,22 @@ module_param(physSize, ulong, 0644);
 static uint logFileSize = 0;
 module_param(logFileSize,uint, 0644);
 
-static uint recovery = 1;
+static uint recovery = 0;
 module_param(recovery, uint, 0644);
 MODULE_PARM_DESC(recovery, "Recover GPU from stuck (1: Enable, 0: Disable)");
 
 /* Middle needs about 40KB buffer, Maximal may need more than 200KB buffer. */
-static uint stuckDump = 1;
+static uint stuckDump = 3;
 module_param(stuckDump, uint, 0644);
 MODULE_PARM_DESC(stuckDump, "Level of stuck dump content (1: Minimal, 2: Middle, 3: Maximal)");
 
 static int showArgs = 1;
 module_param(showArgs, int, 0644);
 
+static int mmu = 1;
+module_param(mmu, int, 0644);
+
 static int gpu3DMinClock = 1;
-module_param(gpu3DMinClock, int, 0644);
 
 static int contiguousRequested = 0;
 
@@ -406,6 +408,7 @@ _UpdateModuleParam(
     stuckDump         = Param->stuckDump;
     showArgs          = Param->showArgs;
     contiguousRequested = Param->contiguousRequested;
+    gpu3DMinClock     = Param->gpu3DMinClock;
 }
 
 void
@@ -1006,6 +1009,7 @@ static int drv_init(void)
         .gpu3DMinClock      = gpu3DMinClock,
         .contiguousRequested = contiguousRequested,
         .platform           = &platform,
+        .mmu                = mmu,
     };
 
     gcmkHEADER();
@@ -1097,29 +1101,6 @@ static int drv_init(void)
        && (device->kernels[gcvCORE_MAJOR] != gcvNULL)
        && (device->kernels[gcvCORE_MAJOR]->hardware->mmuVersion != 0))
     {
-#if !gcdSECURITY
-        gctUINT32 gpuPhysical;
-        gcmkVERIFY_OK(gckOS_CPUPhysicalToGPUPhysical(device->os, baseAddress, &gpuPhysical));
-
-        status = gckMMU_Enable(device->kernels[gcvCORE_MAJOR]->mmu, gpuPhysical, physSize);
-        gcmkTRACE_ZONE(gcvLEVEL_INFO, gcvZONE_DRIVER,
-            "Enable new MMU: status=%d\n", status);
-
-#if gcdMULTI_GPU_AFFINITY
-        status = gckMMU_Enable(device->kernels[gcvCORE_OCL]->mmu, gpuPhysical, physSize);
-        gcmkTRACE_ZONE(gcvLEVEL_INFO, gcvZONE_DRIVER,
-            "Enable new MMU: status=%d\n", status);
-#endif
-
-        if ((device->kernels[gcvCORE_2D] != gcvNULL)
-            && (device->kernels[gcvCORE_2D]->hardware->mmuVersion != 0))
-        {
-            status = gckMMU_Enable(device->kernels[gcvCORE_2D]->mmu, gpuPhysical, physSize);
-            gcmkTRACE_ZONE(gcvLEVEL_INFO, gcvZONE_DRIVER,
-                "Enable new MMU for 2D: status=%d\n", status);
-        }
-#endif
-
         /* Reset the base address */
         device->baseAddress = 0;
     }
@@ -1264,7 +1245,7 @@ static int __enable_gpufreq(gckGALDEVICE device)
     gceSTATUS status;
     int i;
 
-    status = gckOS_QueryClkRate(device->os, gcvCORE_MAJOR, &clockRate);
+    status = gckOS_QueryClkRate(device->os, gcvCORE_MAJOR, gcvFALSE, &clockRate);
 
     if(gcmIS_SUCCESS(status) && clockRate != 0)
     {
@@ -1345,7 +1326,7 @@ static int __disable_gpufreq(gckGALDEVICE device)
         }
     }
 
-    status = gckOS_QueryClkRate(device->os, gcvCORE_MAJOR, &clockRate);
+    status = gckOS_QueryClkRate(device->os, gcvCORE_MAJOR, gcvFALSE, &clockRate);
 
     if(gcmIS_SUCCESS(status) && clockRate != 0)
     {
@@ -1624,6 +1605,7 @@ static int __devinit gpu_probe(struct platform_device *pdev)
         .recovery           = recovery,
         .stuckDump          = stuckDump,
         .showArgs           = showArgs,
+        .gpu3DMinClock      = gpu3DMinClock,
     };
 
     gcmkHEADER();
@@ -1776,7 +1758,11 @@ static int gpu_suspend(struct platform_device *dev, pm_message_t state)
             else
 #endif
             {
-                status = gckHARDWARE_SetPowerManagementState(device->kernels[i]->hardware, gcvPOWER_OFF_HINT);
+                status = gckHARDWARE_SetPowerManagementState(device->kernels[i]->hardware,
+                                                             (has_feat_power_domain()
+                                                                 ? gcvPOWER_OFF_HINT
+                                                                 : gcvPOWER_OFF)
+                                                                 );
             }
 
             if (gcmIS_ERROR(status))
@@ -1822,7 +1808,11 @@ static int gpu_resume(struct platform_device *dev)
             else
 #endif
             {
-                status = gckHARDWARE_SetPowerManagementState(device->kernels[i]->hardware, gcvPOWER_ON_HINT);
+                status = gckHARDWARE_SetPowerManagementState(device->kernels[i]->hardware,
+                                                             (has_feat_power_domain()
+                                                                 ? gcvPOWER_ON_HINT
+                                                                 : gcvPOWER_ON)
+                                                                 );
             }
 
             if (gcmIS_ERROR(status))

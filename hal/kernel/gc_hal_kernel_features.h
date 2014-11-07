@@ -3,6 +3,11 @@
 
 #include <linux/cputype.h>
 
+static inline int has_feat_axi_freq_change(void)
+{
+    return cpu_is_pxa1908() || cpu_is_pxa1U88();
+}
+
 /* refer to MRVL_CONFIG_MMP_PM_DOMAIN(used in mrvl4x)*/
 static inline int has_feat_power_domain(void)
 {

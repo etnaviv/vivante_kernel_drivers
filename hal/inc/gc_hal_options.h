@@ -961,11 +961,7 @@
         Android only for now.
 */
 #ifndef gcdENABLE_RENDER_INTO_WINDOW
-#if (defined USE_LOCAL_GRALLOC) && USE_LOCAL_GRALLOC
 #   define gcdENABLE_RENDER_INTO_WINDOW         1
-#else
-#   define gcdENABLE_RENDER_INTO_WINDOW         1
-#endif
 #endif
 
 /*
@@ -976,10 +972,10 @@
         This will dynamically check if color compression is available.
 */
 #ifndef gcdENABLE_RENDER_INTO_WINDOW_WITH_FC
-#if (defined USE_LOCAL_GRALLOC) && USE_LOCAL_GRALLOC
+#if defined(USE_HWC_GCU) && USE_HWC_GCU
 #   define gcdENABLE_RENDER_INTO_WINDOW_WITH_FC 0
 #else
-#   define gcdENABLE_RENDER_INTO_WINDOW_WITH_FC 0
+#   define gcdENABLE_RENDER_INTO_WINDOW_WITH_FC 1
 #endif
 #endif
 
@@ -1013,11 +1009,7 @@
              'acquireFenceFd' for framebuffer target for DC
  */
 #ifndef gcdANDROID_NATIVE_FENCE_SYNC
-#if (defined USE_LOCAL_GRALLOC) && USE_LOCAL_GRALLOC
 #   define gcdANDROID_NATIVE_FENCE_SYNC         3
-#else
-#   define gcdANDROID_NATIVE_FENCE_SYNC         3
-#endif
 #endif
 
 /*
@@ -1038,11 +1030,16 @@
         "android native fence sync" is enabled.
  */
 #ifndef gcdANDROID_IMPLICIT_NATIVE_BUFFER_SYNC
-#if (defined USE_LOCAL_GRALLOC) && USE_LOCAL_GRALLOC
-#   define gcdANDROID_IMPLICIT_NATIVE_BUFFER_SYNC   0
-#else
 #   define gcdANDROID_IMPLICIT_NATIVE_BUFFER_SYNC   0
 #endif
+
+/*
+ * Implicit native buffer sync is not needed when ANDROID_native_fence_sync
+ * is available.
+ */
+#if gcdANDROID_NATIVE_FENCE_SYNC
+#   undef  gcdANDROID_IMPLICIT_NATIVE_BUFFER_SYNC
+#   define gcdANDROID_IMPLICIT_NATIVE_BUFFER_SYNC   0
 #endif
 
 /*
@@ -1270,6 +1267,26 @@
 
 #ifndef gcdENABLE_VG
 #   define gcdENABLE_VG                         0
+#endif
+
+#ifndef gcdgcdGC355_MEM_PRINT
+#   define gcdgcdGC355_MEM_PRINT                      0
+#else
+#if (!((gcdENABLE_3D == 0) && (gcdENABLE_2D == 0) && (gcdENABLE_VG == 1)))
+#      undef gcdgcdGC355_MEM_PRINT
+#      define gcdgcdGC355_MEM_PRINT                   0
+#   endif
+#endif
+
+#ifndef gcdENABLE_UNIFIED_CONSTANT
+#   define gcdENABLE_UNIFIED_CONSTANT           1
+#endif
+
+/*
+    gcdRECORD_COMMAND
+*/
+#ifndef gcdRECORD_COMMAND
+#   define gcdRECORD_COMMAND                    0
 #endif
 
 #endif /* __gc_hal_options_h_ */

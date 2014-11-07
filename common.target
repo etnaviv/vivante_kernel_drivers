@@ -80,9 +80,9 @@ endif
 ifeq ($(PROGRAM), 1)
 $(TARGET_OUTPUT): $(PREREQUISITES) $(OBJECTS)
 ifeq ($(SRC_CXX),)
-	$(CC) $(PFLAGS) $(OBJECTS) $(LIBS) -o $(TARGET_OUTPUT)
+	$(CC) $(PFLAGS) $(OBJECTS) -o $(TARGET_OUTPUT) $(LIBS)
 else
-	$(CXX) $(PFLAGS) $(OBJECTS) $(LIBS) -o $(TARGET_OUTPUT)
+	$(CXX) $(PFLAGS) $(OBJECTS) -o $(TARGET_OUTPUT) $(LIBS)
 endif
 
 ifneq ($(USE_ARMCC), 1)
@@ -96,10 +96,10 @@ ifeq ($(DYNAMIC), 1)
 ifeq ($(USE_ARMCC), 1)
 LFLAGS += --shared -L--soname=,$(TARGET_NAME)
 else
-LFLAGS += -Wall -shared -Wl,-soname,$(TARGET_NAME)
+LFLAGS += -Wall -shared -Wl,-soname,$(TARGET_NAME) -Wl,-z,defs
 endif
 $(TARGET_OUTPUT): $(PREREQUISITES) $(OBJECTS)
-	$(CC) $(LFLAGS) $(OBJECTS) $(LIBS) -o $(TARGET_OUTPUT)
+	$(CC) $(LFLAGS) $(OBJECTS) -o $(TARGET_OUTPUT) $(LIBS)
 endif
 
 ifeq ($(STATIC), 1)

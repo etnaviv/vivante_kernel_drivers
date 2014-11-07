@@ -16,6 +16,7 @@
 #
 
 ifeq ($(VIVANTE_ANDROID_MK_DEF),)
+VIVANTE_ANDROID_MK_DEF := 1
 
 ################################################################################
 # Options.
@@ -188,6 +189,14 @@ else
 CFLAGS        += -DgcdPAGED_MEMORY_CACHEABLE=0
 endif
 
+# Disable implicit native buffer sync on kitkat and later.
+# Kitkat and later will use KHR_fence_sync or ANDROID_native_fence_sync
+# to keep buffers sync-ed.
+# Please see frameworks/native/libs/gui/SyncFeatures.cpp
+ifeq ($(shell expr $(PLATFORM_SDK_VERSION) ">=" 19),1)
+CFLAGS 		  += -DgcdANDROID_IMPLICIT_NATIVE_BUFFER_SYNC=0
+endif
+
 # G2D Compress feature support
 ifeq ($(strip $(MRVL_DISABLE_G2D_COMPRESS)), true)
 CFLAGS        += -DENABLE_COMPRESS=0
@@ -195,10 +204,13 @@ else
 CFLAGS        += -DENABLE_COMPRESS=1
 endif
 
+################################################################################
+# Platform specific configs.
+
 USE_LOCAL_GRALLOC ?= 0
 ifeq ($(USE_LOCAL_GRALLOC), 1)
     CFLAGS += -DUSE_LOCAL_GRALLOC=1
 endif
-VIVANTE_ANDROID_MK_DEF := 1
+
 endif
 

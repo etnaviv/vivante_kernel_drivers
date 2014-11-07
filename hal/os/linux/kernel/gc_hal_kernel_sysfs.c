@@ -223,46 +223,69 @@ static ssize_t show_register_stats (struct device *dev,
                     struct device_attribute *attr,
                     char * buf)
 {
-    return sprintf(buf, "options:\n"
-                        " default 0x0            idle & clock & current-cmd\n"
-                        " offset  0xaddr         register's offset\n");
+    gckKERNEL kernel = gcvNULL;
+    gctUINT32 clockControl, clockRate, idle, len = 0, i = 0;
+    gctBOOL isIdle;
+
+    for(; i< gcdMAX_GPU_COUNT; i++)
+    {
+        kernel = galDevice->kernels[i];
+
+        if(kernel != gcvNULL)
+        {
+            if(i == gcvCORE_MAJOR)
+            {
+                gcmkVERIFY_OK(gckOS_DirectReadRegister(galDevice->os, gcvCORE_MAJOR, 0x00000, &clockControl));
+                len += sprintf(buf+len, "clock register: [0x%02x]\n", clockControl);
+                if(has_feat_3d_shader_clock())
+                {
+                    gctUINT32 shClkRate;
+
+                    gcmkVERIFY_OK(gckOS_QueryClkRate(galDevice->os, gcvCORE_SH, gcvFALSE, &shClkRate));
+                    len += sprintf(buf+len, "shader clock rate: [%d] MHz\n", (gctUINT32)shClkRate/1000/1000);
+                }
+            }
+
+            len += sprintf(buf+len, "[%s]\n", _core_desc[i]);
+            gcmkVERIFY_OK(gckHARDWARE_QueryIdleEx(kernel->hardware, &idle, &idle, &isIdle));
+            gcmkVERIFY_OK(gckOS_QueryClkRate(galDevice->os, i, gcvFALSE, &clockRate));
+
+            len += sprintf(buf+len, "   idle register: [0x%02x][%s]\n",
+                       idle, (gcvTRUE == isIdle)?"idle":"busy");
+            len += sprintf(buf+len, "   clock rate: [%d] MHz\n", (gctUINT32)clockRate/1000/1000);
+         }
+
+    }
+
+    return len +=sprintf(buf+len, "options:\n"
+                                  "   echo Core 0xAddr > register_stats\n"
+                                  "   e.g: echo 0 0x664 > register_stats\n"
+                                  "     # 0 means core 0\n"
+                                  "     # 0x664 means register address\n");
 }
 
 static ssize_t store_register_stats (struct device *dev,
                     struct device_attribute *attr,
                     const char *buf, size_t count)
 {
-    gctCHAR type[10];
-    gctUINT32 offset, clkState = 0;
-    gctINT t = ~0;
+    gctUINT32 core, offset, value;
 
-    SYSFS_VERIFY_INPUT(sscanf(buf, "%s 0x%x", type, &offset), 2);
+    SYSFS_VERIFY_INPUT(sscanf(buf, "%d 0x%x", &core, &offset), 2);
+    SYSFS_VERIFY_INPUT_RANGE(core, 0, gcdMAX_GPU_COUNT - 1);
     SYSFS_VERIFY_INPUT_RANGE(offset, 0, 0x30001);
 
-    if (strstr(type, "default"))
+    if(gcvCORE_SH == core)
     {
-        t = 0;
-    }
-    else if (strstr(type, "offset"))
-    {
-        t = 1;
-    }
-    else
-    {
-        gcmkPRINT("Invalid Command~");
-        return count;
+        core = gcvCORE_MAJOR;
     }
 
-    gcmkVERIFY_OK(gckOS_QueryRegisterStats( galDevice->os, t, offset, &clkState));
+    gcmkVERIFY_OK(gckOS_ReadRegisterEx(galDevice->os, core, offset, &value));
 
-    if (t && clkState)
-    {
-        gcmkPRINT("Some Registers can't be read because of %s disabled",
-            (clkState&0x11)?("External/Internal clk"):((clkState&0x01)?"External":"Internal"));
-    }
+    gcmkPRINT("Core(%d) Register[0x%x] value is 0x%08x\n", core, offset, value);
 
     return count;
 }
+
 
 static ssize_t show_clk_off_when_idle (struct device *dev,
                     struct device_attribute *attr,
@@ -375,7 +398,7 @@ static ssize_t show_clk_rate (struct device *dev,
     {
         if(galDevice->kernels[i] != gcvNULL)
         {
-            status = gckOS_QueryClkRate(galDevice->os, i, &clockRate);
+            status = gckOS_QueryClkRate(galDevice->os, i, gcvFALSE, &clockRate);
             if(status == gcvSTATUS_OK)
             {
                 len += sprintf(buf+len, "[%s] current frequency: %u MHZ\n", _core_desc[i], clockRate/1000);
@@ -390,7 +413,7 @@ static ssize_t show_clk_rate (struct device *dev,
             {
                 unsigned int shClkRate = 0;
 
-                status = gckOS_QueryClkRate(galDevice->os, gcvCORE_SH, &shClkRate);
+                status = gckOS_QueryClkRate(galDevice->os, gcvCORE_SH, gcvFALSE, &shClkRate);
                 if(status == gcvSTATUS_OK)
                 {
                     len += sprintf(buf+len, "[%s] current frequency: %u MHZ\n", "SH", shClkRate/1000);
@@ -403,6 +426,23 @@ static ssize_t show_clk_rate (struct device *dev,
         }
     }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0)
+    if(has_feat_axi_freq_change())
+    {
+        unsigned int axiClkRate = 0;
+
+        status = gckOS_QueryClkRate(galDevice->os, gcvCORE_MAJOR, gcvTRUE, &axiClkRate);
+        if(status == gcvSTATUS_OK)
+        {
+            len += sprintf(buf+len, "[%s] current frequency: %u MHZ\n", "AXI", axiClkRate/1000);
+        }
+        else
+        {
+            len += sprintf(buf+len, "[%s] failed to get clock rate\n", "AXI");
+        }
+    }
+#endif
+
     return len;
 }
 
@@ -412,6 +452,7 @@ static ssize_t store_clk_rate (struct device *dev,
 {
     gceSTATUS status;
     int core, frequency, i, gpu_count;
+    int axi=0;
 
     for (i = 0, gpu_count = 0; i < gcdMAX_GPU_COUNT; i++)
         if (galDevice->kernels[i] != gcvNULL)
@@ -420,8 +461,17 @@ static ssize_t store_clk_rate (struct device *dev,
     if (has_feat_3d_shader_clock())
         gpu_count++;
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0)
     /* read input and verify */
-    SYSFS_VERIFY_INPUT(sscanf(buf, "%d,%d", &core, &frequency), 2);
+    if(has_feat_axi_freq_change())
+    {
+        SYSFS_VERIFY_INPUT(sscanf(buf, "%d,%d,%d", &core, &frequency, &axi), 3);
+    }
+    else
+#endif
+    {
+        SYSFS_VERIFY_INPUT(sscanf(buf, "%d,%d", &core, &frequency), 2);
+    }
     SYSFS_VERIFY_INPUT_RANGE(core, 0, (gpu_count-1));
     SYSFS_VERIFY_INPUT_RANGE(frequency, 156, 624);
 
@@ -435,7 +485,7 @@ static ssize_t store_clk_rate (struct device *dev,
         gcmkVERIFY_OK(gckOS_AcquireClockMutex(galDevice->os, realcore));
     }
 
-    status = gckOS_SetClkRate(galDevice->os, core, frequency*1000);
+    status = gckOS_SetClkRate(galDevice->os, core, axi, frequency*1000);
 
     if(gcmIS_ERROR(status))
     {

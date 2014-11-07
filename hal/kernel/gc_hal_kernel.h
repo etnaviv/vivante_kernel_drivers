@@ -231,6 +231,15 @@ typedef struct _gcsDATABASE
 }
 gcsDATABASE;
 
+typedef struct _gcsRECORDER * gckRECORDER;
+
+typedef struct _gcsFDPRIVATE *          gcsFDPRIVATE_PTR;
+typedef struct _gcsFDPRIVATE
+{
+    gctINT                              (* release) (gcsFDPRIVATE_PTR Private);
+}
+gcsFDPRIVATE;
+
 /* Create a process database that will contain all its allocations. */
 gceSTATUS
 gckKERNEL_CreateProcessDB(
@@ -855,6 +864,10 @@ struct _gckEVENT
 #if gcdINTERRUPT_STATISTIC
     gctPOINTER                  interruptCount;
 #endif
+
+#if gcdRECORD_COMMAND
+    gckRECORDER                 recorder;
+#endif
 };
 
 /* Free all events belonging to a process. */
@@ -1153,6 +1166,13 @@ gckVIDMEM_HANDLE_Lookup(
     OUT gckVIDMEM_NODE * Node
     );
 
+gceSTATUS
+gckVIDMEM_NODE_GetFd(
+    IN gckKERNEL Kernel,
+    IN gctUINT32 Handle,
+    OUT gctINT * Fd
+    );
+
 #if gcdPROCESS_ADDRESS_SPACE
 gceSTATUS
 gckEVENT_DestroyMmu(
@@ -1237,6 +1257,13 @@ gckOS_DestroyUserVirtualMapping(
     IN gctPHYS_ADDR Physical,
     IN gctSIZE_T Bytes,
     IN gctPOINTER Logical
+    );
+
+gceSTATUS
+gckOS_GetFd(
+    IN gctSTRING Name,
+    IN gcsFDPRIVATE_PTR Private,
+    OUT gctINT *Fd
     );
 
 gceSTATUS
@@ -1502,6 +1529,49 @@ gckENTRYQUEUE_Dequeue(
     status = status; \
 })
 #endif
+
+/******************************************************************************\
+****************************** gckRECORDER Object ******************************
+\******************************************************************************/
+gceSTATUS
+gckRECORDER_Construct(
+    IN gckOS Os,
+    IN gckHARDWARE Hardware,
+    OUT gckRECORDER * Recorder
+    );
+
+gceSTATUS
+gckRECORDER_Destory(
+    IN gckOS Os,
+    IN gckRECORDER Recorder
+    );
+
+void
+gckRECORDER_AdvanceIndex(
+    gckRECORDER Recorder,
+    gctUINT64   CommitStamp
+    );
+
+void
+gckRECORDER_Record(
+    gckRECORDER Recorder,
+    gctUINT8_PTR CommandBuffer,
+    gctUINT32 CommandBytes,
+    gctUINT8_PTR ContextBuffer,
+    gctUINT32 ContextBytes
+    );
+
+void
+gckRECORDER_Dump(
+    gckRECORDER Recorder
+    );
+
+gceSTATUS
+gckRECORDER_UpdateMirror(
+    gckRECORDER Recorder,
+    gctUINT32 State,
+    gctUINT32 Data
+    );
 
 #ifdef __cplusplus
 }

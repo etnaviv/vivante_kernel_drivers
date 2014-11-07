@@ -73,20 +73,18 @@ static struct ondemand_tuners ondemand_tuners_ins[] = {
         .down_differential = DEF_FREQUENCY_DOWN_DIFFERENTIAL,
     },
 
-#if GPUFREQ_HAVE_MULTI_CORES
     [1] = {
         .up_threshold = DEF_FREQUENCY_UP_THRESHOLD,
         .sampling_down_factor = DEF_SAMPLING_DOWN_FACTOR,
         .down_differential = DEF_FREQUENCY_DOWN_DIFFERENTIAL,
     },
 
-#   if MRVL_CONFIG_SHADER_CLK_CONTROL
+#if MRVL_CONFIG_SHADER_CLK_CONTROL
     [2] = {
         .up_threshold = DEF_FREQUENCY_UP_THRESHOLD,
         .sampling_down_factor = DEF_SAMPLING_DOWN_FACTOR,
         .down_differential = DEF_FREQUENCY_DOWN_DIFFERENTIAL,
     },
-#   endif
 #endif
 };
 

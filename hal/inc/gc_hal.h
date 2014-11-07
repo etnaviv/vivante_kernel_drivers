@@ -398,10 +398,15 @@ gckOS_MapPagesEx(
     IN gceCORE Core,
     IN gctPHYS_ADDR Physical,
     IN gctSIZE_T PageCount,
-#if gcdPROCESS_ADDRESS_SPACE
     IN gctUINT32 Address,
-#endif
     IN gctPOINTER PageTable
+    );
+
+gceSTATUS
+gckOS_UnmapPages(
+    IN gckOS Os,
+    IN gctSIZE_T PageCount,
+    IN gctUINT32 Address
     );
 
 /* Unlock pages. */
@@ -1495,6 +1500,13 @@ gckOS_GPUPhysicalToCPUPhysical(
     IN gctUINT32_PTR CPUPhysical
     );
 
+gceSTATUS
+gckOS_QueryOption(
+    IN gckOS Os,
+    IN gctCONST_STRING Option,
+    OUT gctUINT32 * Value
+    );
+
 /******************************************************************************\
 ** Debug Support
 */
@@ -1616,6 +1628,7 @@ gceSTATUS
 gckOS_GetIfaceMapping(
     IN gckOS Os,
     IN gceCORE Core,
+    IN gctBOOL Axi,
     OUT gctPOINTER *Iface
     );
 
@@ -1681,17 +1694,10 @@ gckOS_PowerOffWhenIdle(
     );
 
 gceSTATUS
-gckOS_QueryRegisterStats(
-    IN gckOS Os,
-    IN gctBOOL Type,
-    IN gctUINT32 Offset,
-    OUT gctUINT32* ClkState
-    );
-
-gceSTATUS
 gckOS_QueryClkRate(
     IN gckOS Os,
     IN gceCORE Core,
+    IN gctBOOL Axi,
     OUT gctUINT32_PTR Rate
     );
 
@@ -1699,6 +1705,7 @@ gceSTATUS
 gckOS_SetClkRate(
     IN gckOS Os,
     IN gceCORE Core,
+    IN gctBOOL Axi,
     IN gctUINT32 Rate
     );
 #if MRVL_CONFIG_ENABLE_GPUFREQ
@@ -3036,14 +3043,6 @@ gckMMU_Construct(
 gceSTATUS
 gckMMU_Destroy(
     IN gckMMU Mmu
-    );
-
-/* Enable the MMU. */
-gceSTATUS
-gckMMU_Enable(
-    IN gckMMU Mmu,
-    IN gctUINT32 PhysBaseAddr,
-    IN gctUINT32 PhysSize
     );
 
 /* Allocate pages inside the MMU. */
