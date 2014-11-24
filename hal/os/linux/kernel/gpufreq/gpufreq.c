@@ -17,13 +17,11 @@
 #include <linux/spinlock.h>
 #include <linux/device.h>
 #include <linux/slab.h>
-#include <linux/cpufreq.h>
 
 unsigned int log_level = GPUFREQ_LOG_DEFAULT;
 /* variables declaration  */
 static LIST_HEAD(gpufreq_governor_list);
 static DEFINE_MUTEX(gpufreq_governor_mutex);
-static DEFINE_MUTEX(gpufreq_freq_constraint_mutex);
 static DEFINE_SPINLOCK(gpufreq_driver_lock);
 static struct gpufreq_driver *gpufreq_driver;
 
@@ -32,7 +30,6 @@ static unsigned int inited_gpufreq_trans_notifier_list[GPUFREQ_GPU_NUMS] = {0};
 static struct srcu_notifier_head gpufreq_trans_notifier_list[GPUFREQ_GPU_NUMS];
 
 static gckOS gpu_os = NULL;
-unsigned int freq_constraint = 0;
 
 static const char* const _gpu_type[] = {
     [gcvCORE_MAJOR]     = "3D",
@@ -815,116 +812,6 @@ static struct notifier_block pulseEater_gpufreq_notifier_block = {
     .notifier_call = pulseEater_notifier_call,
 };
 
-static int gpufreq_update_policy(unsigned int gpu)
-{
-    struct gpufreq_policy *policy = gpufreq_policy_get(gpu);
-    struct gpufreq_policy new_policy;
-    int ret = 0;
-
-    if (!policy)
-    {
-        ret = -ENODEV;
-        goto out;
-    }
-
-    if (unlikely(lock_policy_rwsem_write(gpu, 0)))
-    {
-        ret = -EINVAL;
-        goto out_policy;
-    }
-
-    memcpy(&new_policy, policy, sizeof(struct gpufreq_policy));
-    new_policy.min      = policy->real_policy.min_freq;
-    new_policy.max      = policy->real_policy.max_freq;
-    new_policy.governor = policy->real_policy.governor;
-
-    ret = _gpufreq_set_policy(policy, &new_policy);
-
-    unlock_policy_rwsem_write(gpu);
-
-out_policy:
-    gpufreq_policy_put(policy);
-out:
-    return ret;
-}
-
-static unsigned int handle_constraint(unsigned int gpu)
-{
-    unsigned int ret = 0, ret_freq = 0;
-    struct gpufreq_policy *policy = gpufreq_policy_get(gpu);
-
-    if (!policy)
-    {
-        ret = -ENODEV;
-        goto out;
-    }
-
-    if (!gpufreq_driver->get)
-        goto out_policy;
-
-    ret_freq = gpufreq_driver->get(gpu);
-
-    /* frequency is less than constraint, MUST raise it immediately. */
-    if (ret_freq && freq_constraint
-        && ret_freq < freq_constraint)
-    {
-        gpufreq_update_policy(gpu);
-    }
-
-out_policy:
-    gpufreq_policy_put(policy);
-out:
-    return ret;
-}
-
-static int gpufreq_cpu_notifier_trans(struct notifier_block * nb,
-                            unsigned long val, void * data)
-{
-    struct cpufreq_freqs *freq = data;
-
-        return 0;
-
-    debug_log(GPUFREQ_LOG_INFO, "[%lu] [%8u] -> [%8u]\n",
-               val, freq->old, freq->new);
-
-    /*
-        Special workaround for Nevo C0/D0 silicon bug:
-        AXI bus frequency must be less than or equal
-        to 1/2 GPU clock rate.
-    */
-    switch(val) {
-    case CPUFREQ_PRECHANGE:
-        mutex_lock(&gpufreq_freq_constraint_mutex);
-        /* core: 156/312MHZ, axi: 78MHZ */
-        if(freq->new <= 312000)
-            freq_constraint = HZ_TO_KHZ(156000000);
-
-        /* core: 624MHZ, axi: 104MHZ */
-        else if(freq->new <= 624000)
-            freq_constraint = HZ_TO_KHZ(208000000);
-
-        /* core: 806/1014/1196/1404/1508MHZ, axi: 156MHZ */
-        else
-            freq_constraint = HZ_TO_KHZ(312000000);
-
-        debug_log(GPUFREQ_LOG_INFO, "constraint updated to %u\n", freq_constraint);
-        mutex_unlock(&gpufreq_freq_constraint_mutex);
-
-        handle_constraint(0);
-
-        break;
-
-    case CPUFREQ_POSTCHANGE:
-        break;
-    }
-
-    return 0;
-}
-
-static struct notifier_block gpufreq_cpu_trans_nb = {
-    .notifier_call = gpufreq_cpu_notifier_trans,
-};
-
 /***************************************************
  *  gpufreq notifier interfaces
  ***************************************************/
@@ -1021,7 +908,6 @@ int gpufreq_register_driver(gckOS Os, struct gpufreq_driver *driver_data)
 #if MRVL_CONFIG_DEVFREQ_GOV_THROUGHPUT
     unsigned int gpu;
 #endif
-    int ret = 0;
 
     /* check gpufreq_driver callback functions */
     if (!driver_data || !driver_data->init || !driver_data->verify ||
@@ -1055,10 +941,6 @@ int gpufreq_register_driver(gckOS Os, struct gpufreq_driver *driver_data)
 #endif
 
     gckOS_GPUFreqNotifierRegister(Os, &gpufreq_notifier_block);
-    ret = cpufreq_register_notifier(&gpufreq_cpu_trans_nb,
-                                    CPUFREQ_TRANSITION_NOTIFIER);
-    if(ret)
-        debug_log(GPUFREQ_LOG_WARNING, "failed to register notifier to cpufreq\n");
     debug_log(GPUFREQ_LOG_INFO, "driver %s up and running\n", driver_data->name);
 
     return 0;
@@ -1070,7 +952,6 @@ int gpufreq_register_driver(gckOS Os, struct gpufreq_driver *driver_data)
 int gpufreq_unregister_driver(gckOS Os, struct gpufreq_driver *driver)
 {
     unsigned long flags;
-    int ret = 0;
 
     if (!driver || (driver != gpufreq_driver))
         return -EINVAL;
@@ -1085,10 +966,6 @@ int gpufreq_unregister_driver(gckOS Os, struct gpufreq_driver *driver)
     }
 
     gckOS_GPUFreqNotifierUnregister(Os, &gpufreq_notifier_block);
-    ret = cpufreq_unregister_notifier(&gpufreq_cpu_trans_nb,
-                                      CPUFREQ_TRANSITION_NOTIFIER);
-    if(ret)
-        debug_log(GPUFREQ_LOG_WARNING, "failed to unregister notifier from cpufreq\n");
 
     spin_lock_irqsave(&gpufreq_driver_lock, flags);
     gpufreq_driver = NULL;
@@ -1491,19 +1368,17 @@ int gpufreq_frequency_table_target(struct gpufreq_policy *policy,
     {
         unsigned int freq = table[i].frequency;
 
-        mutex_lock(&gpufreq_freq_constraint_mutex);
-        if(freq < freq_constraint)
-        {
-            mutex_unlock(&gpufreq_freq_constraint_mutex);
-            continue;
-        }
-        mutex_unlock(&gpufreq_freq_constraint_mutex);
-
         if(freq == GPUFREQ_ENTRY_INVALID)
             continue;
 
+        /*
+            remove this quick path if qos is enabled with such case:
+                qos_max < policy->min
+        */
+#if 0
         if(freq < policy->min || freq > policy->max)
             continue;
+#endif
 
         switch(relation)
         {

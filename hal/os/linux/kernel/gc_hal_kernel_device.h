@@ -160,6 +160,9 @@ typedef struct _gcsHAL_PRIVATE_DATA
     gctPOINTER          contiguousLogical;
     /* The process opening the device may not be the same as the one that closes it. */
     gctUINT32           pidOpen;
+#if MRVL_CONFIG_PROC
+    struct proc_dir_entry * gc_procmem_file;
+#endif
 }
 gcsHAL_PRIVATE_DATA, * gcsHAL_PRIVATE_DATA_PTR;
 

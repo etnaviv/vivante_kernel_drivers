@@ -12,7 +12,7 @@
 
 
 #include "gc_hal_kernel_precomp.h"
-
+#include "gc_hal_kernel_context.h"
 #define _GC_OBJ_ZONE    gcvZONE_KERNEL
 
 /*******************************************************************************
@@ -802,8 +802,12 @@ static inline gctBOOL _UseSmallSizePool(IN gctSIZE_T Bytes)
     gctSIZE_T wasteBytes = (PAGE_SIZE - (Bytes & (PAGE_SIZE - 1))) % PAGE_SIZE;
 
     /* For those memory size less than 512k, let them go to reserve memory to allocate. remove for shrink*/
-    /* WasteBytes /Bytes < 0.1. */
-    if((wasteBytes * 10) < Bytes)
+    if(Bytes < (512<<10))
+    {
+        return gcvTRUE;
+    }
+    /* WasteBytes /PAGE_SIZE < 0.1. */
+    if((wasteBytes * 10) < PAGE_SIZE)
     {
         return gcvFALSE;
     }
@@ -915,7 +919,7 @@ AllocateMemory:
             gcmkONERROR(
                 gckVIDMEM_ConstructVirtual(Kernel, Flag | gcvALLOC_FLAG_NON_CONTIGUOUS, Bytes, &node));
 
-            bytes = node->Virtual.bytes;
+            bytes = bytesAligned;
             node->Virtual.type = Type;
             gcmkVERIFY_OK(gckOS_UpdateVidMemUsage(Kernel->os, gcvTRUE, bytesAligned, node->Virtual.type));
 
@@ -926,30 +930,38 @@ AllocateMemory:
         else
         if (pool == gcvPOOL_CONTIGUOUS)
         {
-#if gcdCONTIGUOUS_SIZE_LIMIT
-            if (Bytes > gcdCONTIGUOUS_SIZE_LIMIT && contiguous == gcvFALSE)
+            if(has_feat_ulc())
             {
+                /* Just skip contiguous memory allocation for ULC */
                 status = gcvSTATUS_OUT_OF_MEMORY;
             }
             else
+            {
+#if gcdCONTIGUOUS_SIZE_LIMIT
+                if (Bytes > gcdCONTIGUOUS_SIZE_LIMIT && contiguous == gcvFALSE)
+                {
+                    status = gcvSTATUS_OUT_OF_MEMORY;
+                }
+                else
 #endif
-            {
-                /* Create a gcuVIDMEM_NODE from contiguous memory. */
-                status = gckVIDMEM_ConstructVirtual(
-                            Kernel,
-                            Flag | gcvALLOC_FLAG_CONTIGUOUS,
-                            Bytes,
-                            &node);
-            }
+                {
+                    /* Create a gcuVIDMEM_NODE from contiguous memory. */
+                    status = gckVIDMEM_ConstructVirtual(
+                                Kernel,
+                                Flag | gcvALLOC_FLAG_CONTIGUOUS,
+                                Bytes,
+                                &node);
+                }
 
-            if (gcmIS_SUCCESS(status))
-            {
-                bytes = node->Virtual.bytes;
-                node->Virtual.type = Type;
-                gcmkVERIFY_OK(gckOS_UpdateVidMemUsage(Kernel->os, gcvTRUE, bytesAligned, node->Virtual.type));
+                if (gcmIS_SUCCESS(status))
+                {
+                    bytes = bytesAligned;
+                    node->Virtual.type = Type;
+                    gcmkVERIFY_OK(gckOS_UpdateVidMemUsage(Kernel->os, gcvTRUE, bytesAligned, node->Virtual.type));
 
-                /* Memory allocated. */
-                break;
+                    /* Memory allocated. */
+                    break;
+                }
             }
         }
 
@@ -1567,6 +1579,7 @@ gckKERNEL_Dispatch(
     gceSTATUS status = gcvSTATUS_OK;
     gctPHYS_ADDR physical = gcvNULL;
     gctSIZE_T bytes;
+    gctSIZE_T pageSize;
     gctPOINTER logical = gcvNULL;
     gctPOINTER info = gcvNULL;
 #if (gcdENABLE_3D || gcdENABLE_2D)
@@ -2534,13 +2547,14 @@ gckKERNEL_Dispatch(
                                      Interface->u.Attach.logicals,
                                      &Interface->u.Attach.bytes));
         }
-
+        gcmkONERROR(gckOS_GetPageSize(Kernel->os,&pageSize));
+        bytes = gcmALIGN(context->totalSize,pageSize)*gcdCONTEXT_BUFFER_COUNT;
         gcmkVERIFY_OK(
             gckKERNEL_AddProcessDB(Kernel,
                                    processID, gcvDB_CONTEXT,
                                    gcmINT2PTR(Interface->u.Attach.context),
                                    gcvNULL,
-                                   0));
+                                   bytes));
         break;
 #endif
 
@@ -3882,6 +3896,7 @@ gckKERNEL_AllocateVirtualCommandBuffer(
     gckVIRTUAL_COMMAND_BUFFER_PTR buffer = gcvNULL;
     gckMMU mmu;
     gctUINT32 flag = gcvALLOC_FLAG_NON_CONTIGUOUS;
+    gctSIZE_T pageSize = 0, bytesAligned = 0;
 
     gcmkHEADER_ARG("Os=0x%X InUserSpace=%d *Bytes=%lu",
                    os, InUserSpace, gcmOPT_VALUE(Bytes));
@@ -3893,6 +3908,9 @@ gckKERNEL_AllocateVirtualCommandBuffer(
     gcmkVERIFY_ARGUMENT(Physical != gcvNULL);
     gcmkVERIFY_ARGUMENT(Logical != gcvNULL);
 
+    gcmkONERROR(gckOS_GetPageSize(Kernel->os,&pageSize));
+    bytesAligned = gcmALIGN(bytes, pageSize);
+
     gcmkONERROR(gckOS_Allocate(os,
                                sizeof(gckVIRTUAL_COMMAND_BUFFER),
                                (gctPOINTER)&buffer));
@@ -3900,13 +3918,11 @@ gckKERNEL_AllocateVirtualCommandBuffer(
     gcmkONERROR(gckOS_ZeroMemory(buffer, sizeof(gckVIRTUAL_COMMAND_BUFFER)));
 
     buffer->bytes = bytes;
-
     gcmkONERROR(gckOS_AllocatePagedMemoryEx(os,
                                             flag,
                                             bytes,
                                             gcvNULL,
                                             &buffer->physical));
-
     if (InUserSpace)
     {
         gcmkONERROR(gckOS_CreateUserVirtualMapping(os,
@@ -3978,6 +3994,8 @@ gckKERNEL_AllocateVirtualCommandBuffer(
         Kernel->virtualBufferTail = buffer;
     }
 
+    gcmkVERIFY_OK(gckOS_UpdateVidMemUsage(Kernel->os, gcvTRUE, bytesAligned, gcvSURF_TYPE_UNKNOWN));
+
     gcmkVERIFY_OK(gckOS_ReleaseMutex(os, Kernel->virtualBufferLock));
 
     gcmkFOOTER_NO();
@@ -4036,12 +4054,16 @@ gckKERNEL_DestroyVirtualCommandBuffer(
     gckOS os;
     gckKERNEL kernel;
     gckVIRTUAL_COMMAND_BUFFER_PTR buffer = (gckVIRTUAL_COMMAND_BUFFER_PTR)Physical;
+    gctSIZE_T pageSize = 0, bytesAligned = 0;
 
     gcmkHEADER();
     gcmkVERIFY_ARGUMENT(buffer != gcvNULL);
 
     kernel = buffer->kernel;
     os = kernel->os;
+
+    gcmkVERIFY_OK(gckOS_GetPageSize(Kernel->os,&pageSize));
+    bytesAligned = gcmALIGN(Bytes, pageSize);
 
     if (!buffer->userLogical)
     {
@@ -4059,6 +4081,7 @@ gckKERNEL_DestroyVirtualCommandBuffer(
     gcmkVERIFY_OK(gckOS_UnmapPages(os, buffer->pageCount, buffer->gpuAddress));
 
     gcmkVERIFY_OK(gckOS_FreePagedMemory(os, buffer->physical, Bytes));
+    gcmkVERIFY_OK(gckOS_UpdateVidMemUsage(Kernel->os, gcvFALSE, bytesAligned, gcvSURF_TYPE_UNKNOWN));
 
     gcmkVERIFY_OK(gckOS_AcquireMutex(os, kernel->virtualBufferLock, gcvINFINITE));
 

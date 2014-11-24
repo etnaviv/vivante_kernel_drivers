@@ -32,7 +32,7 @@
 extern "C" {
 #endif
 
-#define DEF_MIN_SAMPLING_RATE  (100)
+#define DEF_MIN_SAMPLING_RATE  (50)
 
 /******************************************************************************\
 ******************************* Alignment Macros *******************************
@@ -247,6 +247,34 @@ gceCORE;
 #   define gcmVERIFY_OBJECT(obj, t)     _gcmVERIFY_OBJECT(gcm, obj, t)
 #   define gcmkVERIFY_OBJECT(obj, t)    _gcmVERIFY_OBJECT(gcmk, obj, t)
 
+/******************************************************************************/
+/*VERIFY_OBJECT if error detected and no return*/
+/******************************************************************************/
+#define _gcmVERIFY_OBJECT_NO_RETURN(prefix, obj, t) \
+    do \
+    { \
+        if ((obj) == gcvNULL) \
+        { \
+            prefix##TRACE(gcvLEVEL_ERROR, \
+                          #prefix "VERIFY_OBJECT failed: NULL   expected: %c%c%c%c", \
+                          gcmCC_PRINT(t)); \
+            prefix##ASSERT((obj) != gcvNULL); \
+            prefix##ONERROR(gcvSTATUS_INVALID_OBJECT); \
+        } \
+        else if (((gcsOBJECT*) (obj))->type != t) \
+        { \
+            prefix##TRACE(gcvLEVEL_ERROR, \
+                          #prefix "VERIFY_OBJECT failed: %c%c%c%c   expected: %c%c%c%c", \
+                          gcmCC_PRINT(((gcsOBJECT*) (obj))->type), \
+                          gcmCC_PRINT(t)); \
+            prefix##ASSERT(((gcsOBJECT*)(obj))->type == t); \
+            prefix##ONERROR(gcvSTATUS_INVALID_OBJECT); \
+        } \
+    } \
+    while(gcvFALSE)
+
+#   define gcmVERIFY_OBJECT_NO_RETURN(obj, t)     _gcmVERIFY_OBJECT_NO_RETURN(gcm, obj, t)
+#   define gcmkVERIFY_OBJECT_NO_RETURN(obj, t)    _gcmVERIFY_OBJECT_NO_RETURN(gcmk, obj, t)
 
 /******************************************************************************/
 /*VERIFY_OBJECT if special return expected*/
@@ -1808,6 +1836,14 @@ gceSTATUS
 gckOS_AcquireSemaphore(
     IN gckOS Os,
     IN gctPOINTER Semaphore
+    );
+
+/* Acquire a semaphore within a given time period */
+gceSTATUS
+gckOS_AcquireSemaphoreTimeout(
+    IN gckOS Os,
+    IN gctPOINTER Semaphore,
+    IN gctUINT32 Wait
     );
 
 /* Try to acquire a semahore. */

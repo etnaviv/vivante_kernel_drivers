@@ -12,6 +12,8 @@
 
 
 #include "gc_hal_kernel_precomp.h"
+#include "gc_hal_kernel_linux.h"
+
 #ifdef LINUX
 #include <linux/kernel.h>
 #else
@@ -706,6 +708,9 @@ gckKERNEL_CreateProcessDB(
     database->virtualCommandBuffer.bytes = 0;
     database->virtualCommandBuffer.maxBytes = 0;
     database->virtualCommandBuffer.totalBytes = 0;
+    database->virtualContextBuffer.bytes = 0;
+    database->virtualContextBuffer.maxBytes = 0;
+    database->virtualContextBuffer.totalBytes = 0;
 
     for (i = 0; i < gcmCOUNTOF(database->list); i++)
     {
@@ -979,6 +984,10 @@ gckKERNEL_AddProcessDB(
         count = &database->virtualCommandBuffer;
         break;
 
+    case gcvDB_CONTEXT:
+        count = &database->virtualContextBuffer;
+        break;
+
     default:
         count = gcvNULL;
         break;
@@ -1126,6 +1135,10 @@ gckKERNEL_RemoveProcessDB(
 
     case gcvDB_COMMAND_BUFFER:
         database->virtualCommandBuffer.bytes -= bytes;
+        break;
+
+    case gcvDB_CONTEXT:
+        database->virtualContextBuffer.bytes -= bytes;
         break;
 
     default:
@@ -1751,6 +1764,71 @@ gckKERNEL_ShowVidMemUsageDetails(
     }
 
     /* Success. */
+    gcmkFOOTER_NO();
+    return gcvSTATUS_OK;
+}
+
+gceSTATUS
+gckKERNEL_ShowProcessVidMemUsage(
+    struct seq_file *m,
+    IN gckKERNEL Kernel,
+    IN gctUINT32 ProcessID
+    )
+{
+    gcsDATABASE_PTR database;
+    gctUINT32 slot;
+    gctUINT32 i;
+    gctINT32 size[gcvSURF_NUM_TYPES] = {0};
+    gctINT32 sum  = 0;
+
+    gcmkHEADER_ARG("Kernel=0x%x", Kernel);
+    /* Verify the arguments. */
+    gcmkVERIFY_OBJECT(Kernel, gcvOBJ_KERNEL);
+
+    if(!Kernel->dbCreated)
+    {
+        gcmkFOOTER_NO();
+        return gcvSTATUS_OK;
+    }
+
+    gcmkVERIFY_OK(gckOS_AcquireMutex(Kernel->os, Kernel->db->dbMutex, gcvINFINITE));
+
+    slot = ProcessID % gcmCOUNTOF(Kernel->db->db);
+    database = Kernel->db->db[slot];
+    while(database && database->processID != ProcessID)
+    {
+        database = database->next;
+    }
+
+    seq_printf(m, "GC memory usage details for pid %d\n",database->processID);
+
+    if(database && database->processID == ProcessID)
+    {
+        for(i = 0 ; i < gcvSURF_NUM_TYPES; i++)
+        {
+            size[i] = database->vidMemType[i].bytes;
+            if(size[i] >= 1024)
+            {
+                seq_printf(m, "  - %-16s %d KB \n",
+                               _gc_VIDMEM_type_name[i], size[i]/1024);
+            }
+            else if(size[i] > 0)
+            {
+                seq_printf(m, "  - %-16s %d B \n",
+                               _gc_VIDMEM_type_name[i], size[i]);
+            }
+        }
+        sum = database->vidMem.bytes + database->contiguous.bytes
+             +database->nonPaged.bytes + database->virtualCommandBuffer.bytes
+             +database->virtualContextBuffer.bytes;
+
+        seq_printf(m, "  - %-16s %d KB \n",
+                      "Others", (gctINT)(sum-database->vidMem.bytes)/1024);
+        seq_printf(m, "  - %-16s %d KB \n",
+                      "Sum",sum/1024);
+
+    }
+    gcmkVERIFY_OK(gckOS_ReleaseMutex(Kernel->os, Kernel->db->dbMutex));
     gcmkFOOTER_NO();
     return gcvSTATUS_OK;
 }

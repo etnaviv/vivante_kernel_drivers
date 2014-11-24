@@ -18,7 +18,7 @@
 
 #define DEF_SAMPLING_DOWN_FACTOR            (1)
 #define MAX_SAMPLING_DOWN_FACTOR            (100000)
-#define DEF_MIN_SAMPLING_RATE               (100)
+#define DEF_MIN_SAMPLING_RATE               (50)
 #define DEF_FREQUENCY_UP_THRESHOLD          (90)
 #define DEF_FREQUENCY_DOWN_DIFFERENTIAL     (10)
 #define MIN_FREQUENCY_UP_THRESHOLD          (11)
@@ -52,7 +52,6 @@ struct gpufreq_ondemand_info_s {
     int                     ref;
 };
 
-extern unsigned int freq_constraint;
 static struct gpufreq_ondemand_info_s ondemand_info_s[GPUFREQ_GPU_NUMS];
 static unsigned int min_sampling_rate;
 static unsigned int desired_high_freq;
@@ -254,10 +253,6 @@ static void gov_policy_gpubench(struct gpufreq_ondemand_info_s *ondemand_info)
     if(cur_policy->cur == cur_policy->min)
         return;
 
-    /* FIXME: workaround "axi <= gcu/2" silicion issus. */
-    if(freq_constraint && cur_policy->cur == freq_constraint)
-        return;
-
     /*
      * The optimal frequency is the frequency that is the lowest that
      * can support the current GPU usage without triggering the up
@@ -273,10 +268,6 @@ static void gov_policy_gpubench(struct gpufreq_ondemand_info_s *ondemand_info)
 
         if(new_freq < cur_policy->min)
             new_freq = cur_policy->min;
-
-        /* FIXME: workaround "axi <= gcu/2" silicion issus. */
-        if(freq_constraint && new_freq < freq_constraint)
-            new_freq = freq_constraint;
 
         ondemand_info->ref = 0;
         __gpufreq_driver_target(cur_policy, new_freq, GPUFREQ_RELATION_L);
@@ -446,13 +437,6 @@ static int gpufreq_governor_ondemand(struct gpufreq_policy *policy,
         {
             __gpufreq_driver_target(this_gov_info->cur_policy,
                 policy->min, GPUFREQ_RELATION_L);
-        }
-        else if(freq_constraint && this_gov_info->cur_policy->cur < freq_constraint)
-        {
-            debug_log(GPUFREQ_LOG_INFO, "cur:%u, constraint %u\n",
-            this_gov_info->cur_policy->cur, freq_constraint);
-            __gpufreq_driver_target(this_gov_info->cur_policy,
-                freq_constraint, GPUFREQ_RELATION_L);
         }
         mutex_unlock(&this_gov_info->timer_mutex);
         break;

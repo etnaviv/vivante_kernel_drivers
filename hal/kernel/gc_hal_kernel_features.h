@@ -90,4 +90,9 @@ static inline int has_feat_freq_change_indirect(void)
     return cpu_is_pxa1928();
 }
 
+static inline int has_feat_ulc(void)
+{
+    return cpu_is_pxa1908();
+}
+
 #endif

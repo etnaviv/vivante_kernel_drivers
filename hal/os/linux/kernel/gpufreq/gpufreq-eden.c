@@ -430,10 +430,26 @@ static int eden_gpufreq_target (struct gpufreq_policy *policy, unsigned int targ
     struct gpufreq_frequency_table *freq_table = gpu_eden[gpu].freq_table;
 
 #if MRVL_CONFIG_ENABLE_QOS_SUPPORT
-    target_freq = max((unsigned int)pm_qos_request(gc_qos[gpu].pm_qos_class_min),
-                     target_freq);
-    target_freq = min((unsigned int)pm_qos_request(gc_qos[gpu].pm_qos_class_max),
-                     target_freq);
+    {
+        unsigned int qos_min = (unsigned int)pm_qos_request(gc_qos[gpu].pm_qos_class_min);
+        unsigned int qos_max = (unsigned int)pm_qos_request(gc_qos[gpu].pm_qos_class_max);
+
+        debug_log(GPUFREQ_LOG_DEBUG, "[%d] target %d | policy [%d, %d] | Qos [%d, %d]\n",
+                gpu, target_freq, policy->min, policy->max, qos_min, qos_max);
+
+        /*
+          - policy max and qos max has higher priority than policy min and qos min
+          - policy min and qos min has no priority order, so are policy max and qos max
+        */
+        target_freq = max(policy->min, target_freq);
+        target_freq = max(qos_min, target_freq);
+        target_freq = min(policy->max, target_freq);
+        target_freq = min(qos_max, target_freq);
+
+        /* seek a target_freq <= min_value_of(policy->max, qos_max) */
+        if((target_freq == policy->max) || (target_freq == qos_max))
+            relation = GPUFREQ_RELATION_H;
+    }
 #endif
 
     /* find a nearest freq in freq_table for target_freq */

@@ -832,8 +832,9 @@ gckCOMMAND_EnterCommit(
                                     gcvBROADCAST_GPU_COMMIT));
 
         /* Acquire the power management semaphore. */
-        gcmkONERROR(gckOS_AcquireSemaphore(Command->os,
-                                           Command->powerSemaphore));
+        gcmkONERROR(gckOS_AcquireSemaphoreTimeout(Command->os,
+                                                  Command->powerSemaphore,
+                                                  (gcdGPU_ADVANCETIMER_STALL*50)));
         semaAcquired = gcvTRUE;
     }
 
@@ -1341,7 +1342,7 @@ gckCOMMAND_Commit(
             gcmSIZEOF(struct _gcoCMDBUF)
             ));
 
-        gcmkVERIFY_OBJECT(commandBufferObject, gcvOBJ_COMMANDBUFFER);
+        gcmkVERIFY_OBJECT_NO_RETURN(commandBufferObject, gcvOBJ_COMMANDBUFFER);
     }
     else
     {
@@ -1354,7 +1355,7 @@ gckCOMMAND_Commit(
 
         commandBufferObject = pointer;
 
-        gcmkVERIFY_OBJECT(commandBufferObject, gcvOBJ_COMMANDBUFFER);
+        gcmkVERIFY_OBJECT_NO_RETURN(commandBufferObject, gcvOBJ_COMMANDBUFFER);
         commandBufferMapped = gcvTRUE;
     }
 

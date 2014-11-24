@@ -58,6 +58,29 @@ struct gpufreq_pxa988 {
 struct gpufreq_pxa988 gh[GPUFREQ_GPU_NUMS];
 static gckOS gpu_os;
 
+#if GPUFREQ_REQUEST_DDR_QOS
+static DDR_QOS_NODE gpufreq_ddr_constraint[GPUFREQ_GPU_NUMS] = {
+        {
+            .qos_node = {
+                .name = "gpu3d_ddr_min",
+            }
+        },
+        {
+            .qos_node = {
+                .name = "gpu2d_ddr_min",
+            }
+        },
+        {
+            .qos_node = {
+                .name = "gpush_ddr_min",
+            }
+        },
+
+    };
+
+static int gpu_high_threshold = 312000;
+#endif
+
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0)
 static struct gpufreq_axi ga[GPUFREQ_GPU_NUMS-1];
 static bool _AllowSetAxiFreq(unsigned int old_freq, int gpu, unsigned int new_freq)
@@ -340,6 +363,10 @@ static int pxa988_gpufreq_init (gctPOINTER freqTable, struct gpufreq_policy *pol
     }
 #endif
 
+#if GPUFREQ_REQUEST_DDR_QOS
+    gpufreq_ddr_constraint_init(&gpufreq_ddr_constraint[gpu]);
+#endif
+
     debug_log(GPUFREQ_LOG_INFO, "GPUFreq for gpu %u initialized, cur_freq %u\n", gpu, policy->cur);
 
     return 0;
@@ -348,6 +375,11 @@ static int pxa988_gpufreq_init (gctPOINTER freqTable, struct gpufreq_policy *pol
 static int pxa988_gpufreq_exit (struct gpufreq_policy *policy)
 {
     unsigned gpu = policy->gpu;
+
+#if GPUFREQ_REQUEST_DDR_QOS
+    gpufreq_ddr_constraint_deinit(&gpufreq_ddr_constraint[gpu]);
+#endif
+
     pxa988_gpufreq_unregister_qos(gpu);
 
     return 0;
@@ -369,10 +401,26 @@ static int pxa988_gpufreq_target (struct gpufreq_policy *policy, unsigned int ta
     struct gpufreq_frequency_table *freq_table = gh[gpu].freq_table;
 
 #if MRVL_CONFIG_ENABLE_QOS_SUPPORT
-    target_freq = max((unsigned int)pm_qos_request(gc_qos[gpu].pm_qos_class_min),
-                     target_freq);
-    target_freq = min((unsigned int)pm_qos_request(gc_qos[gpu].pm_qos_class_max),
-                     target_freq);
+    {
+        unsigned int qos_min = (unsigned int)pm_qos_request(gc_qos[gpu].pm_qos_class_min);
+        unsigned int qos_max = (unsigned int)pm_qos_request(gc_qos[gpu].pm_qos_class_max);
+
+        pr_debug("[%d] target %d | policy [%d, %d] | Qos [%d, %d]\n",
+                gpu, target_freq, policy->min, policy->max, qos_min, qos_max);
+
+        /*
+          - policy max and qos max has higher priority than policy min and qos min
+          - policy min and qos min has no priority order, so are policy max and qos max
+        */
+        target_freq = max(policy->min, target_freq);
+        target_freq = max(qos_min, target_freq);
+        target_freq = min(policy->max, target_freq);
+        target_freq = min(qos_max, target_freq);
+
+        /* seek a target_freq <= min_value_of(policy->max, qos_max) */
+        if((target_freq == policy->max) || (target_freq == qos_max))
+            relation = GPUFREQ_RELATION_H;
+    }
 #endif
 
     /* find a nearest freq in freq_table for target_freq */
@@ -415,6 +463,13 @@ static int pxa988_gpufreq_target (struct gpufreq_policy *policy, unsigned int ta
     if(has_feat_axi_freq_change() &&
         (gpu != gcvCORE_SH))
         policy->axi_cur = freqs.axi_new_freq;
+#endif
+
+#if GPUFREQ_REQUEST_DDR_QOS
+    gpufreq_ddr_constraint_update(&gpufreq_ddr_constraint[gpu],
+                                   freqs.new_freq,
+                                   freqs.old_freq,
+                                   gpu_high_threshold);
 #endif
 
     gpufreq_notify_transition(&freqs, GPUFREQ_POSTCHANGE);

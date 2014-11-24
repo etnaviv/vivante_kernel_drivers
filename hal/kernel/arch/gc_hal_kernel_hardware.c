@@ -5607,6 +5607,18 @@ gckHARDWARE_SetPowerManagementState(
                 break;
             }
         }
+
+        if (!(flag & gcvPOWER_FLAG_CLOCK_ON))
+        {
+            /* Start monitor timer if Power on GPU. */
+            if (Hardware->kernel->monitorTimer)
+            {
+                Hardware->kernel->monitorTimerStop = gcvFALSE;
+                gckOS_StartTimer(os,
+                                 Hardware->kernel->monitorTimer,
+                                 Hardware->kernel->timeOut);
+            }
+        }
     }
 
     /* Get time until powered on. */
@@ -5851,6 +5863,17 @@ gckHARDWARE_SetPowerManagementState(
         powerStateValue = (flag & gcvPOWER_FLAG_POWER_OFF) ? gcvFALSE
                                                            : gcvTRUE;
         gcmkONERROR(gckOS_AtomSet(os, Hardware->powerState, powerStateValue));
+
+        if (!powerStateValue)
+        {
+            /* Cacel monitor timer if Power off GPU. */
+            if (Hardware->kernel->monitorTimer)
+            {
+                gckOS_StopTimer(os, Hardware->kernel->monitorTimer);
+                Hardware->kernel->monitorTimerStop = gcvTRUE;
+                Hardware->kernel->monitoring = gcvFALSE;
+            }
+        }
 
         /* Turn off the GPU power. */
 #if MRVL_ENABLE_GC_POWER_CLOCK

@@ -18,7 +18,7 @@
 
 #define DEF_SAMPLING_DOWN_FACTOR            (1)
 #define MAX_SAMPLING_DOWN_FACTOR            (100000)
-#define DEF_MIN_SAMPLING_RATE               (100)
+#define DEF_MIN_SAMPLING_RATE               (50)
 #define DEF_FREQUENCY_UP_THRESHOLD          (85)
 #define DEF_FREQUENCY_DOWN_THRESHOLD        (60)
 #define DEF_FREQUENCY_FREQ_STEP             (10)
@@ -51,7 +51,6 @@ struct gpufreq_conservative_info_s {
     unsigned int            enabled;
 };
 
-extern unsigned int freq_constraint;
 static struct gpufreq_conservative_info_s conservative_info_s[GPUFREQ_GPU_NUMS];
 static unsigned int min_sampling_rate;
 
@@ -475,13 +474,6 @@ static int gpufreq_governor_conservative(struct gpufreq_policy *policy,
         {
             __gpufreq_driver_target(this_gov_info->cur_policy,
                 policy->min, GPUFREQ_RELATION_L);
-        }
-        else if(freq_constraint && this_gov_info->cur_policy->cur < freq_constraint)
-        {
-            debug_log(GPUFREQ_LOG_INFO, "cur:%u, constraint %u\n",
-            this_gov_info->cur_policy->cur, freq_constraint);
-            __gpufreq_driver_target(this_gov_info->cur_policy,
-                freq_constraint, GPUFREQ_RELATION_L);
         }
         mutex_unlock(&this_gov_info->timer_mutex);
         break;

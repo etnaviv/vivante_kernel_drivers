@@ -204,6 +204,7 @@ typedef struct _gcsDATABASE
     gcsDATABASE_COUNTERS                mapUserMemory;
     gcsDATABASE_COUNTERS                mapMemory;
     gcsDATABASE_COUNTERS                virtualCommandBuffer;
+    gcsDATABASE_COUNTERS                virtualContextBuffer;
 
     gcsDATABASE_COUNTERS                vidMemType[gcvSURF_NUM_TYPES];
     /* Counter for each video memory pool. */
@@ -331,6 +332,15 @@ gckKERNEL_DumpVidMemUsage(
     IN gckKERNEL Kernel,
     IN gctINT32 ProcessID
     );
+
+#if MRVL_CONFIG_PROC
+gceSTATUS
+gckKERNEL_ShowProcessVidMemUsage(
+    struct seq_file *m,
+    IN gckKERNEL Kernel,
+    IN gctUINT32 ProcessID
+    );
+#endif
 
 gceSTATUS
 gckKERNEL_FindDatabase(

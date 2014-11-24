@@ -116,6 +116,7 @@ typedef enum _gcePATCH_ID
     gcvPATCH_GLBMGUI,
     gcvPATCH_GFXBENCH,
     gcvPATCH_ANTUTU,        /* Antutu 3.x */
+    gcvPATCH_ANTUTU2D,    /* Antutu 5.1 2d test */
     gcvPATCH_ANTUTU4X,      /* Antutu 4.x */
     gcvPATCH_QUADRANT,
     gcvPATCH_GPUBENCH,
@@ -4796,7 +4797,7 @@ gckOS_DebugStatus2Name(
        { \
            if (!(arg)) \
            { \
-               prefix##TRACE(gcvLEVEL_ERROR, #prefix "VERIFY_ARGUMENT failed:"); \
+               prefix##TRACE(gcvLEVEL_ERROR, #prefix "VERIFY_ARGUMENT failed: @ %s(%d)", __FUNCTION__, __LINE__); \
                prefix##ASSERT(arg); \
                prefix##FOOTER_ARG("status=%d", gcvSTATUS_INVALID_ARGUMENT); \
                return gcvSTATUS_INVALID_ARGUMENT; \

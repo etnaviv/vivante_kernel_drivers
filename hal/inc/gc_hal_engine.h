@@ -1230,7 +1230,7 @@ gco3D_DrawInstancedPrimitives(
     IN gctSIZE_T PrimitiveCount,
     IN gctSIZE_T VertexCount,
     IN gctBOOL SpilitDraw,
-    IN gctSIZE_T SpliltCount,
+    IN gctSIZE_T SpilitCount,
     IN gcePRIMITIVE SpilitType,
     IN gctSIZE_T InstanceCount
     );
@@ -1261,7 +1261,10 @@ gco3D_DrawIndexedPrimitives(
     IN gcePRIMITIVE Type,
     IN gctSIZE_T BaseVertex,
     IN gctSIZE_T StartIndex,
-    IN gctSIZE_T PrimitiveCount
+    IN gctSIZE_T PrimitiveCount,
+    IN gctBOOL SpilitDraw,
+    IN gctSIZE_T SpilitCount,
+    IN gcePRIMITIVE SpilitType
     );
 
 /* Draw a number of indexed primitives using offsets. */
@@ -2310,13 +2313,16 @@ gcoVERTEXARRAY_Bind_Ex(
     IN gctUINT32 EnableBits,
     IN gcsVERTEXARRAY_PTR VertexArray,
     IN gctUINT First,
-    IN gctSIZE_T Count,
+    IN gctSIZE_T * Count,
     IN gctBOOL DrawArraysInstanced,
     IN gctSIZE_T InstanceCount,
     IN gceINDEX_TYPE IndexType,
     IN gcoINDEX IndexObject,
     IN gctPOINTER IndexMemory,
     IN OUT gcePRIMITIVE * PrimitiveType,
+    IN OUT gctBOOL * SpilitDraw,
+    IN OUT gctSIZE_T * SpilitCount,
+    IN OUT gcePRIMITIVE * SpilitPrimitiveType,
 #if gcdUSE_WCLIP_PATCH
     IN OUT gctUINT * PrimitiveCount,
     IN OUT gctFLOAT * wLimitRms,
@@ -2359,11 +2365,14 @@ gcoVERTEXARRAY_Bind(
     IN gctUINT32 EnableBits,
     IN gcsVERTEXARRAY_PTR VertexArray,
     IN gctUINT First,
-    IN gctSIZE_T Count,
+    IN gctSIZE_T * Count,
     IN gceINDEX_TYPE IndexType,
     IN gcoINDEX IndexObject,
     IN gctPOINTER IndexMemory,
     IN OUT gcePRIMITIVE * PrimitiveType,
+    IN OUT gctBOOL * SpilitDraw,
+    IN OUT gctSIZE_T * SpilitCount,
+    IN OUT gcePRIMITIVE * SpilitPrimitiveType,
 #if gcdUSE_WCLIP_PATCH
     IN OUT gctUINT * PrimitiveCount,
     IN OUT gctFLOAT * wLimitRms,

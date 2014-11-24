@@ -178,15 +178,16 @@ module_param(pmemSize, long, 0644);
 /******************************************************************************\
 * Create a data entry system using proc for GC
 \******************************************************************************/
-#define MRVL_CONFIG_PROC    1
 
 #if MRVL_CONFIG_PROC
 #include <linux/proc_fs.h>
 
 #define GC_PROC_FILE        "driver/gc"
+#define GC_PROC_MEMFOLD     "driver/gcmem"
 #define _GC_OBJ_ZONE        gcvZONE_DRIVER
 
 static struct proc_dir_entry * gc_proc_file;
+static struct proc_dir_entry * gc_procmem_folder;
 
 /* cat /proc/driver/gc will print gc related msg */
 static ssize_t gc_proc_read(
@@ -205,6 +206,38 @@ static ssize_t gc_proc_write(
 static struct file_operations gc_proc_ops = {
     .read = gc_proc_read,
     .write = gc_proc_write,
+};
+
+static int proc_show(struct seq_file *m, void *arg)
+{
+    gctUINT32 i;
+    gctUINT32_PTR pid = (gctUINT32_PTR)m->private;
+    for(i = 0; i < gcdMAX_GPU_COUNT; i++)
+    {
+        if(galDevice->kernels[i])
+        {
+            gckKERNEL_ShowProcessVidMemUsage(m, galDevice->kernels[i], *pid);
+        }
+    }
+    return gcvSTATUS_OK;
+}
+
+static int gc_procmem_open(struct inode *inode, struct file *file)
+{
+    gctSIZE_T PageSize;
+
+    gctUINT32_PTR data = PDE_DATA(file_inode(file));
+    gckOS_GetPageSize(galDevice->os,&PageSize);
+
+    file->private_data = gcvNULL;
+    return single_open_size(file, &proc_show, data, PageSize*4);
+}
+
+static const struct file_operations gc_procmem_ops = {
+    .open    = gc_procmem_open,
+    .read    = seq_read,
+    .llseek  = seq_lseek,
+    .release = seq_release,
 };
 
 static gceSTATUS _gc_gather_infomation(char *buf, ssize_t* length)
@@ -324,11 +357,22 @@ static void create_gc_proc_file(void)
 {
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0))
     gc_proc_file = proc_create(GC_PROC_FILE, 0644, gcvNULL, &gc_proc_ops);
-
+    gc_procmem_folder = proc_mkdir(GC_PROC_MEMFOLD,gcvNULL);
+    if(!gc_procmem_folder)
+    {
+        gcmkPRINT("[galcore] procmem folder create failed!\n");
+    }
     if(!gc_proc_file)
 #else
     gc_proc_file = create_proc_entry(GC_PROC_FILE, 0644, gcvNULL);
-    if (gc_proc_file) {
+    gc_procmem_folder = proc_mkdir(GC_PROC_MEMFOLD,gcvNULL);
+    if(!gc_procmem_folder)
+    {
+        gcmkPRINT("[galcore] procmem folder create failed!\n");
+    }
+
+    if (gc_proc_file)
+    {
         gc_proc_file->proc_fops = &gc_proc_ops;
     } else
 #endif
@@ -338,7 +382,36 @@ static void create_gc_proc_file(void)
 static void remove_gc_proc_file(void)
 {
     if(gc_proc_file)
+    {
         remove_proc_entry(GC_PROC_FILE, gcvNULL);
+    }
+    if(gc_procmem_folder)
+    {
+        remove_proc_entry(GC_PROC_MEMFOLD, gcvNULL);
+    }
+}
+
+static void create_gc_procmem_file(IN struct proc_dir_entry **gc_procmem_file, IN gctUINT32_PTR pid)
+{
+    char procname[50];
+
+    sprintf(procname, "%s-%d","gcmem" ,*pid);
+    *gc_procmem_file = proc_create_data(procname, 0644, gc_procmem_folder, &gc_procmem_ops, pid);
+    if (!(*gc_procmem_file))
+    {
+        gcmkPRINT("[galcore] proc file create failed!\n");
+    }
+}
+
+static void remove_gc_procmem_file(IN struct proc_dir_entry **gc_procmem_file, IN gctUINT32_PTR pid)
+{
+    char procname[50];
+    sprintf(procname, "%s-%d","gcmem" ,*pid);
+    gcmkPRINT("[galcore] remove procmem :%s! file:%p\n",procname,(*gc_procmem_file));
+    if(*gc_procmem_file)
+    {
+        remove_proc_entry(procname, gc_procmem_folder);
+    }
 }
 
 #endif
@@ -508,6 +581,10 @@ int drv_open(
     data->contiguousLogical  = gcvNULL;
     gcmkONERROR(gckOS_GetProcessID(&data->pidOpen));
 
+#if MRVL_CONFIG_PROC
+    create_gc_procmem_file(&(data->gc_procmem_file),&(data->pidOpen));
+#endif
+
     /* Attached the process. */
     for (i = 0; i < gcdMAX_GPU_COUNT; i++)
     {
@@ -641,6 +718,11 @@ int drv_release(
             gcmkONERROR(gckKERNEL_AttachProcessEx(galDevice->kernels[i], gcvFALSE, data->pidOpen));
         }
     }
+
+#if MRVL_CONFIG_PROC
+    remove_gc_procmem_file(&(data->gc_procmem_file),&(data->pidOpen));
+    data->gc_procmem_file = gcvNULL;
+#endif
 
     kfree(data);
     filp->private_data = NULL;

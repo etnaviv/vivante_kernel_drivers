@@ -22,18 +22,13 @@
 #include <linux/sysfs.h>
 #include <linux/cputype.h>
 
-/* disable it firstly
-  * because kernel doesn't support  this right now
-  */
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0)
-#define GPUFREQ_REQUEST_DDR_QOS     0
-#else
 #define GPUFREQ_REQUEST_DDR_QOS     1
-#endif
 
 #if GPUFREQ_REQUEST_DDR_QOS
 #include <linux/pm_qos.h>
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,14,0)
 #include <linux/platform_data/devfreq-pxa.h>
+#endif
 
 /* request DDR in KHz */
 #define GPUFREQ_REQ_DDR_LVL_HIGH        312000

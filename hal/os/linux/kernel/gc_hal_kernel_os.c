@@ -7820,6 +7820,58 @@ OnError:
 
 /*******************************************************************************
 **
+**  gckOS_AcquireSemaphoreTimeout
+**
+**  Acquire a semaphore within a given time period
+**
+**  INPUT:
+**
+**      gckOS Os
+**          Pointer to the gckOS object.
+**
+**      gctPOINTER Semaphore
+**          Pointer to the semaphore that needs to be acquired.
+**
+**      gctUINT32 Wait
+**          Time in milliseconds to wait for the semaphore
+**
+**  OUTPUT:
+**
+**      Nothing.
+*/
+gceSTATUS
+gckOS_AcquireSemaphoreTimeout(
+    IN gckOS Os,
+    IN gctPOINTER Semaphore,
+    IN gctUINT32 Wait
+    )
+{
+    gceSTATUS status;
+
+    gcmkHEADER_ARG("Os=0x%08X Semaphore=0x%08X", Os, Semaphore);
+
+    /* Verify the arguments. */
+    gcmkVERIFY_OBJECT(Os, gcvOBJ_OS);
+    gcmkVERIFY_ARGUMENT(Semaphore != gcvNULL);
+
+    /* Acquire the semaphore. */
+    if (down_timeout((struct semaphore *) Semaphore, Wait * HZ / 1000))
+    {
+        gcmkONERROR(gcvSTATUS_INTERRUPTED_TIMEOUT);
+    }
+
+    /* Success. */
+    gcmkFOOTER_NO();
+    return gcvSTATUS_OK;
+
+OnError:
+    /* Return the status. */
+    gcmkFOOTER();
+    return status;
+}
+
+/*******************************************************************************
+**
 **  gckOS_TryAcquireSemaphore
 **
 **  Try to acquire a semaphore.
@@ -8956,7 +9008,20 @@ gckOS_MapSignal(
     gcmkVERIFY_ARGUMENT(Signal != gcvNULL);
     gcmkVERIFY_ARGUMENT(MappedSignal != gcvNULL);
 
-    gcmkONERROR(_QueryIntegerId(&Os->signalDB, (gctUINT32)(gctUINTPTR_T)Signal, (gctPOINTER)&signal));
+    status = _QueryIntegerId(&Os->signalDB, (gctUINT32)(gctUINTPTR_T)Signal, (gctPOINTER)&signal);
+
+    /* gcvSTATUS_NOT_FOUND is a normal return value,
+    ** since user level may already delete it.
+    */
+    if (status == gcvSTATUS_NOT_FOUND)
+    {
+        gcmkFOOTER();
+        return gcvSTATUS_NOT_FOUND;
+    }
+    else
+    {
+        gcmkONERROR(status);
+    }
 
     if(atomic_inc_return(&signal->ref) <= 1)
     {
@@ -10673,10 +10738,22 @@ gckOS_ReferenceSyncPoint(
     gcmkVERIFY_OBJECT(Os, gcvOBJ_OS);
     gcmkVERIFY_ARGUMENT(SyncPoint != gcvNULL);
 
-    gcmkONERROR(
-        _QueryIntegerId(&Os->syncPointDB,
+    status = _QueryIntegerId(&Os->syncPointDB,
                         (gctUINT32)(gctUINTPTR_T)SyncPoint,
-                        (gctPOINTER)&syncPoint));
+                        (gctPOINTER)&syncPoint);
+
+    /* gcvSTATUS_NOT_FOUND is a normal return value,
+    ** since user level may already delete it.
+    */
+    if (status == gcvSTATUS_NOT_FOUND)
+    {
+        gcmkFOOTER();
+        return gcvSTATUS_NOT_FOUND;
+    }
+    else
+    {
+        gcmkONERROR(status);
+    }
 
     /* Initialize the sync point. */
     atomic_inc(&syncPoint->ref);
@@ -10843,7 +10920,7 @@ gckOS_CreateSyncTimeline(
     struct viv_sync_timeline * timeline;
 
     /* Create viv sync timeline. */
-    timeline = viv_sync_timeline_create("viv timeline", Os);
+    timeline = viv_sync_timeline_create("viv-timeline", Os);
 
     if (timeline == gcvNULL)
     {
@@ -10918,7 +10995,7 @@ gckOS_CreateNativeFence(
     syncPoint->timeline = &timeline->obj;
 
     /* Build fence name. */
-    snprintf(name, 32, "viv sync_fence-%u", (gctUINT)(gctUINTPTR_T)SyncPoint);
+    snprintf(name, 32, "viv-sync_fence-%u", (gctUINT)(gctUINTPTR_T)SyncPoint);
 
     /* Create sync_fence. */
     fence = sync_fence_create(name, pt);
