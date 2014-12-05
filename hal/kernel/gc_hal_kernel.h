@@ -1298,6 +1298,7 @@ gckKERNEL_GetGPUAddress(
     IN gckKERNEL Kernel,
     IN gctPOINTER Logical,
     IN gctBOOL InUserSpace,
+    IN gckVIRTUAL_COMMAND_BUFFER_PTR Buffer,
     OUT gctUINT32 * Address
     );
 

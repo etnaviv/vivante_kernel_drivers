@@ -1730,6 +1730,7 @@ gckCONTEXT_Construct(
                 context->hardware->kernel,
                 pointer,
                 gcvFALSE,
+                buffer->physical,
                 &address
                 ));
         }

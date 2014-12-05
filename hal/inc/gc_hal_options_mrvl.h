@@ -254,7 +254,7 @@
 /* @Ziyi: If any change happened between these 2 comments please contact zyxu@marvell.com, Thanks. */
 /* #################### [START ==DO NOT CHANGE THIS MARCRO== START] #################### */
 
-#define _GC_VERSION_STRING_                     "GC version rls_eden_5011p4v0003_GC3"
+#define _GC_VERSION_STRING_                     "GC version rls_eden_5011p4v0003_GC3.3"
 
 /* Do not align u/v stride to 16 */
 #define VIVANTE_ALIGN_UVSTRIDE                  0

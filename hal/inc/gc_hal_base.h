@@ -142,6 +142,7 @@ typedef enum _gcePATCH_ID
     gcvPATCH_NBA2013,
     gcvPATCH_BARDTALE,
     gcvPATCH_F18,
+    gcvPATCH_SUBWAYSURF,
     gcvPATCH_CARPARK,
     gcvPATCH_CARCHALLENGE,
     gcvPATCH_HEROESCALL,

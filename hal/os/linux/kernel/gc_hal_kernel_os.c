@@ -383,8 +383,18 @@ _QueryProcessPageTable(
     OUT gctUINT32 * Address
     )
 {
+    /* Logical mapped in kernel space*/
+    if(is_vmalloc_addr(Logical))
+    {
+        *Address = (vmalloc_to_pfn(Logical) << PAGE_SHIFT) | ((gctUINTPTR_T)Logical & ~PAGE_MASK);
+    }
+    /* Logical allocated by kmalloc*/
+    else if ((gctUINTPTR_T)Logical >= PAGE_OFFSET)
+    {
+        *Address = virt_to_phys(Logical);
+    }
     /* Logical from userspace*/
-    if((gctUINTPTR_T)Logical < PAGE_OFFSET)
+    else
     {
         spinlock_t *lock;
         gctUINTPTR_T logical = (gctUINTPTR_T)Logical;
@@ -430,16 +440,6 @@ _QueryProcessPageTable(
 
         *Address = (pte_pfn(*pte) << PAGE_SHIFT) | (logical & ~PAGE_MASK);
         pte_unmap_unlock(pte, lock);
-    }
-    /* Logical mapped in kernel space*/
-    else if(is_vmalloc_addr(Logical))
-    {
-        *Address = (vmalloc_to_pfn(Logical) << PAGE_SHIFT) | ((gctUINTPTR_T)Logical & ~PAGE_MASK);
-    }
-    /* Logical allocated by kmalloc*/
-    else
-    {
-        *Address = virt_to_phys(Logical);
     }
 
     return gcvSTATUS_OK;
@@ -765,7 +765,7 @@ gckOS_Construct(
                 __FUNCTION__, __LINE__
                 );
         }
-    }    
+    }
 #endif
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0)

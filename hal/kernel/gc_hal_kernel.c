@@ -4119,54 +4119,31 @@ gckKERNEL_GetGPUAddress(
     IN gckKERNEL Kernel,
     IN gctPOINTER Logical,
     IN gctBOOL InUserSpace,
+    IN gckVIRTUAL_COMMAND_BUFFER_PTR Buffer,
     OUT gctUINT32 * Address
     )
 {
-    gceSTATUS status;
-    gckVIRTUAL_COMMAND_BUFFER_PTR buffer;
+    gckVIRTUAL_COMMAND_BUFFER_PTR buffer = Buffer;
     gctPOINTER start;
-    gctUINT32 pid;
 
     gcmkHEADER_ARG("Logical = %x InUserSpace=%d.", Logical, InUserSpace);
 
-    gcmkVERIFY_OK(gckOS_GetProcessID(&pid));
-
-    status = gcvSTATUS_INVALID_ADDRESS;
-
-    gcmkVERIFY_OK(gckOS_AcquireMutex(Kernel->os, Kernel->virtualBufferLock, gcvINFINITE));
-
-    /* Walk all command buffer. */
-    for (buffer = Kernel->virtualBufferHead; buffer != gcvNULL; buffer = buffer->next)
+    if (InUserSpace)
     {
-        if (InUserSpace)
-        {
-            start = buffer->userLogical;
-        }
-        else
-        {
-            start = buffer->kernelLogical;
-        }
-
-        if (start == gcvNULL)
-        {
-            continue;
-        }
-
-        if (Logical >= start
-        && (Logical < (gctPOINTER)((gctUINT8_PTR)start + buffer->pageCount * 4096))
-        && pid == buffer->pid
-        )
-        {
-            * Address = buffer->gpuAddress + (gctUINT32)((gctUINT8_PTR)Logical - (gctUINT8_PTR)start);
-            status = gcvSTATUS_OK;
-            break;
-        }
+        start = buffer->userLogical;
+    }
+    else
+    {
+        start = buffer->kernelLogical;
     }
 
-    gcmkVERIFY_OK(gckOS_ReleaseMutex(Kernel->os, Kernel->virtualBufferLock));
+    gcmkASSERT(Logical >= start
+           && (Logical < (gctPOINTER)((gctUINT8_PTR)start + buffer->pageCount * 4096)));
+
+    * Address = buffer->gpuAddress + (gctUINT32)((gctUINT8_PTR)Logical - (gctUINT8_PTR)start);
 
     gcmkFOOTER_NO();
-    return status;
+    return gcvSTATUS_OK;
 }
 
 gceSTATUS

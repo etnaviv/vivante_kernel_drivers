@@ -505,6 +505,63 @@ static ssize_t store_clk_rate (struct device *dev,
     return count;
 }
 
+static ssize_t show_stuck_debug (struct device *dev,
+                    struct device_attribute *attr,
+                    char * buf)
+{
+    int i = 0, len = 0;
+
+    len += sprintf(buf+len, "stuck dump set:\n");
+
+    for(i = 0; i < gcdMAX_GPU_COUNT; i++)
+    {
+        if(galDevice->kernels[i] != gcvNULL)
+        {
+            len += sprintf(buf+len, "\t[%s] : recovery is %s, Dump level is %u\n",
+                        _core_desc[i],
+                        galDevice->kernels[i]->recovery ? "enabled" : "disabled",
+                        galDevice->kernels[i]->stuckDump);
+        }
+    }
+
+    return len;
+}
+
+static ssize_t store_stuck_debug (struct device *dev,
+                    struct device_attribute *attr,
+                    const char *buf, size_t count)
+{
+    int core, recovery, stuckDump;
+    int i, gpu_count;
+
+    for (i = 0, gpu_count = 0; i < gcdMAX_GPU_COUNT; i++)
+    {
+        if (galDevice->kernels[i] != gcvNULL)
+        {
+            gpu_count++;
+        }
+    }
+
+    SYSFS_VERIFY_INPUT(sscanf(buf, "%d,%d,%d", &core, &recovery, &stuckDump), 3);
+
+    SYSFS_VERIFY_INPUT_RANGE(core, 0, (gpu_count-1));
+    SYSFS_VERIFY_INPUT_RANGE(recovery, 0, 1);
+    SYSFS_VERIFY_INPUT_RANGE(stuckDump, 1, 3);
+
+    galDevice->kernels[core]->recovery = recovery;
+
+    if (recovery == gcvFALSE)
+    {
+        galDevice->kernels[core]->stuckDump = gcmMAX(stuckDump, gcdSTUCK_DUMP_MIDDLE);
+    }
+    else
+    {
+        galDevice->kernels[core]->stuckDump = stuckDump;
+    }
+
+    return count;
+}
+
 gc_sysfs_attr_rw(pm_state);
 gc_sysfs_attr_rw(profiler_debug);
 gc_sysfs_attr_rw(power_debug);
@@ -512,6 +569,7 @@ gc_sysfs_attr_rw(runtime_debug);
 gc_sysfs_attr_rw(show_commands);
 gc_sysfs_attr_rw(register_stats);
 gc_sysfs_attr_rw(clk_rate);
+gc_sysfs_attr_rw(stuck_debug);
 
 static struct attribute *gc_debug_attrs[] = {
     &gc_attr_pm_state.attr,
@@ -525,6 +583,7 @@ static struct attribute *gc_debug_attrs[] = {
 #if gcdPOWEROFF_TIMEOUT
     &gc_attr_poweroff_idle_timeout.attr,
 #endif
+    &gc_attr_stuck_debug.attr,
     NULL
 };
 

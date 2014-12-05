@@ -1269,6 +1269,8 @@ gckCOMMAND_Commit(
     gctSIZE_T chipEnableBytes;
 #endif
 
+    gckVIRTUAL_COMMAND_BUFFER_PTR virtualCommandBuffer = gcvNULL;
+
     gcmkHEADER_ARG(
         "Command=0x%x CommandBuffer=0x%x ProcessID=%d",
         Command, CommandBuffer, ProcessID
@@ -1389,10 +1391,20 @@ gckCOMMAND_Commit(
     /* Get the hardware address. */
     if (Command->kernel->virtualCommandBuffer)
     {
+        gckKERNEL kernel = Command->kernel;
+
+        virtualCommandBuffer = gcmNAME_TO_PTR(commandBufferObject->physical);
+
+        if (virtualCommandBuffer == gcvNULL)
+        {
+            gcmkONERROR(gcvSTATUS_INVALID_ARGUMENT);
+        }
+
         gcmkONERROR(gckKERNEL_GetGPUAddress(
             Command->kernel,
             commandBufferLogical,
             gcvTRUE,
+            virtualCommandBuffer,
             &commandBufferAddress
             ));
     }

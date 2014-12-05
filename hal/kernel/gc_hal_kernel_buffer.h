@@ -112,7 +112,7 @@ struct _gcoCMDBUF
     gcsOBJECT                   object;
 
     /* Commit count. */
-    gctUINT                     count;
+    gctUINT64                   commitCount;
 
     /* Command buffer entry and exit pipes. */
     gcePIPE_SELECT              entryPipe;

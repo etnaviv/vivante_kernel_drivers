@@ -145,12 +145,12 @@ module_param(physSize, ulong, 0644);
 static uint logFileSize = 0;
 module_param(logFileSize,uint, 0644);
 
-static uint recovery = 0;
+static uint recovery = 1;
 module_param(recovery, uint, 0644);
 MODULE_PARM_DESC(recovery, "Recover GPU from stuck (1: Enable, 0: Disable)");
 
 /* Middle needs about 40KB buffer, Maximal may need more than 200KB buffer. */
-static uint stuckDump = 3;
+static uint stuckDump = 1;
 module_param(stuckDump, uint, 0644);
 MODULE_PARM_DESC(stuckDump, "Level of stuck dump content (1: Minimal, 2: Middle, 3: Maximal)");
 
@@ -407,7 +407,7 @@ static void remove_gc_procmem_file(IN struct proc_dir_entry **gc_procmem_file, I
 {
     char procname[50];
     sprintf(procname, "%s-%d","gcmem" ,*pid);
-    gcmkPRINT("[galcore] remove procmem :%s! file:%p\n",procname,(*gc_procmem_file));
+
     if(*gc_procmem_file)
     {
         remove_proc_entry(procname, gc_procmem_folder);
