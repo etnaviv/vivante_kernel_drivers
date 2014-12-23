@@ -309,10 +309,20 @@ gckKERNEL_MapVideoMemoryEx(
 
             mdl = (PLINUX_MDL) device->contiguousPhysical;
 
+            MEMORY_LOCK(device->os);
+
             mdlMap = FindMdlMap(mdl, processID);
             gcmkASSERT(mdlMap);
+            if (mdlMap == gcvNULL)
+            {
+                MEMORY_UNLOCK(device->os);
+                *Logical = gcvNULL;
+                gcmkONERROR(gcvSTATUS_INVALID_ARGUMENT);
+            }
 
             logical = (gctPOINTER) mdlMap->vmaAddr;
+
+            MEMORY_UNLOCK(device->os);
         }
 #if gcdENABLE_VG
         if (Core == gcvCORE_VG)

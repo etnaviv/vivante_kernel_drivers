@@ -120,6 +120,78 @@ static ssize_t store_pm_state (struct device *dev,
     return count;
 }
 
+static ssize_t show_clock_gating_state (struct device *dev,
+                    struct device_attribute *attr,
+                    char * buf)
+{
+    int len = 0;
+
+#if 1 
+    int i;
+    gctUINT32 state, data1, data2;
+    gckHARDWARE hardware;
+
+    for (i = 0; i < gcdMAX_GPU_COUNT; i++)
+    {
+        if (galDevice->kernels[i] != gcvNULL)
+        {
+            len += sprintf(buf+len, "[%s] clock gating state:\n", _core_desc[i]);
+
+            hardware = galDevice->kernels[i]->hardware;
+            state = hardware->chipClockGatingState;
+            len += sprintf(buf+len, "\tExpected: %s 0x%x\n",
+                            state&0x80000000?(state&0x40000000?"disabled":"enabled"):"default",
+                            state&0x3FFFFFFF);
+
+            gcmkVERIFY_OK(
+                gckOS_ReadRegisterEx(hardware->os,
+                                     hardware->core,
+                                     hardware->powerBaseAddress +
+                                     0x00100,
+                                     &data1));
+	data1 = (((((gctUINT32)(data1)) >> (0 ? 0:0)) &((gctUINT32) ((((1 ? 0:0) - (0 ? 0:0) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 0:0) - (0 ? 0:0) + 1)))))));
+	            gcmkVERIFY_OK(
+                gckOS_ReadRegisterEx(hardware->os,
+                                     hardware->core,
+                                     hardware->powerBaseAddress +
+                                     0x00104,
+                                     &data2));
+            len += sprintf(buf+len, "\tActual:   %s 0x%x\n", data1?"enabled":"disabled", data2);
+        }
+    }
+#else
+    len += sprintf(buf+len, "GC module power contorl is disabled.\n");
+
+#endif
+
+    return len;
+}
+
+static ssize_t store_clock_gating_state (struct device *dev,
+                    struct device_attribute *attr,
+                    const char *buf, size_t count)
+{
+    int core, i, gpu_count;
+    gctUINT32 state;
+
+    /* count core numbers */
+    for (i = 0, gpu_count = 0; i < gcdMAX_GPU_COUNT; i++)
+    {
+        if (galDevice->kernels[i] != gcvNULL)
+        {
+            gpu_count++;
+        }
+    }
+
+    /* Input: core,clock gating set. */
+    SYSFS_VERIFY_INPUT(sscanf(buf, "%d,%x", &core, &state), 2);
+    SYSFS_VERIFY_INPUT_RANGE(core, 0, (gpu_count-1));
+
+    galDevice->kernels[core]->hardware->chipClockGatingState = state;
+
+    return count;
+}
+
 static ssize_t show_profiler_debug (struct device *dev,
                     struct device_attribute *attr,
                     char * buf)
@@ -195,6 +267,7 @@ static ssize_t show_show_commands (struct device *dev,
                         " 3    show 2D&3D commands\n"
 #if gcdENABLE_VG
                         " 4    show VG commands\n"
+
 #endif
                         ,galDevice->printPID);
 }
@@ -212,6 +285,7 @@ static ssize_t store_show_commands (struct device *dev,
 #else
     /* 3D, 2D, 2D&3D. */
     SYSFS_VERIFY_INPUT_RANGE(value, 0, 3);
+
 #endif
 
     galDevice->printPID = value;
@@ -384,6 +458,7 @@ static ssize_t store_poweroff_idle_timeout (struct device *dev,
 }
 
 gc_sysfs_attr_rw(poweroff_idle_timeout);
+
 #endif
 
 static ssize_t show_clk_rate (struct device *dev,
@@ -441,6 +516,7 @@ static ssize_t show_clk_rate (struct device *dev,
             len += sprintf(buf+len, "[%s] failed to get clock rate\n", "AXI");
         }
     }
+
 #endif
 
     return len;
@@ -468,6 +544,7 @@ static ssize_t store_clk_rate (struct device *dev,
         SYSFS_VERIFY_INPUT(sscanf(buf, "%d,%d,%d", &core, &frequency, &axi), 3);
     }
     else
+
 #endif
     {
         SYSFS_VERIFY_INPUT(sscanf(buf, "%d,%d", &core, &frequency), 2);
@@ -570,6 +647,7 @@ gc_sysfs_attr_rw(show_commands);
 gc_sysfs_attr_rw(register_stats);
 gc_sysfs_attr_rw(clk_rate);
 gc_sysfs_attr_rw(stuck_debug);
+gc_sysfs_attr_rw(clock_gating_state);
 
 static struct attribute *gc_debug_attrs[] = {
     &gc_attr_pm_state.attr,
@@ -582,8 +660,10 @@ static struct attribute *gc_debug_attrs[] = {
     &gc_attr_clk_off_when_idle.attr,
 #if gcdPOWEROFF_TIMEOUT
     &gc_attr_poweroff_idle_timeout.attr,
+
 #endif
     &gc_attr_stuck_debug.attr,
+    &gc_attr_clock_gating_state.attr,
     NULL
 };
 
@@ -708,6 +788,7 @@ static ssize_t store_dutycycle (struct device *dev,
         SYSFS_VERIFY_INPUT_RANGE(core, 0, 2);
 #else
         SYSFS_VERIFY_INPUT_RANGE(core, 0, 1);
+
 #endif
 
         for(; domain < 2; domain++)
@@ -938,6 +1019,7 @@ static inline int __create_sysfs_file_gpufreq(void)
                     hardware->devShObj.kobj = kobj;
                 }
             }
+
 #endif
         }
     }
@@ -969,6 +1051,7 @@ static inline void __remove_sysfs_file_gpufreq(void)
 
                 kobject_put((struct kobject *)hardware->devShObj.kobj);
             }
+
 #endif
         }
     }
@@ -982,6 +1065,7 @@ static inline void __remove_sysfs_file_gpufreq(void)
 {
     return;
 }
+
 #endif
 
 void create_gc_sysfs_file(struct platform_device *pdev)
@@ -1011,6 +1095,7 @@ void create_gc_sysfs_file(struct platform_device *pdev)
     */
 #if MRVL_GPU_RESOURCE_DT
     __create_sysfs_soft_link(pdev);
+
 #endif
 
     ret = __create_sysfs_file_common();
@@ -1056,6 +1141,7 @@ void remove_gc_sysfs_file(struct platform_device *pdev)
     {
 #if MRVL_GPU_RESOURCE_DT
         __remove_sysfs_soft_link(pdev);
+
 #endif
         __remove_sysfs_file_common();
         registered_common = 0;
@@ -1064,5 +1150,6 @@ void remove_gc_sysfs_file(struct platform_device *pdev)
     /* release a kset. */
     kset_unregister(kset_gpu);
 }
+
 
 #endif

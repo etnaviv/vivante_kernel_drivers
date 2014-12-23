@@ -56,15 +56,6 @@ extern void get_gc2d_reg_lock(unsigned int lock, unsigned long *flags);
 #define GC_CLK_DISABLE      clk_disable
 #endif
 
-#define MEMORY_LOCK(os) \
-    gcmkVERIFY_OK(gckOS_AcquireMutex( \
-                                (os), \
-                                (os)->memoryLock, \
-                                gcvINFINITE))
-
-#define MEMORY_UNLOCK(os) \
-    gcmkVERIFY_OK(gckOS_ReleaseMutex((os), (os)->memoryLock))
-
 #define MEMORY_MAP_LOCK(os) \
     gcmkVERIFY_OK(gckOS_AcquireMutex( \
                                 (os), \
@@ -180,7 +171,14 @@ _DestroyMdlMap(
 
     /* Verify the arguments. */
     gcmkVERIFY_ARGUMENT(MdlMap != gcvNULL);
+    gcmkVERIFY_ARGUMENT(Mdl != gcvNULL);
     gcmkASSERT(Mdl->maps != gcvNULL);
+
+    if ((MdlMap == gcvNULL) || (Mdl == gcvNULL) || (Mdl->maps == gcvNULL))
+    {
+        gcmkFOOTER_NO();
+        return gcvSTATUS_INVALID_ARGUMENT;
+    }
 
     if (Mdl->maps == MdlMap)
     {
@@ -195,6 +193,14 @@ _DestroyMdlMap(
             prevMdlMap = prevMdlMap->next;
 
             gcmkASSERT(prevMdlMap != gcvNULL);
+
+            /* Not found. */
+            if (prevMdlMap == gcvNULL)
+            {
+                gcmkFOOTER_NO();
+                return gcvSTATUS_NOT_FOUND;
+            }
+
         }
 
         prevMdlMap->next = MdlMap->next;
@@ -6988,6 +6994,7 @@ _HandleCache(
     gctUINT32 i, pageNum;
     gctUINT32 paddr;
     gctPOINTER vaddr;
+    gctBOOL locked = gcvFALSE;
 
     gcmkHEADER_ARG("Os=0x%X ProcessID=%d Handle=0x%X Logical=0x%X Bytes=%lu",
                    Os, ProcessID, Handle, Logical, Bytes);
@@ -7019,6 +7026,8 @@ _HandleCache(
         vaddr = (gctPOINTER)gcmALIGN_BASE((gctUINTPTR_T)Logical, PAGE_SIZE);
         pageNum = GetPageCount(Bytes, 0);
 
+        MEMORY_LOCK(Os);
+        locked = gcvTRUE;
         for (i = 0; i < pageNum; i += 1)
         {
             gcmkONERROR(_ConvertLogical2Physical(
@@ -7035,6 +7044,8 @@ _HandleCache(
                       PAGE_SIZE,
                       Dir);
         }
+        MEMORY_UNLOCK(Os);
+        locked = gcvFALSE;
     }
 
     mb();
@@ -7044,6 +7055,11 @@ _HandleCache(
     return gcvSTATUS_OK;
 
 OnError:
+    if(locked)
+    {
+        /* Unlock memory. */
+        MEMORY_UNLOCK(Os);
+    }
     return status;
 }
 
@@ -7857,7 +7873,7 @@ gckOS_AcquireSemaphoreTimeout(
     /* Acquire the semaphore. */
     if (down_timeout((struct semaphore *) Semaphore, Wait * HZ / 1000))
     {
-        gcmkONERROR(gcvSTATUS_INTERRUPTED_TIMEOUT);
+        gcmkONERROR(gcvSTATUS_INTERRUPTED);
     }
 
     /* Success. */

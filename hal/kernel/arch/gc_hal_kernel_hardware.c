@@ -934,6 +934,53 @@ _ConfigureModuleLevelClockGating(
 
 #endif
 
+gceSTATUS
+_ConfigureClockGatingBySysfs(
+    gckHARDWARE Hardware
+    )
+{
+#if 1 
+    gctUINT32 state, data;
+
+    state = Hardware->chipClockGatingState;
+
+    if (state & 0x80000000)
+    {
+        gcmkVERIFY_OK(
+            gckOS_WriteRegisterEx(Hardware->os,
+                                  Hardware->core,
+                                  Hardware->powerBaseAddress +
+                                  0x00104,
+                                  state & 0x3FFFFFFF));
+
+        gcmkVERIFY_OK(
+            gckOS_ReadRegisterEx(Hardware->os,
+                                 Hardware->core,
+                                 Hardware->powerBaseAddress +
+                                 0x00100,
+                                 &data));
+
+        if (state & 0x40000000)
+        {
+	data = ((((gctUINT32)(data)) & ~(((gctUINT32)(((gctUINT32) ((((1 ? 0:0) - (0 ? 0:0) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 0:0) - (0 ? 0:0) + 1))))))) << (0 ? 0:0))) | (((gctUINT32)((gctUINT32)(0)&((gctUINT32) ((((1 ? 0:0) - (0 ? 0:0) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 0:0) - (0 ? 0:0) + 1))))))) << (0 ? 0:0)));
+	        }
+        else
+        {
+	data = ((((gctUINT32)(data)) & ~(((gctUINT32)(((gctUINT32) ((((1 ? 0:0) - (0 ? 0:0) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 0:0) - (0 ? 0:0) + 1))))))) << (0 ? 0:0))) | (((gctUINT32)((gctUINT32)(1)&((gctUINT32) ((((1 ? 0:0) - (0 ? 0:0) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 0:0) - (0 ? 0:0) + 1))))))) << (0 ? 0:0)));
+	        }
+
+        gcmkVERIFY_OK(
+            gckOS_WriteRegisterEx(Hardware->os,
+                                  Hardware->core,
+                                  Hardware->powerBaseAddress
+                                  + 0x00100,
+                                  data));
+    }
+
+#endif
+    return gcvSTATUS_OK;
+}
+
 #if gcdPOWEROFF_TIMEOUT
 void
 _PowerTimerFunction(
@@ -1744,6 +1791,8 @@ gckHARDWARE_Construct(
                                         &hardware->pulseEaterTimer));
     }
 
+    hardware->chipClockGatingState = 0;
+
     /* Return pointer to the gckHARDWARE object. */
     *Hardware = hardware;
 
@@ -2259,6 +2308,12 @@ gckHARDWARE_InitializeHardware(
                                  &regPMC));
     }
 
+    if (Hardware->core == gcvCORE_MAJOR)
+    {
+        /* Disable GC3D SE clock gating. */
+	regPMC = ((((gctUINT32)(regPMC)) & ~(((gctUINT32)(((gctUINT32) ((((1 ? 5:5) - (0 ? 5:5) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 5:5) - (0 ? 5:5) + 1))))))) << (0 ? 5:5))) | (((gctUINT32)((gctUINT32)(1)&((gctUINT32) ((((1 ? 5:5) - (0 ? 5:5) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 5:5) - (0 ? 5:5) + 1))))))) << (0 ? 5:5)));
+	    }
+
     /* Disable RA HZ clock gating. */
 	regPMC = ((((gctUINT32)(regPMC)) & ~(((gctUINT32)(((gctUINT32) ((((1 ? 17:17) - (0 ? 17:17) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 17:17) - (0 ? 17:17) + 1))))))) << (0 ? 17:17))) | (((gctUINT32)((gctUINT32)(1)&((gctUINT32) ((((1 ? 17:17) - (0 ? 17:17) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 17:17) - (0 ? 17:17) + 1))))))) << (0 ? 17:17)));
 	
@@ -2310,6 +2365,10 @@ gckHARDWARE_InitializeHardware(
 
 #if gcdDEBUG_MODULE_CLOCK_GATING
     _ConfigureModuleLevelClockGating(Hardware);
+
+#endif
+#if 1 
+    _ConfigureClockGatingBySysfs(Hardware);
 
 #endif
 

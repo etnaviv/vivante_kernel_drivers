@@ -28,7 +28,7 @@ clean:
 install:
 	$(MAKE) --makefile=makefile.linux V_TARGET=install gcdSTATIC_LINK=$(gcdSTATIC_LINK)
 
-ifeq ($(gcdENABLE_3D), 1)
+ifeq ($(VIVANTE_ENABLE_3D), 1)
 $(MODULES):
 	@test ! -d $@ || $(MAKE) -j8 --makefile=makefile.linux --directory=$@ $(V_TARGET) gcdENABLE_3D=1 gcdSTATIC_LINK=$(gcdSTATIC_LINK)
 else

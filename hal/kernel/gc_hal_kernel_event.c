@@ -1040,7 +1040,9 @@ gckEVENT_AddList(
     gckKERNEL kernel = Event->kernel;
     gctBOOL mapped = gcvFALSE;
     gctSIGNAL mapSignal = gcvNULL;
+#if gcdANDROID_NATIVE_FENCE_SYNC
     gctBOOL referenced = gcvFALSE;
+#endif
 
     gcmkHEADER_ARG("Event=0x%x Interface=0x%x",
                    Event, Interface);
@@ -1090,6 +1092,7 @@ gckEVENT_AddList(
 
         mapped = gcvTRUE;
     }
+#if gcdANDROID_NATIVE_FENCE_SYNC
     else if (Interface->command == gcvHAL_SYNC_POINT)
     {
         /* Add the reference if event a sync point */
@@ -1103,6 +1106,7 @@ gckEVENT_AddList(
 
         referenced = gcvTRUE;
     }
+#endif
 
     /* Allocate a free record. */
     gcmkONERROR(gckEVENT_AllocateRecord(Event, AllocateAllowed, &record));
@@ -1238,12 +1242,14 @@ OnError:
         gcmkVERIFY_OK(gckEVENT_FreeRecord(Event, record));
     }
 
+#if gcdANDROID_NATIVE_FENCE_SYNC
     if (referenced)
     {
         gcmkVERIFY_OK(
             gckOS_DestroySyncPoint(Event->os,
                                     gcmUINT64_TO_PTR(Interface->u.SyncPoint.syncPoint)));
     }
+#endif
 
     if (mapped)
     {

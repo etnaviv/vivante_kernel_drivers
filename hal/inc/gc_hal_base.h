@@ -116,7 +116,6 @@ typedef enum _gcePATCH_ID
     gcvPATCH_GLBMGUI,
     gcvPATCH_GFXBENCH,
     gcvPATCH_ANTUTU,        /* Antutu 3.x */
-    gcvPATCH_ANTUTU2D,    /* Antutu 5.1 2d test */
     gcvPATCH_ANTUTU4X,      /* Antutu 4.x */
     gcvPATCH_QUADRANT,
     gcvPATCH_GPUBENCH,

@@ -81,4 +81,13 @@ typedef struct _DRIVER_ARGS
 }
 DRIVER_ARGS;
 
+#define MEMORY_LOCK(os) \
+    gcmkVERIFY_OK(gckOS_AcquireMutex( \
+                                (os), \
+                                (os)->memoryLock, \
+                                gcvINFINITE))
+
+#define MEMORY_UNLOCK(os) \
+    gcmkVERIFY_OK(gckOS_ReleaseMutex((os), (os)->memoryLock))
+
 #endif /* __gc_hal_kernel_os_h_ */

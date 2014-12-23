@@ -195,6 +195,9 @@ struct _gckHARDWARE
     gctSIZE_T                   functionBytes;
 
     gcsHARDWARE_FUNCTION        functions[gcvHARDWARE_FUNCTION_NUM];
+
+    /* Clock gating state. */
+    gctUINT32                   chipClockGatingState;
 };
 
 gceSTATUS
