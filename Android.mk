@@ -36,6 +36,7 @@ ifeq (,$(wildcard $(PRODUCT_OUT)/root/lib/modules))
 	mkdir -p $(PRODUCT_OUT)/root/lib/modules
 endif
 	cp $(GALCORE_SRC_PATH)/hal/driver/galcore.ko $(PRODUCT_OUT)/root/lib/modules
+	make clean -C $(GALCORE_SRC_PATH)
 
 
 .PHONY: build-debug-galcore
