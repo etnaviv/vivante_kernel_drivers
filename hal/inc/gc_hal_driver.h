@@ -283,6 +283,9 @@ typedef struct _gcsHAL_QUERY_CHIP_IDENTITY
     /* Product ID */
     gctUINT32                   productID;
 
+    /* Special ECO bits */
+    gceECO_FLAG                 ecoFlags;
+
     gctCHAR                     chipName[32];
 }
 gcsHAL_QUERY_CHIP_IDENTITY;
@@ -967,6 +970,8 @@ typedef struct _gcsHAL_INTERFACE
 
             /* Number of states in the buffer. */
             OUT gctUINT64               stateCount;
+
+            OUT gctUINT32               numStates;
 
             /* Map context buffer to user or not. */
             IN gctBOOL                  map;

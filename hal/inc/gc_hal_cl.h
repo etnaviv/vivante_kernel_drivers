@@ -1,6 +1,6 @@
 /****************************************************************************
 *
-*    Copyright (c) 2005 - 2012 by Vivante Corp.  All rights reserved.
+*    Copyright (c) 2005 - 2014 by Vivante Corp.  All rights reserved.
 *
 *    The material in this file is confidential and contains trade secrets
 *    of Vivante Corporation. This is proprietary information owned by
@@ -9,8 +9,6 @@
 *    without the express written permission of Vivante Corporation.
 *
 *****************************************************************************/
-
-
 
 
 #ifndef __gc_hal_user_cl_h_
@@ -79,7 +77,6 @@ typedef struct _gcoCL_DEVICE_INFO
     gctBOOL             compilerAvail;
     gctUINT64           execCapability;         /* cl_device_exec_capabilities */
     gctBOOL             atomicSupport;
-    gctBOOL             psCL;
 } gcoCL_DEVICE_INFO;
 
 typedef gcoCL_DEVICE_INFO *  gcoCL_DEVICE_INFO_PTR;
@@ -101,10 +98,6 @@ typedef gcoCL_DEVICE_INFO *  gcoCL_DEVICE_INFO_PTR;
 */
 gceSTATUS
 gcoCL_InitializeHardware(
-    );
-
-gceSTATUS
-gcoCL_InitializeEnv(
     );
 
 /**********************************************************************
@@ -133,12 +126,12 @@ gcoCL_SetHardware(
 **
 **  INPUT:
 **
-**      gctSIZE_T * Bytes
+**      gctUINT * Bytes
 **          Pointer to the number of bytes to allocate.
 **
 **  OUTPUT:
 **
-**      gctSIZE_T * Bytes
+**      gctUINT * Bytes
 **          Pointer to a variable that will receive the aligned number of bytes
 **          allocated.
 **
@@ -156,7 +149,7 @@ gcoCL_SetHardware(
 */
 gceSTATUS
 gcoCL_AllocateMemory(
-    IN OUT gctSIZE_T *      Bytes,
+    IN OUT gctUINT *      Bytes,
     OUT gctPHYS_ADDR *      Physical,
     OUT gctPOINTER *        Logical,
     OUT gcsSURF_NODE_PTR *  Node
@@ -176,7 +169,7 @@ gcoCL_AllocateMemory(
 **      gctPOINTER Logical
 **          The logical address of the allocation.
 **
-**      gctSIZE_T Bytes
+**      gctUINT Bytes
 **          Number of bytes allocated.
 **
 **      gcsSURF_NODE_PTR  Node
@@ -191,7 +184,7 @@ gceSTATUS
 gcoCL_FreeMemory(
     IN gctPHYS_ADDR         Physical,
     IN gctPOINTER           Logical,
-    IN gctSIZE_T            Bytes,
+    IN gctUINT              Bytes,
     IN gcsSURF_NODE_PTR     Node
     );
 
@@ -426,10 +419,13 @@ gcoCL_UnlockSurface(
 **      gctPOINTER * Logical
 **          Pointer to a variable that will receive the logical address of the
 **          allocation.
+**
+**      gctUINT * SurfStride
+**          Pointer to a variable that will receive the stride of the texture.
 */
 gceSTATUS
 gcoCL_CreateTexture(
-    IN gctBOOL              Maped,
+    IN OUT gctBOOL*         MapHostMemory,
     IN gctUINT              Width,
     IN gctUINT              Height,
     IN gctUINT              Depth,
@@ -442,8 +438,7 @@ gcoCL_CreateTexture(
     OUT gcoSURF *           Surface,
     OUT gctPHYS_ADDR *      Physical,
     OUT gctPOINTER *        Logical,
-    OUT gctSIZE_T *         RowPitch,
-    OUT gctPOINTER*         MapInfo
+    OUT gctUINT *           SurfStride
     );
 
 /*******************************************************************************
@@ -463,7 +458,17 @@ gcoCL_CreateTexture(
 */
 gceSTATUS
 gcoCL_DestroyTexture(
-    IN gcoTEXTURE Texture
+    IN gcoTEXTURE Texture,
+    IN gcoSURF    Surface
+    );
+
+gceSTATUS
+gcoCL_SetupTexture(
+    IN gcoTEXTURE           Texture,
+    IN gcoSURF              Surface,
+    IN gctUINT              SamplerNum,
+    gceTEXTURE_ADDRESSING   AddressMode,
+    gceTEXTURE_FILTER       FilterMode
     );
 
 /*******************************************************************************
@@ -484,6 +489,16 @@ gcoCL_DestroyTexture(
 gceSTATUS
 gcoCL_QueryDeviceInfo(
     OUT gcoCL_DEVICE_INFO_PTR   DeviceInfo
+    );
+
+gceSTATUS
+gcoCL_QueryDeviceCount(
+    OUT gctUINT32 * Count
+    );
+
+gceSTATUS
+gcoCL_SelectDevice(
+    IN gctUINT32    DeviceId
     );
 
 /*******************************************************************************
@@ -513,8 +528,6 @@ gcoCL_Flush(
     IN gctBOOL      Stall
     );
 
-gceSTATUS
-gcoCL_FlushHWCache();
 /*******************************************************************************
 **
 **  gcoCL_CreateSignal
@@ -592,6 +605,25 @@ gcoCL_WaitSignal(
     );
 
 /*******************************************************************************
+**
+**  gcoCL_SetSignal
+**
+**  Make a signal to become signaled.
+**
+**  INPUT:
+**
+**      gctSIGNAL Signal
+**          Pointer to the gctSIGNAL.
+**
+**  OUTPUT:
+**
+**      Nothing.
+*/
+gceSTATUS
+gcoCL_SetSignal(
+    IN gctSIGNAL Signal
+    );
+/*******************************************************************************
 **                                gcoCL_LoadKernel
 ********************************************************************************
 **
@@ -618,8 +650,7 @@ gcoCL_LoadKernel(
 
 gceSTATUS
 gcoCL_InvokeThreadWalker(
-    IN gcsTHREAD_WALKER_INFO_PTR Info,
-    IN gctBOOL Dirty
+    IN gcsTHREAD_WALKER_INFO_PTR Info
     );
 
 #ifdef __cplusplus

@@ -203,9 +203,9 @@ gceCORE;
 #define gcdMAX_GPU_COUNT               3
 #endif
 
-#define gcdMAX_SURF_LAYER              4
+#define gcdMAX_SURF_LAYERS              4
 
-#define gcdMAX_DRAW_BUFFERS            4
+#define gcdMAX_DRAW_BUFFERS            8
 
 /*******************************************************************************
 **
@@ -1316,6 +1316,20 @@ gckOS_WaitSignal(
     IN gctSIGNAL Signal,
     IN gctUINT32 Wait
     );
+
+#ifdef __QNXNTO__
+gceSTATUS
+gckOS_SignalPulse(
+    IN gckOS Os,
+    IN gctSIGNAL Signal
+    );
+
+gceSTATUS
+gckOS_SignalPending(
+    IN gckOS Os,
+    IN gctSIGNAL Signal
+    );
+#endif
 
 /* Map a user signal to the kernel space. */
 gceSTATUS
@@ -2622,6 +2636,12 @@ gckHARDWARE_SetPowerOffTimeoutEnable(
     IN gckHARDWARE  Hardware,
     IN gctBOOL      Enable
 );
+
+gceSTATUS
+gckHARDWARE_QueryPowerOffTimeoutEnable(
+    IN gckHARDWARE  Hardware,
+    OUT gctBOOL*    Enable
+);
 #endif
 
 /* Profile 2D Engine. */
@@ -3025,6 +3045,7 @@ gckCOMMAND_Attach(
     IN gckCOMMAND Command,
     OUT gckCONTEXT * Context,
     OUT gctSIZE_T * StateCount,
+    OUT gctUINT32 * NumStates,
     IN gctUINT32 ProcessID
     );
 

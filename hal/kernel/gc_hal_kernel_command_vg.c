@@ -19,6 +19,16 @@
 
 #define _GC_OBJ_ZONE            gcvZONE_COMMAND
 
+#ifdef __QNXNTO__
+extern gceSTATUS
+drv_signal_mgr_add(
+    gctUINT32 Pid,
+    gctINT32 Coid,
+    gctINT32 Rcvid,
+    gctUINT64 Signal,
+    gctPOINTER *Handle);
+#endif
+
 /******************************************************************************\
 *********************************** Debugging **********************************
 \******************************************************************************/
@@ -846,18 +856,33 @@ _ScheduleTasks(
                         userTask->size
                         );
 
-#ifdef __QNXNTO__
-                    if (taskHeader->id == gcvTASK_SIGNAL)
-                    {
-                        ((gcsTASK_SIGNAL_PTR)taskHeader)->coid  = TaskTable->coid;
-                        ((gcsTASK_SIGNAL_PTR)taskHeader)->rcvid = TaskTable->rcvid;
-                    }
-#endif
-
                     /* Copy the task data. */
                     gcmkVERIFY_OK(gckOS_MemCopy(
                         kernelTask, taskHeader, userTask->size
                         ));
+
+#ifdef __QNXNTO__
+                    if (taskHeader->id == gcvTASK_SIGNAL)
+                    {
+                        gcsTASK_SIGNAL_PTR taskSignal = (gcsTASK_SIGNAL_PTR)kernelTask;
+                        gctPOINTER signal;
+                        gctUINT32 pid;
+
+                        gcmkVERIFY_OK(gckOS_GetProcessID(&pid));
+
+                        taskSignal->coid  = TaskTable->coid;
+                        taskSignal->rcvid = TaskTable->rcvid;
+
+                        gcmkERR_BREAK(drv_signal_mgr_add(
+                            pid,
+                            taskSignal->coid,
+                            taskSignal->rcvid,
+                            gcmPTR_TO_UINT64(taskSignal->signal),
+                            &signal));
+
+                        taskSignal->signal = signal;
+                    }
+#endif
 
                     /* Advance to the next task. */
                     kernelTask += userTask->size;
@@ -3541,15 +3566,16 @@ gckVGCOMMAND_Commit(
                 /* Set the signal to avoid user waiting. */
 #ifdef __QNXNTO__
                 gcmkERR_BREAK(gckOS_UserSignal(
-                    Command->os, Context->signal, Context->rcvid, Context->coid
+                    Command->os,
+                    Context->userSignal,
+                    Context->rcvid,
+                    Context->coid
                     ));
 #else
                 gcmkERR_BREAK(gckOS_UserSignal(
                     Command->os, Context->signal, Context->process
                     ));
-
-#endif /* __QNXNTO__ */
-
+#endif
             }
             else
             {

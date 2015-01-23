@@ -2211,6 +2211,9 @@ gckKERNEL_QueryProcessDB(
     gcmkONERROR(
         gckKERNEL_FindDatabase(Kernel, ProcessID, LastProcessID, &database));
 
+
+    gcmkVERIFY_OK(gckOS_AcquireMutex(Kernel->os, database->counterMutex, gcvINFINITE));
+
     /* Get pointer to counters. */
     switch (Type)
     {
@@ -2267,6 +2270,8 @@ gckKERNEL_QueryProcessDB(
     default:
         break;
     }
+
+    gcmkVERIFY_OK(gckOS_ReleaseMutex(Kernel->os, database->counterMutex));
 
     /* Success. */
     gcmkFOOTER_NO();

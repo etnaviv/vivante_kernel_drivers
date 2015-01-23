@@ -5,14 +5,18 @@
 
 static inline int has_feat_axi_freq_change(void)
 {
-    return cpu_is_pxa1908() || cpu_is_pxa1U88();
+    return cpu_is_pxa1908() || cpu_is_pxa1U88()
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,14,0)
+    || cpu_is_pxa1936()
+#endif
+    ;
 }
 
 /* refer to MRVL_CONFIG_MMP_PM_DOMAIN(used in mrvl4x)*/
 static inline int has_feat_power_domain(void)
 {
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3,14,0)
-    return cpu_is_pxa1U88() || cpu_is_pxa1908();
+    return cpu_is_pxa1U88() || cpu_is_pxa1908() || cpu_is_pxa1936();
 #else
     return 0;
 #endif
@@ -51,13 +55,21 @@ static inline int has_feat_2d_power_onoff(void)
 /* has pulse eater support */
 static inline int has_feat_pulse_eater_profiler(void)
 {
-    return cpu_is_pxa1U88() || cpu_is_pxa1908();
+    return cpu_is_pxa1U88() || cpu_is_pxa1908()
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,14,0)
+    || cpu_is_pxa1936()
+#endif
+    ;
 }
 
 /* refer to MRVL_CONFIG_SHADER_CLK_CONTROL */
 static inline int has_feat_shader_indept_dfc(void)
 {
-    return cpu_is_pxa1U88() || cpu_is_pxa1908();
+    return cpu_is_pxa1U88() || cpu_is_pxa1908()
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,14,0)
+    || cpu_is_pxa1936()
+#endif
+    ;
 }
 
 /* MRVL_3D_CORE_SH_CLOCK_SEPARATED */
@@ -77,7 +89,11 @@ static inline int has_feat_policy_clock_off_when_idle(void)
 */
 static inline int has_feat_dfc_protect_clk_op(void)
 {
-    return cpu_is_pxa1928() || cpu_is_pxa1U88() || cpu_is_pxa1908();
+    return cpu_is_pxa1928() || cpu_is_pxa1U88() || cpu_is_pxa1908()
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,14,0)
+    || cpu_is_pxa1936()
+#endif
+    ;
 }
 
 /*
@@ -86,6 +102,14 @@ static inline int has_feat_dfc_protect_clk_op(void)
     and set freq to lowest when power off.
 */
 static inline int has_feat_freq_change_indirect(void)
+{
+    return cpu_is_pxa1928();
+}
+
+/*
+    fix gc2d axi bus error changeing rtc/wtc reigister when there is tranfic.
+*/
+static inline int has_feat_freq_change_when_idle(void)
 {
     return cpu_is_pxa1928();
 }

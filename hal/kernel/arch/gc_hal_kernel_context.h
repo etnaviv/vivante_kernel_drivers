@@ -109,6 +109,7 @@ struct _gckCONTEXT
 
     /* Context buffer metrics. */
     gctSIZE_T                   stateCount;
+    gctUINT32                   numStates;
     gctUINT32                   totalSize;
     gctUINT32                   bufferSize;
     gctUINT32                   linkIndex2D;

@@ -636,6 +636,9 @@ struct _gckKERNEL
     gctUINT32                   timer;
     gctUINT32                   restoreAddress;
     gctUINT32                   restoreMask;
+    gctUINT32                   commandLevel;
+    gctUINT32                   commandProc;
+    gctBOOL                      commandTraceprint;
 };
 
 struct _FrequencyHistory
@@ -719,6 +722,8 @@ struct _gckCOMMAND
 
     /* Context management. */
     gckCONTEXT                  currContext;
+    gctPOINTER                  stateMap;
+    gctPOINTER                  stateMapCreated;
 
     /* Pointer to last WAIT command. */
     gctPHYS_ADDR                waitPhysical;

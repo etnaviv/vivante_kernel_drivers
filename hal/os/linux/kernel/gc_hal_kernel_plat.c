@@ -65,17 +65,12 @@ static void __gpu_clk_disable(struct gc_iface *iface)
 {
     unsigned int chains_count = iface->chains_count;
 
-    if(0 == iface->clk_refcnt)
-        return;
+    if(iface->ops && iface->ops->disableclk)
+        iface->ops->disableclk(iface);
 
-    if(1 == iface->clk_refcnt)
-    {
-        if(iface->ops && iface->ops->disableclk)
-            iface->ops->disableclk(iface);
+    while(0 != chains_count)
+        __gpu_clk_disable(iface->chains_clk[--chains_count]);
 
-        while(0 != chains_count)
-            __gpu_clk_disable(iface->chains_clk[--chains_count]);
-    }
     iface->clk_refcnt--;
 }
 
@@ -84,26 +79,24 @@ static int __gpu_clk_enable(struct gc_iface *iface)
     int ret = 0, i = 0;
     unsigned int chains_count = iface->chains_count;
 
-    if(0 == iface->clk_refcnt)
+    while(0 != chains_count)
     {
-        while(0 != chains_count)
-        {
-            chains_count--;
-            ret = __gpu_clk_enable(iface->chains_clk[i]);
-            if(ret)
-            {
-                while(i > 0)
-                    __gpu_clk_disable(iface->chains_clk[--i]);
-                goto out;
-            }
-            i++;
-        }
-
-        if(iface->ops && iface->ops->enableclk)
-            ret = iface->ops->enableclk(iface);
+        chains_count--;
+        ret = __gpu_clk_enable(iface->chains_clk[i]);
         if(ret)
-            goto disable_chains;
+        {
+            while(i > 0)
+                __gpu_clk_disable(iface->chains_clk[--i]);
+            goto out;
+        }
+        i++;
     }
+
+    if(iface->ops && iface->ops->enableclk)
+        ret = iface->ops->enableclk(iface);
+    if(ret)
+        goto disable_chains;
+
     iface->clk_refcnt++;
 
     return 0;
@@ -196,48 +189,57 @@ int gpu_clk_getrate(struct gc_iface *iface, unsigned long *rate_khz)
 /********************************************************
  * GC power operations **********************************
  *******************************************************/
-static void __gpu_pwr_disable(struct gc_iface *iface)
+static int __gpu_pwr_disable(struct gc_iface *iface)
 {
-    if(0 == iface->pwr_refcnt)
-        return;
+    int retval = 0;
 
-    if(1 == iface->pwr_refcnt)
-    {
-        if(iface->ops && iface->ops->pwrops)
-            iface->ops->pwrops(iface, 0);
-    }
-    iface->pwr_refcnt--;
+    if(iface->ops && iface->ops->pwrops)
+        retval = iface->ops->pwrops(iface, 0);
+
+    if(likely(retval >= 0))
+        iface->pwr_refcnt--;
+
+    return retval;
 }
 
-static void __gpu_pwr_enable(struct gc_iface *iface)
+static int __gpu_pwr_enable(struct gc_iface *iface)
 {
-    if(0 == iface->pwr_refcnt)
-    {
-        if(iface->ops && iface->ops->pwrops)
-            iface->ops->pwrops(iface, 1);
-    }
-    iface->pwr_refcnt++;
+    int retval = 0;
+
+    if(iface->ops && iface->ops->pwrops)
+        retval = iface->ops->pwrops(iface, 1);
+
+    if(likely(retval >= 0))
+        iface->pwr_refcnt++;
+
+    return retval;
 }
 
-void gpu_pwr_disable(struct gc_iface *iface)
+int gpu_pwr_disable(struct gc_iface *iface)
 {
     unsigned long flags;
+    int retval = 0;
 
     gpu_pwr_lock_save(iface, flags);
-    __gpu_pwr_disable(iface);
+    retval = __gpu_pwr_disable(iface);
     gpu_pwr_lock_restore(iface, flags);
+
+    return retval;
 }
 
-void gpu_pwr_enable(struct gc_iface *iface)
+int gpu_pwr_enable(struct gc_iface *iface)
 {
     unsigned long flags;
+    int retval = 0;
 
     gpu_pwr_lock_save(iface, flags);
-    __gpu_pwr_enable(iface);
+    retval = __gpu_pwr_enable(iface);
     gpu_pwr_lock_restore(iface, flags);
 
     /* Delay 10 us to wait for chip stable. */
     gckOS_Udelay(gcvNULL, 10);
+
+    return retval;
 }
 
 void gpu_pwr_disable_prepare(struct gc_iface *iface)

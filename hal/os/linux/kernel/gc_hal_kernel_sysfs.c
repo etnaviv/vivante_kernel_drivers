@@ -402,17 +402,80 @@ static ssize_t store_clk_off_when_idle (struct device *dev,
 gc_sysfs_attr_rw(clk_off_when_idle);
 
 #if gcdPOWEROFF_TIMEOUT
-static ssize_t show_poweroff_idle_timeout (struct device *dev,
+static ssize_t show_poweroff_timeout (struct device *dev,
                     struct device_attribute *attr,
                     char * buf)
 {
-    int len = 0;
+    gctUINT32 timeout, i;
+    ssize_t len = 0;
+
+    for (i = 0; i < gcdMAX_GPU_COUNT; i++)
+    {
+        if (galDevice->kernels[i] != gcvNULL)
+        {
+            gcmkVERIFY_OK(gckHARDWARE_QueryPowerOffTimeout(
+                                    galDevice->kernels[i]->hardware,
+                                    &timeout));
+
+            len += sprintf(buf+len, "[%s] poweroff_timeout = %d ms\n", _core_desc[i], timeout);
+        }
+    }
 
     len += sprintf(buf+len, "\n* Usage:\n"
-                            " $ cat /sys/devices/.../poweroff_idle_timeout\n"
-                            " $ echo [core],[state] > /sys/devices/.../poweroff_idle_timeout\n"
-                            "   e.g. core[3D] power_off_idle_timeout [enable]\n"
-                            " $ echo 0,1 > /sys/devices/.../poweroff_idle_timeout\n"
+                            "  $ cat /sys/devices/.../poweroff_timeout\n"
+                            "  $ echo [core],[timeout] > /sys/devices/.../poweroff_timeout\n"
+                            );
+    return len;
+}
+
+static ssize_t store_poweroff_timeout (struct device *dev,
+                    struct device_attribute *attr,
+                    const char *buf, size_t count)
+{
+    int core, timeout, i, gpu_count;
+
+    /* count core numbers */
+    for (i = 0, gpu_count = 0; i < gcdMAX_GPU_COUNT; i++)
+        if (galDevice->kernels[i] != gcvNULL)
+            gpu_count++;
+
+    /* read input and verify */
+    SYSFS_VERIFY_INPUT(sscanf(buf, "%d,%d", &core, &timeout), 2);
+    SYSFS_VERIFY_INPUT_RANGE(core, 0, (gpu_count-1));
+    SYSFS_VERIFY_INPUT_RANGE(timeout, 0, 3600000);
+
+    gcmkVERIFY_OK(gckHARDWARE_SetPowerOffTimeout(
+                            galDevice->kernels[core]->hardware,
+                            timeout));
+
+    return count;
+}
+
+gc_sysfs_attr_rw(poweroff_timeout);
+
+static ssize_t show_poweroff_timeout_enable (struct device *dev,
+                    struct device_attribute *attr,
+                    char * buf)
+{
+    int len = 0, i;
+    gctBOOL enable;
+
+    for (i = 0; i < gcdMAX_GPU_COUNT; i++)
+    {
+        if (galDevice->kernels[i] != gcvNULL)
+        {
+            gcmkVERIFY_OK(gckHARDWARE_QueryPowerOffTimeoutEnable(
+                                    galDevice->kernels[i]->hardware,
+                                    &enable));
+
+            len += sprintf(buf+len, "[%s] poweroff_timeout_enable = %d\n", _core_desc[i], enable);
+        }
+    }
+
+    len += sprintf(buf+len, "\n* Usage:\n"
+                            " $ cat /sys/devices/.../poweroff_timeout_enable\n"
+                            " $ echo [core],[state] > /sys/devices/.../poweroff_timeout_enable\n"
+                            " $   e.g. echo 0,1 > /sys/devices/.../poweroff_timeout_enable\n"
                             );
 
     len += sprintf(buf+len, "* Core options:\n");
@@ -420,8 +483,8 @@ static ssize_t show_poweroff_idle_timeout (struct device *dev,
         len += sprintf(buf+len, " - %d   core [%s]\n", gcvCORE_MAJOR, _core_desc[gcvCORE_MAJOR]);
     if (galDevice->kernels[gcvCORE_2D] != gcvNULL)
         len += sprintf(buf+len, " - %d   core [%s]\n", gcvCORE_2D, _core_desc[gcvCORE_2D]);
-    if (galDevice->kernels[gcvCORE_VG] != gcvNULL)
-        len += sprintf(buf+len, " - %d   core [%s]\n", gcvCORE_VG, _core_desc[gcvCORE_VG]);
+    if (galDevice->kernels[gcvCORE_SH] != gcvNULL)
+        len += sprintf(buf+len, " - %d   core [%s]\n", gcvCORE_SH, _core_desc[gcvCORE_SH]);
 
     len += sprintf(buf+len, "* State options:\n"
                             " - 0   to disable power off when idle timeout\n"
@@ -430,7 +493,7 @@ static ssize_t show_poweroff_idle_timeout (struct device *dev,
     return len;
 }
 
-static ssize_t store_poweroff_idle_timeout (struct device *dev,
+static ssize_t store_poweroff_timeout_enable (struct device *dev,
                     struct device_attribute *attr,
                     const char *buf, size_t count)
 {
@@ -457,7 +520,7 @@ static ssize_t store_poweroff_idle_timeout (struct device *dev,
     return count;
 }
 
-gc_sysfs_attr_rw(poweroff_idle_timeout);
+gc_sysfs_attr_rw(poweroff_timeout_enable);
 
 #endif
 
@@ -639,6 +702,55 @@ static ssize_t store_stuck_debug (struct device *dev,
     return count;
 }
 
+static ssize_t show_command_debug (struct device *dev,
+                    struct device_attribute *attr,
+                    char * buf)
+{
+    int i = 0, len = 0;
+
+    len += sprintf(buf+len, "commandbuffer set:\n");
+
+    for(i = 0; i < gcdMAX_GPU_COUNT; i++)
+    {
+        if(galDevice->kernels[i] != gcvNULL)
+        {
+            len += sprintf(buf+len, "\t[%s] : Dump level is %u\n trace print: %d\n process is:%d\n",
+                        _core_desc[i],
+                        galDevice->kernels[i]->commandLevel,
+                        galDevice->kernels[i]->commandTraceprint,
+                        galDevice->kernels[i]->commandProc);
+        }
+    }
+
+    return len;
+}
+
+static ssize_t store_command_debug (struct device *dev,
+    struct device_attribute *attr,
+    const char *buf, size_t count)
+{
+    int core, level, trace, process;
+    int i, gpu_count;
+
+    for (i = 0, gpu_count = 0; i < gcdMAX_GPU_COUNT; i++)
+    {
+        if (galDevice->kernels[i] != gcvNULL)
+        {
+            gpu_count++;
+        }
+    }
+
+    SYSFS_VERIFY_INPUT(sscanf(buf, "%d,%d,%d,%d", &core, &level, &trace, &process), 4);
+    SYSFS_VERIFY_INPUT_RANGE(core, 0, (gpu_count-1));
+    SYSFS_VERIFY_INPUT_RANGE(level, 0, 2);
+    SYSFS_VERIFY_INPUT_RANGE(trace, 0, 1);
+    galDevice->kernels[core]->commandLevel= level;
+    galDevice->kernels[core]->commandTraceprint= trace;
+    galDevice->kernels[core]->commandProc= process;
+
+    return count;
+}
+
 gc_sysfs_attr_rw(pm_state);
 gc_sysfs_attr_rw(profiler_debug);
 gc_sysfs_attr_rw(power_debug);
@@ -648,6 +760,7 @@ gc_sysfs_attr_rw(register_stats);
 gc_sysfs_attr_rw(clk_rate);
 gc_sysfs_attr_rw(stuck_debug);
 gc_sysfs_attr_rw(clock_gating_state);
+gc_sysfs_attr_rw(command_debug);
 
 static struct attribute *gc_debug_attrs[] = {
     &gc_attr_pm_state.attr,
@@ -659,11 +772,13 @@ static struct attribute *gc_debug_attrs[] = {
     &gc_attr_clk_rate.attr,
     &gc_attr_clk_off_when_idle.attr,
 #if gcdPOWEROFF_TIMEOUT
-    &gc_attr_poweroff_idle_timeout.attr,
+    &gc_attr_poweroff_timeout.attr,
+    &gc_attr_poweroff_timeout_enable.attr,
 
 #endif
     &gc_attr_stuck_debug.attr,
     &gc_attr_clock_gating_state.attr,
+    &gc_attr_command_debug.attr,
     NULL
 };
 

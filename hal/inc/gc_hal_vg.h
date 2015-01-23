@@ -659,6 +659,7 @@ typedef struct _gcsVGCONTEXT
     gctSIGNAL                   signal;
 
 #if defined(__QNXNTO__)
+    gctSIGNAL                   userSignal;
     gctINT32                    coid;
     gctINT32                    rcvid;
 #endif

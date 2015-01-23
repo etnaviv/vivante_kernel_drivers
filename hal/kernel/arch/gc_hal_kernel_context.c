@@ -339,6 +339,7 @@ _FlushPipe(
 	?   ((((gctUINT32)(0)) & ~(((gctUINT32)(((gctUINT32) ((((1 ? 3:3) - (0 ? 3:3) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 3:3) - (0 ? 3:3) + 1))))))) << (0 ? 3:3))) | (((gctUINT32)(0x1 & ((gctUINT32) ((((1 ? 3:3) - (0 ? 3:3) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 3:3) - (0 ? 3:3) + 1))))))) << (0 ? 3:3)))
 		:   ((((gctUINT32)(0)) & ~(((gctUINT32)(((gctUINT32) ((((1 ? 0:0) - (0 ? 0:0) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 0:0) - (0 ? 0:0) + 1))))))) << (0 ? 0:0))) | (((gctUINT32)(0x1 & ((gctUINT32) ((((1 ? 0:0) - (0 ? 0:0) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 0:0) - (0 ? 0:0) + 1))))))) << (0 ? 0:0)))
 		| ((((gctUINT32)(0)) & ~(((gctUINT32)(((gctUINT32) ((((1 ? 1:1) - (0 ? 1:1) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 1:1) - (0 ? 1:1) + 1))))))) << (0 ? 1:1))) | (((gctUINT32)(0x1 & ((gctUINT32) ((((1 ? 1:1) - (0 ? 1:1) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 1:1) - (0 ? 1:1) + 1))))))) << (0 ? 1:1)))
+		| ((((gctUINT32)(0)) & ~(((gctUINT32)(((gctUINT32) ((((1 ? 4:4) - (0 ? 4:4) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 4:4) - (0 ? 4:4) + 1))))))) << (0 ? 4:4))) | (((gctUINT32)(0x1 & ((gctUINT32) ((((1 ? 4:4) - (0 ? 4:4) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 4:4) - (0 ? 4:4) + 1))))))) << (0 ? 4:4)))
 		| ((((gctUINT32)(0)) & ~(((gctUINT32)(((gctUINT32) ((((1 ? 2:2) - (0 ? 2:2) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 2:2) - (0 ? 2:2) + 1))))))) << (0 ? 2:2))) | (((gctUINT32)(0x1 & ((gctUINT32) ((((1 ? 2:2) - (0 ? 2:2) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 2:2) - (0 ? 2:2) + 1))))))) << (0 ? 2:2)))
 		| ((((gctUINT32)(0)) & ~(((gctUINT32)(((gctUINT32) ((((1 ? 5:5) - (0 ? 5:5) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 5:5) - (0 ? 5:5) + 1))))))) << (0 ? 5:5))) | (((gctUINT32)(0x1 & ((gctUINT32) ((((1 ? 5:5) - (0 ? 5:5) + 1) == 32) ? ~0 : (~(~0 << ((1 ? 5:5) - (0 ? 5:5) + 1))))))) << (0 ? 5:5)));
 	
@@ -573,6 +574,11 @@ _State(
     {
         /* Determine maximum state. */
         Context->stateCount = Address + Size;
+    }
+    if (buffer == gcvNULL)
+    {
+        /* Update number of states. */
+        Context->numStates += Size;
     }
 
     /* Do we need a new entry? */
@@ -898,7 +904,7 @@ _InitializeContextBuffer(
 		index += _State( Context, index,0x00E10 >> 2,0x00000000,4,gcvFALSE,gcvFALSE);
 		index += _State( Context, index,0x00E04 >> 2,0x00000000,1,gcvFALSE,gcvFALSE);
 		index += _State( Context, index,0x00E40 >> 2,0x00000000,16,gcvFALSE,gcvFALSE);
-		index += _State( Context, index,0x00E08 >> 2,0x00000031,1,gcvFALSE,gcvFALSE);
+		index += _State( Context, index,0x00E08 >> 2,0x17000031,1,gcvFALSE,gcvFALSE);
 		index += _State( Context, index,0x00E24 >> 2,0x00000000,1,gcvFALSE,gcvFALSE);
 		index += _State( Context, index,0x00E20 >> 2,0x00000000,1,gcvFALSE,gcvFALSE);
 	
@@ -914,6 +920,13 @@ _InitializeContextBuffer(
 		index += _State( Context, index,0x01010 >> 2,0x00000000,1,gcvFALSE,gcvFALSE);
 		index += _State( Context, index,0x01030 >> 2,0x00000000,1,gcvFALSE,gcvFALSE);
 	
+    if (halti2)
+    {
+	index += _State( Context, index,0x0102C >> 2,0x00000000,1,gcvFALSE,gcvFALSE);
+		index += _State( Context, index,0x01034 >> 2,0x00000000,1,gcvFALSE,gcvFALSE);
+		index += _State( Context, index,0x01038 >> 2,0x00000000,1,gcvFALSE,gcvFALSE);
+	    }
+
     index += _CLOSE_RANGE();
 
     /* Texture states. */
@@ -1496,12 +1509,6 @@ _DestroyContext(
 
 #endif
 
-        /* Free the state mapping. */
-        if (Context->map != gcvNULL)
-        {
-            gcmkONERROR(gcmkOS_SAFE_FREE(Context->os, Context->map));
-        }
-
         /* Mark the gckCONTEXT object as unknown. */
         Context->object.type = gcvOBJ_UNKNOWN;
 
@@ -1624,28 +1631,44 @@ gckCONTEXT_Construct(
     /* Compute the size of the record array. **********************************/
 
     context->recordArraySize
-        = gcmSIZEOF(gcsSTATE_DELTA_RECORD) * (gctUINT)context->stateCount;
+        = gcmSIZEOF(gcsSTATE_DELTA_RECORD) * (gctUINT)context->numStates;
 
 
     if (context->stateCount > 0)
     {
-        /**************************************************************************/
-        /* Allocate and reset the state mapping table. ****************************/
+        gctUINT32 oldValue;
 
-        /* Allocate the state mapping table. */
-        gcmkONERROR(gckOS_Allocate(
+        gcmkONERROR(gckOS_AtomicExchange(
             Os,
-            gcmSIZEOF(gcsSTATE_MAP) * context->stateCount,
-            &pointer
+            context->hardware->kernel->command->stateMapCreated,
+            1,
+            &oldValue
             ));
 
-        context->map = pointer;
+        /**************************************************************************/
+        /* Allocate and reset the state mapping table. ****************************/
+        if (oldValue == 0)
+        {
+            /* Allocate the state mapping table. */
+            gcmkONERROR(gckOS_Allocate(
+                Os,
+                gcmSIZEOF(gcsSTATE_MAP) * context->stateCount,
+                &pointer
+                ));
+
+            context->map = pointer;
+
+            context->hardware->kernel->command->stateMap = pointer;
+        }
+        else
+        {
+            context->map = context->hardware->kernel->command->stateMap;
+        }
 
         /* Zero the state mapping table. */
         gcmkONERROR(gckOS_ZeroMemory(
             context->map, gcmSIZEOF(gcsSTATE_MAP) * context->stateCount
             ));
-
 
         /**************************************************************************/
         /* Allocate the hint array. ***********************************************/
@@ -2121,7 +2144,7 @@ gckCONTEXT_Update(
             /* Merge all pending states. */
             for (j = 0; j < kDelta->recordCount; j += 1)
             {
-                if (j >= Context->stateCount)
+                if (j >= Context->numStates)
                 {
                     break;
                 }

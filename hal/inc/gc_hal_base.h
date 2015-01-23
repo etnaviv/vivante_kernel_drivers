@@ -66,6 +66,27 @@ typedef struct _gcoFENCE *              gcoFENCE;
 typedef struct _gcsSYNC_CONTEXT *       gcsSYNC_CONTEXT_PTR;
 #endif
 
+/******************************************************************************\
+********************* Share obj lock/unlock macros. ****************************
+\******************************************************************************/
+#define gcmLOCK_SHARE_OBJ(Obj) \
+{ \
+    if(Obj->sharedLock != gcvNULL)\
+    {\
+        (gcoOS_AcquireMutex( \
+                     gcvNULL, Obj->sharedLock, gcvINFINITE));\
+    }\
+}
+
+
+#define gcmUNLOCK_SHARE_OBJ(Obj)\
+{\
+    if(Obj->sharedLock != gcvNULL)\
+    {\
+        (gcoOS_ReleaseMutex(gcvNULL, Obj->sharedLock));\
+    }\
+}
+
 #if defined(ANDROID)
 typedef struct _gcoOS_SymbolsList gcoOS_SymbolsList;
 #endif
@@ -117,6 +138,9 @@ typedef enum _gcePATCH_ID
     gcvPATCH_GFXBENCH,
     gcvPATCH_ANTUTU,        /* Antutu 3.x */
     gcvPATCH_ANTUTU4X,      /* Antutu 4.x */
+    gcvPATCH_ANTUTU5X,
+    gcvPATCH_ANTUTU5X_2D,    /* Antutu 5.x 2d test */
+    gcvPATCH_ANTUTU5X_3D,    /* Antutu 5.x 3d test */
     gcvPATCH_QUADRANT,
     gcvPATCH_GPUBENCH,
     gcvPATCH_DUOKAN,
@@ -181,6 +205,8 @@ typedef enum _gcePATCH_ID
     gcvPATCH_SUMSUNG_BENCH,
     gcvPATCH_ROCKSTAR_MAXPAYNE,
     gcvPATCH_TITANPACKING,
+    gcvPATCH_OES20SFT,
+    gcvPATCH_OES30SFT,
     gcvPATCH_BASEMARKOSIICN,
     gcvPATCH_FRUITNINJA,
 #if defined(ANDROID)
@@ -1089,6 +1115,35 @@ gcoHAL_ReadShBuffer(
 gceSTATUS
 gcoHAL_ConfigPowerManagement(
     IN gctBOOL Enable
+    );
+
+gceSTATUS
+gcoHAL_AllocateVideoMemory(
+    IN gctUINT Alignment,
+    IN gceSURF_TYPE Type,
+    IN gctUINT32 Flag,
+    IN gcePOOL Pool,
+    IN OUT gctSIZE_T * Bytes,
+    OUT gctUINT32_PTR Node
+    );
+
+gceSTATUS
+gcoHAL_LockVideoMemory(
+    IN gctUINT32 Node,
+    IN gctBOOL Cacheable,
+    OUT gctUINT32 * Physical,
+    OUT gctPOINTER * Logical
+    );
+
+gceSTATUS
+gcoHAL_UnlockVideoMemory(
+    IN gctUINT32 Node,
+    IN gceSURF_TYPE Type
+    );
+
+gceSTATUS
+    gcoHAL_ReleaseVideoMemory(
+    IN gctUINT32 Node
     );
 
 #if gcdENABLE_3D || gcdENABLE_VG
@@ -3934,7 +3989,7 @@ gckOS_DumpBuffer(
 
 #define gcmkDUMPBUFFER          gckOS_DumpBuffer
 
-#if gcdDUMP_COMMAND
+#if gcdDUMP_COMMAND || MRVL_DUMP_COMMAND
 #   define gcmkDUMPCOMMAND(Os, Buffer, Size, Type, CopyMessage) \
         gcmkDUMPBUFFER(Os, Buffer, Size, Type, CopyMessage)
 #else
@@ -5704,9 +5759,9 @@ struct _gcoOS_SymbolsList
         UnifiedConst = gcvTRUE; \
         VsConstBase  = 0xC000; \
         PsConstBase  = 0xC000; \
+        VsConstMax   = gcmMIN(512, NumConstants - 64); \
+        PsConstMax   = gcmMIN(512, NumConstants - 64); \
         ConstMax     = NumConstants; \
-        VsConstMax   = 256; \
-        PsConstMax   = ConstMax - VsConstMax; \
     } \
     else if (NumConstants == 256) \
     { \

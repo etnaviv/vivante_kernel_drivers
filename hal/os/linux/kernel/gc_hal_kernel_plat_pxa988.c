@@ -82,8 +82,9 @@ static struct gc_iface gc3dsh_iface = {
  * gc3d definition
  */
 
-static void __PLAT_APINAME(gc3d_pwr_ops)(struct gc_iface *iface, unsigned int enabled)
+static int __PLAT_APINAME(gc3d_pwr_ops)(struct gc_iface *iface, unsigned int enabled)
 {
+    int retval = 0;
     PR_DEBUG("[%6s] %s %d\n", iface->name, __func__, enabled);
 
     if(has_feat_power_domain())
@@ -94,16 +95,16 @@ static void __PLAT_APINAME(gc3d_pwr_ops)(struct gc_iface *iface, unsigned int en
                 __func__,
                 __LINE__,
                 enabled?"on":"off");
-            return;
+            return -ENODEV;
         }
 
         if(enabled)
         {
-            pm_runtime_get_sync((&(((struct platform_device*)(iface->pdev))->dev)));
+            retval = pm_runtime_get_sync((&(((struct platform_device*)(iface->pdev))->dev)));
         }
         else
         {
-            pm_runtime_put_sync((&(((struct platform_device*)(iface->pdev))->dev)));
+            retval = pm_runtime_put_sync((&(((struct platform_device*)(iface->pdev))->dev)));
         }
     }
     else
@@ -125,12 +126,14 @@ static void __PLAT_APINAME(gc3d_pwr_ops)(struct gc_iface *iface, unsigned int en
             GC3D_PWR = gc_pwr;
 #else
             gcmkPRINT("GC3D_PWR not implemented!");
-            return;
+            return -EINVAL;
 #endif
         }
 
         GC3D_PWR((PARAM_TYPE_PWR)enabled);
     }
+
+    return retval;
 }
 
 static struct gc_ops gc3d_ops = {
@@ -163,8 +166,9 @@ static struct gc_iface gc3d_iface = {
 /**
  * gc2d definition
  */
-static void __PLAT_APINAME(gc2d_pwr_ops)(struct gc_iface *iface, unsigned int enabled)
+static int __PLAT_APINAME(gc2d_pwr_ops)(struct gc_iface *iface, unsigned int enabled)
 {
+    int retval = 0;
     PR_DEBUG("[%6s] %s %d\n", iface->name, __func__, enabled);
 
     if(has_feat_power_domain())
@@ -175,16 +179,16 @@ static void __PLAT_APINAME(gc2d_pwr_ops)(struct gc_iface *iface, unsigned int en
                 __func__,
                 __LINE__,
                 enabled?"on":"off");
-            return;
+            return -ENODEV;
         }
 
         if(enabled)
         {
-            pm_runtime_get_sync((&(((struct platform_device*)(iface->pdev))->dev)));
+            retval = pm_runtime_get_sync((&(((struct platform_device*)(iface->pdev))->dev)));
         }
         else
         {
-            pm_runtime_put_sync((&(((struct platform_device*)(iface->pdev))->dev)));
+            retval = pm_runtime_put_sync((&(((struct platform_device*)(iface->pdev))->dev)));
         }
     }
     else
@@ -206,12 +210,14 @@ static void __PLAT_APINAME(gc2d_pwr_ops)(struct gc_iface *iface, unsigned int en
             GC2D_PWR = gc2d_pwr;
 #else
             gcmkPRINT("GC2D_PWR not implemented!");
-            return;
+            return -EINVAL;
 #endif
         }
 
         GC2D_PWR((PARAM_TYPE_PWR)enabled);
     }
+
+    return retval;
 }
 
 static struct gc_ops gc2d_ops = {

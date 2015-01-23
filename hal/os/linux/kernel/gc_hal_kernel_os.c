@@ -28,7 +28,7 @@
 #endif
 #include <linux/delay.h>
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,22)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,27)
 #include <linux/anon_inodes.h>
 #endif
 
@@ -9634,8 +9634,13 @@ gckOS_SetGPUPowerOnMRVL(
      */
     if(EnablePwr && !Hint)
     {
+        int retval = 0;
+
         gpu_pwr_enable_prepare(iface);
-        gpu_pwr_enable(iface);
+        retval = gpu_pwr_enable(iface);
+        if(retval < 0)
+            gcmkPRINT("galcore: GPU %d power ops failed, retval %d @ %s(%d)\n",
+                        Core, retval, __FUNCTION__, __LINE__);
         gpu_pwr_enable_unprepare(iface);
         trace_gc_power(Core, 1);
     }
@@ -9689,8 +9694,12 @@ gckOS_SetGPUPowerOffMRVL(
      */
     if (DisablePwr && !Hint)
     {
+        int retval = 0;
         gpu_pwr_disable_prepare(iface);
-        gpu_pwr_disable(iface);
+        retval = gpu_pwr_disable(iface);
+        if(retval < 0)
+            gcmkPRINT("galcore: GPU %d power ops failed, retval %d @ %s(%d)\n",
+                        Core, retval, __FUNCTION__, __LINE__);
         gpu_pwr_disable_unprepare(iface);
         trace_gc_power(Core, 0);
     }
@@ -11290,6 +11299,11 @@ gckOS_QueryOption(
 #endif
         return gcvSTATUS_OK;
     }
+    else if (!strcmp(Option, "contiguousSize"))
+    {
+        *Value = device->contiguousSize;
+        return gcvSTATUS_OK;
+    }
 
     return gcvSTATUS_NOT_SUPPORTED;
 }
@@ -11321,7 +11335,7 @@ gckOS_GetFd(
     OUT gctINT *Fd
     )
 {
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,22)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,27)
     *Fd = anon_inode_getfd(Name, &fd_fops, Private, O_RDWR);
 
     if (*Fd < 0)

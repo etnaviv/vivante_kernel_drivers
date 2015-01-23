@@ -505,7 +505,9 @@ gckKERNEL_Construct(
 
     kernel->recovery      = gcvTRUE;
     kernel->stuckDump     = 1;
-
+    kernel->commandLevel = 0;
+    kernel->commandProc = 0;
+    kernel->commandTraceprint= 0;
     kernel->virtualBufferHead =
     kernel->virtualBufferTail = gcvNULL;
 
@@ -2410,7 +2412,14 @@ gckKERNEL_Dispatch(
 
         logical = gcmUINT64_TO_PTR(Interface->u.Cache.logical);
 
-        if (Interface->u.Cache.node)
+        if (Interface->u.Cache.node == 0)
+        {
+            /* FIXME: Surface wrap some memory which is not allocated by GC,
+            ** So we don't need to handle cache coherence, just ignore it */
+            status = gcvSTATUS_OK;
+            break;
+        }
+        else
         {
             gcmkONERROR(gckVIDMEM_HANDLE_Lookup(
                 Kernel,
@@ -2418,13 +2427,17 @@ gckKERNEL_Dispatch(
                 Interface->u.Cache.node,
                 &nodeObject));
 
-            if (nodeObject->node->VidMem.memory->object.type == gcvOBJ_VIDMEM
-             || nodeObject->node->Virtual.contiguous
-            )
+            if (nodeObject->node->VidMem.memory->object.type == gcvOBJ_VIDMEM)
             {
-                /* If memory is contiguous, get physical address. */
-                gcmkONERROR(gckOS_GetPhysicalAddress(
-                    Kernel->os, logical, (gctUINT32*)&paddr));
+                /* Memory is video memory, no mdl handle */
+                physical = gcvNULL;
+                paddr = gcvINVALID_ADDRESS;
+            }
+            else
+            {
+                /* Memory is from virtual, get mdl handle */
+                physical = nodeObject->node->Virtual.physical;
+                paddr = gcvINVALID_ADDRESS;
             }
         }
 
@@ -2534,6 +2547,7 @@ gckKERNEL_Dispatch(
             gckCOMMAND_Attach(Kernel->command,
                               &context,
                               &bytes,
+                              &Interface->u.Attach.numStates,
                               processID));
 
         Interface->u.Attach.stateCount = bytes;

@@ -1492,6 +1492,9 @@ _AllocatePages(
             {
                 /* Time to move out the trash! */
                 gcmkONERROR(_Collect(Mmu));
+
+                /* We are going to search from start, so reset previous to start. */
+                previous = ~0U;
             }
             else
             {
@@ -2197,12 +2200,12 @@ gckMMU_DumpPageTableEntry(
 #if gcdPROCESS_ADDRESS_SPACE
     if (stlbDesc)
     {
-        gcmkPRINT("    STLB entry = 0x%08X",
+        gcmkPRINT("      STLB entry = 0x%08X",
                   _ReadPageEntry(&stlbDesc->logical[_StlbOffset(Address)]));
     }
     else
     {
-        gcmkPRINT("    MTLB entry is empty.");
+        gcmkPRINT("      MTLB entry is empty.");
     }
 #else
     mtlb   = (Address & gcdMMU_MTLB_MASK) >> gcdMMU_MTLB_SHIFT;
@@ -2217,7 +2220,7 @@ gckMMU_DumpPageTableEntry(
               * gcdMMU_STLB_4K_ENTRY_NUM
               + stlb;
 
-        gcmkPRINT("    Page table entry = 0x%08X", _ReadPageEntry(pageTable + index));
+        gcmkPRINT("      Page table entry = 0x%08X", _ReadPageEntry(pageTable + index));
     }
     else
     {
@@ -2233,7 +2236,7 @@ gckMMU_DumpPageTableEntry(
 
             if (entry == stlbObj->physBase)
             {
-                gcmkPRINT("    Page table entry = 0x%08X", stlbObj->logical[stlb]);
+                gcmkPRINT("      Page table entry = 0x%08X", stlbObj->logical[stlb]);
                 break;
             }
 

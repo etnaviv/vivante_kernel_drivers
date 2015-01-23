@@ -51,8 +51,14 @@ _NewQueue(
     newIndex     = (currentIndex + 1) % gcdCOMMAND_QUEUES;
 
     /* Wait for availability. */
-#if gcdDUMP_COMMAND
-    gcmkPRINT("@[kernel.waitsignal]");
+#if gcdDUMP_COMMAND || MRVL_DUMP_COMMAND
+    if (Command->kernel->commandLevel > 0)
+    {
+        gctUINT32 pid = 0;
+        gcmkVERIFY_OK(gckOS_GetProcessID(&pid));
+        if (pid == Command->kernel->commandProc || Command->kernel->commandProc == 0)
+            gcmkPRINT("@[kernel.waitsignal]");
+    }
 #endif
 
     gcmkONERROR(gckOS_WaitSignal(
@@ -601,6 +607,11 @@ gckCOMMAND_Construct(
     gcmkONERROR(gckRECORDER_Construct(os, Kernel->hardware, &command->recorder));
 #endif
 
+    /* Create and initialize stateMapCreated flag.*/
+    gcmkONERROR(gckOS_AtomConstruct(os, &command->stateMapCreated));
+
+    gcmkONERROR(gckOS_AtomSet(os, command->stateMapCreated, 0));
+
     /* No command queue in use yet. */
     command->index    = -1;
     command->logical  = gcvNULL;
@@ -678,6 +689,11 @@ OnError:
                     command->queues[i].logical
                     ));
             }
+        }
+
+        if (command->stateMapCreated)
+        {
+            gcmkVERIFY_OK(gckOS_AtomDestroy(os, command->stateMapCreated));
         }
 
         gcmkVERIFY_OK(gcmkOS_SAFE_FREE(os, command));
@@ -771,6 +787,16 @@ gckCOMMAND_Destroy(
 #if gcdRECORD_COMMAND
     gckRECORDER_Destory(Command->os, Command->recorder);
 #endif
+
+    if (Command->stateMap)
+    {
+        gcmkOS_SAFE_FREE(Command->os, Command->stateMap);
+    }
+
+    if (Command->stateMapCreated)
+    {
+        gcmkVERIFY_OK(gckOS_AtomDestroy(Command->os, Command->stateMapCreated));
+    }
 
     /* Mark object as unknown. */
     Command->object.type = gcvOBJ_UNKNOWN;
@@ -1251,7 +1277,7 @@ gckCOMMAND_Commit(
     gctUINT32 oldValue;
 #endif
 
-#if gcdDUMP_COMMAND
+#if gcdDUMP_COMMAND || MRVL_DUMP_COMMAND
     gctPOINTER contextDumpLogical = gcvNULL;
     gctSIZE_T contextDumpBytes = 0;
     gctPOINTER bufferDumpLogical = gcvNULL;
@@ -1870,7 +1896,7 @@ gckCOMMAND_Commit(
         /* Update the current context. */
         Command->currContext = Context;
 
-#if gcdDUMP_COMMAND
+#if gcdDUMP_COMMAND || MRVL_DUMP_COMMAND
         contextDumpLogical = entryLogical;
         contextDumpBytes   = entryBytes;
 #endif
@@ -2120,7 +2146,7 @@ gckCOMMAND_Commit(
         }
     }
 
-#if gcdDUMP_COMMAND
+#if gcdDUMP_COMMAND || MRVL_DUMP_COMMAND
     bufferDumpLogical = commandBufferLogical + offset;
     bufferDumpBytes   = commandBufferSize    - offset;
 #endif
@@ -2295,37 +2321,80 @@ gckCOMMAND_Commit(
         ));
 #endif
 
-    gcmkDUMPCOMMAND(
-        Command->os,
-        Command->waitLogical,
-        Command->waitSize,
-        gceDUMP_BUFFER_LINK,
-        gcvFALSE
-        );
+#if gcdDUMP_COMMAND || MRVL_DUMP_COMMAND
+    if (Command->kernel->commandLevel == 1)
+    {
+        gctUINT32 pid = 0;
+        gcmkVERIFY_OK(gckOS_GetProcessID(&pid));
+        if (pid == Command->kernel->commandProc || Command->kernel->commandProc == 0)
+        {
+            gcmkDUMPCOMMAND(
+                Command->os,
+                Command->waitLogical,
+                Command->waitSize,
+                gceDUMP_BUFFER_LINK,
+                gcvFALSE
+                );
 
-    gcmkDUMPCOMMAND(
-        Command->os,
-        contextDumpLogical,
-        contextDumpBytes,
-        gceDUMP_BUFFER_CONTEXT,
-        gcvFALSE
-        );
+            gcmkDUMPCOMMAND(
+                Command->os,
+                contextDumpLogical,
+                contextDumpBytes,
+                gceDUMP_BUFFER_CONTEXT,
+                gcvFALSE
+                );
 
-    gcmkDUMPCOMMAND(
-        Command->os,
-        bufferDumpLogical,
-        bufferDumpBytes,
-        gceDUMP_BUFFER_USER,
-        gcvFALSE
-        );
+            gcmkDUMPCOMMAND(
+                Command->os,
+                waitLinkLogical,
+                waitLinkBytes,
+                gceDUMP_BUFFER_WAITLINK,
+                gcvFALSE
+                );
+            gcmkPRINT("@[kernel.commit]");
+        }
+    }
+    else if (Command->kernel->commandLevel == 2)
+    {
+        gctUINT32 pid = 0;
+        gcmkVERIFY_OK(gckOS_GetProcessID(&pid));
+        if (pid == Command->kernel->commandProc || Command->kernel->commandProc == 0)
+        {
+            gcmkDUMPCOMMAND(
+                Command->os,
+                Command->waitLogical,
+                Command->waitSize,
+                gceDUMP_BUFFER_LINK,
+                gcvFALSE
+                );
 
-    gcmkDUMPCOMMAND(
-        Command->os,
-        waitLinkLogical,
-        waitLinkBytes,
-        gceDUMP_BUFFER_WAITLINK,
-        gcvFALSE
-        );
+            gcmkDUMPCOMMAND(
+                Command->os,
+                contextDumpLogical,
+                contextDumpBytes,
+                gceDUMP_BUFFER_CONTEXT,
+                gcvFALSE
+                );
+
+            gcmkDUMPCOMMAND(
+                Command->os,
+                bufferDumpLogical,
+                bufferDumpBytes,
+                gceDUMP_BUFFER_USER,
+                gcvFALSE
+                );
+
+            gcmkDUMPCOMMAND(
+                Command->os,
+                waitLinkLogical,
+                waitLinkBytes,
+                gceDUMP_BUFFER_WAITLINK,
+                gcvFALSE
+                );
+            gcmkPRINT("@[kernel.commit]");
+        }
+    }
+#endif
 
     /* Update the current pipe. */
     Command->pipeSelect = commandBufferObject->exitPipe;
@@ -2344,9 +2413,6 @@ gckCOMMAND_Commit(
         hardware, Command->logical, Command->offset
         ));
 
-#if gcdDUMP_COMMAND
-    gcmkPRINT("@[kernel.commit]");
-#endif
 #endif /* gcdNULL_DRIVER */
 
     /* Release the context switching mutex. */
@@ -2777,21 +2843,32 @@ gckCOMMAND_Execute(
         ));
 #endif
 
-    gcmkDUMPCOMMAND(
-        Command->os,
-        Command->waitLogical,
-        Command->waitSize,
-        gceDUMP_BUFFER_LINK,
-        gcvFALSE
-        );
+#if gcdDUMP_COMMAND || MRVL_DUMP_COMMAND
+    if (Command->kernel->commandLevel >= 1)
+    {
+        gctUINT32 pid = 0;
+        gcmkVERIFY_OK(gckOS_GetProcessID(&pid));
+        if (pid == Command->kernel->commandProc || Command->kernel->commandProc == 0)
+        {
+            gcmkDUMPCOMMAND(
+                Command->os,
+                Command->waitLogical,
+                Command->waitSize,
+                gceDUMP_BUFFER_LINK,
+                gcvFALSE
+                );
 
-    gcmkDUMPCOMMAND(
-        Command->os,
-        execLogical,
-        execBytes,
-        gceDUMP_BUFFER_KERNEL,
-        gcvFALSE
-        );
+            gcmkDUMPCOMMAND(
+                Command->os,
+                execLogical,
+                execBytes,
+                gceDUMP_BUFFER_KERNEL,
+                gcvFALSE
+                );
+            gcmkPRINT("@[kernel.execute]");
+        }
+    }
+#endif
 
     /* Update the pointer to the last WAIT. */
     Command->waitPhysical = waitPhysical;
@@ -2807,9 +2884,6 @@ gckCOMMAND_Execute(
         Command->kernel->hardware, Command->logical, Command->offset
         ));
 
-#if gcdDUMP_COMMAND
-    gcmkPRINT("@[kernel.execute]");
-#endif
 
     /* Success. */
     gcmkFOOTER_NO();
@@ -2897,8 +2971,14 @@ gckCOMMAND_Stall(
     gcmkONERROR(gckEVENT_Submit(eventObject, gcvTRUE, FromPower));
 #endif
 
-#if gcdDUMP_COMMAND
-    gcmkPRINT("@[kernel.stall]");
+#if gcdDUMP_COMMAND || MRVL_DUMP_COMMAND
+    if (Command->kernel->commandLevel > 0)
+    {
+        gctUINT32 pid = 0;
+        gcmkVERIFY_OK(gckOS_GetProcessID(&pid));
+        if (pid == Command->kernel->commandProc || Command->kernel->commandProc == 0)
+            gcmkPRINT("@[kernel.stall]");
+    }
 #endif
 
     if (status == gcvSTATUS_CHIP_NOT_READY)
@@ -3003,6 +3083,7 @@ gckCOMMAND_Attach(
     IN gckCOMMAND Command,
     OUT gckCONTEXT * Context,
     OUT gctSIZE_T * StateCount,
+     OUT gctUINT32 * NumStates,
     IN gctUINT32 ProcessID
     )
 {
@@ -3030,6 +3111,7 @@ gckCOMMAND_Attach(
 
     /* Return the number of states in the context. */
     * StateCount = (* Context)->stateCount;
+    * NumStates  = (* Context)->numStates;
 
     /* Release the context switching mutex. */
     gcmkONERROR(gckOS_ReleaseMutex(Command->os, Command->mutexContext));

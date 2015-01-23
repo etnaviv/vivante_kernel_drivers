@@ -72,20 +72,16 @@ gcePROGRAM_STAGE_BIT;
 
 gceSTATUS
 gcoHAL_QueryShaderCaps(
-    IN gcoHAL Hal,
-    OUT gctUINT * VertexUniforms,
-    OUT gctUINT * FragmentUniforms,
-    OUT gctUINT * Varyings
+    IN  gcoHAL    Hal,
+    OUT gctUINT * UnifiedUniforms,
+    OUT gctUINT * VertUniforms,
+    OUT gctUINT * FragUniforms,
+    OUT gctUINT * Varyings,
+    OUT gctUINT * ShaderCoreCount,
+    OUT gctUINT * ThreadCount,
+    OUT gctUINT * VertInstructionCount,
+    OUT gctUINT * FragInstructionCount
     );
-
-gceSTATUS
-gcoHAL_QueryShaderCapsEx(
-                         IN gcoHAL Hal,
-                         OUT gctUINT * ShaderCoreCount,
-                         OUT gctUINT * ThreadCount,
-                         OUT gctUINT * VertexInstructionCount,
-                         OUT gctUINT * FragmentInstructionCount
-                         );
 
 gceSTATUS
 gcoHAL_QuerySamplerBase(
@@ -444,6 +440,12 @@ gcoSURF_IsFormatRenderableAsRT(
     );
 
 gceSTATUS
+gcoSURF_SetSharedLock(
+    IN gcoSURF Surface,
+    IN gctPOINTER sharedLock
+    );
+
+gceSTATUS
 gcoSURF_GetFence(
     IN gcoSURF Surface
     );
@@ -515,6 +517,11 @@ gcoSURF_3DBlitCopy(
 /******************************************************************************\
 ******************************** gcoINDEX Object *******************************
 \******************************************************************************/
+gceSTATUS
+gcoINDEX_SetSharedLock(
+    IN gcoINDEX Index,
+    IN gctPOINTER sharedLock
+    );
 
 /* Construct a new gcoINDEX object. */
 gceSTATUS
@@ -2038,6 +2045,12 @@ typedef enum _gceATTRIB_SCHEME
     gcvATTRIB_SCHEME_UBYTE_TO_UINT,
     gcvATTRIB_SCHEME_USHORT_TO_UINT,
 } gceATTRIB_SCHEME;
+
+gceSTATUS
+gcoSTREAM_SetSharedLock(
+    IN gcoSTREAM Stream,
+    IN gctPOINTER sharedLock
+    );
 
 gceSTATUS
 gcoSTREAM_Construct(

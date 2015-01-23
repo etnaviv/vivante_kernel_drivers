@@ -1100,6 +1100,9 @@ gckGALDEVICE_Construct(
 
     device->platform = Args->platform;
 
+    /* set up the contiguous memory */
+    device->contiguousSize = ContiguousSize;
+
     gcmkONERROR(_DebugfsInit(device));
 
     if (gckDEBUGFS_CreateNode(

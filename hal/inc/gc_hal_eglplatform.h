@@ -235,15 +235,6 @@ gcoOS_GetDisplayInfoEx(
     );
 
 gceSTATUS
-gcoOS_GetNextDisplayInfoExByIndex(
-    IN gctINT Index,
-    IN HALNativeDisplayType Display,
-    IN HALNativeWindowType Window,
-    IN gctUINT DisplayInfoSize,
-    OUT halDISPLAY_INFO * DisplayInfo
-    );
-
-gceSTATUS
 gcoOS_GetDisplayVirtual(
     IN HALNativeDisplayType Display,
     OUT gctINT * Width,

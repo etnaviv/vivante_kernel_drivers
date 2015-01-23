@@ -148,6 +148,10 @@ static TEEC_Result gpu3d_session_callback(
             TEEC_SharedMemory *shm = NULL;
 
             shm = gpu3d_allocate_secure_mem(channel->os, size);
+            if (shm == NULL)
+            {
+                return TEEC_ERROR_OUT_OF_MEMORY;
+            }
 
             /* use the value to save the pointer in client side */
             operation->params[0].value.a = (uint32_t)shm;

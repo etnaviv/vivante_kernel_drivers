@@ -210,6 +210,10 @@ static int pxa988_gpufreq_exit (struct gpufreq_policy *policy);
 static int pxa988_gpufreq_verify (struct gpufreq_policy *policy);
 static int pxa988_gpufreq_target (struct gpufreq_policy *policy, unsigned int target_freq, unsigned int relation);
 static int pxa988_gpufreq_set(unsigned int gpu, struct gpufreq_freqs* freqs);
+static int pxa988_gpufreq_suspend(struct gpufreq_policy *policy);
+static int pxa988_gpufreq_resume(struct gpufreq_policy *policy);
+
+
 static unsigned int pxa988_gpufreq_get (unsigned int chip);
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0)
 static unsigned int pxa988_gpufreq_get_axi(unsigned int chip);
@@ -257,6 +261,8 @@ struct gpufreq_driver pxa988_gpufreq_driver = {
     .verify = pxa988_gpufreq_verify,
     .get    = pxa988_gpufreq_get,
     .target = pxa988_gpufreq_target,
+    .suspend= pxa988_gpufreq_suspend,
+    .resume = pxa988_gpufreq_resume,
     .name   = "pxa988-gpufreq",
     .exit   = pxa988_gpufreq_exit,
     .attr   = driver_attrs,
@@ -541,6 +547,38 @@ static unsigned int pxa988_gpufreq_get (unsigned int gpu)
 OnError:
     debug_log(GPUFREQ_LOG_ERROR, "failed to get clk rate of gpu %u\n", gpu);
     return -EINVAL;
+}
+
+static int pxa988_gpufreq_suspend(struct gpufreq_policy *policy)
+{
+#if GPUFREQ_REQUEST_DDR_QOS
+    unsigned int gpu = policy->gpu;
+
+    /* release ddr qos if freq > gpu_high_threshold when power off,
+    * because gpu doesn't need ddr anymore
+    */
+    if(policy->cur >= gpu_high_threshold)
+        gpufreq_ddr_constraint_update(&gpufreq_ddr_constraint[gpu],
+                                       policy->cur,
+                                       0,
+                                       gpu_high_threshold);
+#endif
+    return 0;
+}
+
+static int pxa988_gpufreq_resume(struct gpufreq_policy *policy)
+{
+#if GPUFREQ_REQUEST_DDR_QOS
+    unsigned int gpu = policy->gpu;
+
+    /* re-hold ddr qos if freq > gpu_high_threshold when power on*/
+    if(policy->cur >= gpu_high_threshold)
+        gpufreq_ddr_constraint_update(&gpufreq_ddr_constraint[gpu],
+                                      0,
+                                      policy->cur,
+                                      gpu_high_threshold);
+#endif
+    return 0;
 }
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0)

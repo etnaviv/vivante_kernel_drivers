@@ -26,6 +26,7 @@ Please Reference define in gc_hal_base.h
 */
 static gctUINT32 _debugZones = gcvZONE_NONE;
 
+static gctBOOL trace_debug = 0;
 /******************************************************************************\
 ********************************* Debug Switches *******************************
 \******************************************************************************/
@@ -1956,6 +1957,7 @@ gckOS_DumpBuffer(
     gcsBUFFERED_OUTPUT_PTR outputBuffer = gcvNULL;
     static gctBOOL userLocked;
     gctCHAR *buffer                     = (gctCHAR*)Buffer;
+    int i;
 
     gcmkDECLARE_LOCK(lockHandle);
 
@@ -1978,6 +1980,16 @@ gckOS_DumpBuffer(
     {
         gcmkLOCKSECTION(lockHandle);
         userLocked = gcvFALSE;
+    }
+
+    for (i = 0; i < gcdMAX_GPU_COUNT; i++)
+    {
+        if (Os->device->kernels[i] != gcvNULL && Os->device->kernels[i]->commandTraceprint)
+        {
+            trace_debug = 1;
+            break;
+        }
+        trace_debug = 0;
     }
 
     if (Buffer != gcvNULL)

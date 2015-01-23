@@ -1289,4 +1289,15 @@
 #   define gcdRECORD_COMMAND                    0
 #endif
 
+/*
+    gcdALLOC_CMD_FROM_RESERVE
+
+    Provide a way by which location of command buffer can be
+    specified. This is a DEBUG option to limit command buffer
+    to some memory range.
+*/
+#ifndef gcdALLOC_CMD_FROM_RESERVE
+#   define gcdALLOC_CMD_FROM_RESERVE            0
+#endif
+
 #endif /* __gc_hal_options_h_ */

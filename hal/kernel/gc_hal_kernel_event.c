@@ -1538,12 +1538,15 @@ gckEVENT_Signal(
     /* Mark the event as a signal. */
     iface.command            = gcvHAL_SIGNAL;
     iface.u.Signal.signal    = gcmPTR_TO_UINT64(Signal);
+    iface.u.Signal.auxSignal = 0;
+    iface.u.Signal.process   = 0;
+
 #ifdef __QNXNTO__
     iface.u.Signal.coid      = 0;
     iface.u.Signal.rcvid     = 0;
+
+    gcmkONERROR(gckOS_SignalPending(Event->os, Signal));
 #endif
-    iface.u.Signal.auxSignal = 0;
-    iface.u.Signal.process   = 0;
 
     /* Append it to the queue. */
     gcmkONERROR(gckEVENT_AddList(Event, &iface, FromWhere, gcvFALSE, gcvTRUE));
@@ -2224,7 +2227,7 @@ gckEVENT_Interrupt(
         Data &= ~0x20000000;
 
 #if gcdMULTI_GPU
-        if (Event->kernel->core == gcvCORE_MAJOR)
+        if (CoreId == gcvCORE_3D_0_ID)
 #endif
         {
             /* Get first entry information. */
@@ -2241,6 +2244,20 @@ gckEVENT_Interrupt(
                     &idle));
             }
             while (idle != 0x7FFFFFFF);
+
+#if gcdMULTI_GPU
+            /* Make sure FE of another GPU is idle. */
+            do
+            {
+                gcmkVERIFY_OK(gckOS_ReadRegisterByCoreId(
+                    Event->os,
+                    Event->kernel->core,
+                    gcvCORE_3D_1_ID,
+                    0x4,
+                    &idle));
+            }
+            while (idle != 0x7FFFFFFF);
+#endif
 
             /* Start Command Parser. */
             gcmkVERIFY_OK(gckHARDWARE_Execute(
@@ -2993,9 +3010,8 @@ gckEVENT_Notify(
                 {
                     /* Kernel signal. */
                     gcmkERR_BREAK(
-                        gckOS_Signal(Event->os,
-                                     signal,
-                                     gcvTRUE));
+                        gckOS_SignalPulse(Event->os,
+                                          signal));
                 }
                 else
                 {

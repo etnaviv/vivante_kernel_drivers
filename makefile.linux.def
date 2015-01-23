@@ -229,6 +229,12 @@ ifeq ($(ANDROID), 1)
         CFLAGS += -DUSE_HWC_GCU=0
     endif
 
+    ifeq ($(ENABLE_GPUTEX),1)
+        ifeq ($(ARCH_TYPE), arm)
+            CFLAGS += -DCONFIG_ENABLE_GPUTEX
+        endif
+    endif
+
     ifeq ($(ARCH_TYPE), arm)
         CFLAGS += -fno-builtin-sin -fomit-frame-pointer -msoft-float -march=armv7-a -mfloat-abi=softfp -mfpu=neon -mthumb-interwork -mthumb
     else ifeq ($(ARCH_TYPE), arm64)
@@ -467,8 +473,9 @@ GL21_DIR        := $(AQROOT)/driver/khronos/libGL2
 
 GFX_DIR         := $(AQROOT)/driver/dfb
 CL11_DIR        := $(AQROOT)/driver/khronos/libCL
-CL11_ICD_DIR    := $(AQROOT)/driver/khronos/libCL/icd
+CL11_ICD_DIR    := $(AQROOT)/driver/khronos/libCL/icdloader
 CLC_DIR         := $(AQROOT)/compiler/libCLC
+CLICD_DIR       := $(AQROOT)/driver/khronos/libCL/icd
 
 VSC_DIR         := $(AQROOT)/compiler/libVSC
 GLSLC_DIR       := $(AQROOT)/compiler/libGLSLC

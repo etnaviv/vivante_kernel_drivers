@@ -68,7 +68,11 @@ typedef va_list gctARGUMENTS;
     if(gckDEBUGFS_IsEnabled()) {\
         while(-ERESTARTSYS == gckDEBUGFS_Print(String));\
     }else{\
-        printk(String); \
+        if(trace_debug) {\
+            trace_printk(String); \
+        } else{\
+            printk(String);\
+        }\
     }\
     touch_softlockup_watchdog()
 

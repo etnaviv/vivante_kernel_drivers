@@ -33,7 +33,7 @@ struct gc_ops {
     void (*disableclk) (struct gc_iface *);
     int (*setclkrate) (struct gc_iface *, unsigned long);
     unsigned long (*getclkrate) (struct gc_iface *);
-    void (*pwrops) (struct gc_iface *, unsigned int);
+    int (*pwrops) (struct gc_iface *, unsigned int);
     void (*pwr_enable_prepare) (struct gc_iface *);
     void (*pwr_enable_unprepare) (struct gc_iface *);
     void (*pwr_disable_prepare) (struct gc_iface *);
@@ -74,8 +74,8 @@ int gpu_clk_enable(struct gc_iface *iface);
 int gpu_clk_setrate(struct gc_iface *iface, unsigned long rate_khz);
 int gpu_clk_getrate(struct gc_iface *iface, unsigned long *rate_khz);
 
-void gpu_pwr_disable(struct gc_iface *iface);
-void gpu_pwr_enable(struct gc_iface *iface);
+int gpu_pwr_disable(struct gc_iface *iface);
+int gpu_pwr_enable(struct gc_iface *iface);
 void gpu_pwr_disable_prepare(struct gc_iface *iface);
 void gpu_pwr_disable_unprepare(struct gc_iface *iface);
 void gpu_pwr_enable_prepare(struct gc_iface *iface);
