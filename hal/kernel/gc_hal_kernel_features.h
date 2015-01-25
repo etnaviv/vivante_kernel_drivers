@@ -5,18 +5,14 @@
 
 static inline int has_feat_axi_freq_change(void)
 {
-    return cpu_is_pxa1908() || cpu_is_pxa1U88()
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,14,0)
-    || cpu_is_pxa1936()
-#endif
-    ;
+    return cpu_is_pxa1U88();
 }
 
 /* refer to MRVL_CONFIG_MMP_PM_DOMAIN(used in mrvl4x)*/
 static inline int has_feat_power_domain(void)
 {
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3,14,0)
-    return cpu_is_pxa1U88() || cpu_is_pxa1908() || cpu_is_pxa1936();
+    return cpu_is_pxa1U88();
 #else
     return 0;
 #endif
@@ -81,11 +77,7 @@ static inline int has_feat_policy_clock_off_when_idle(void)
 */
 static inline int has_feat_dfc_protect_clk_op(void)
 {
-    return cpu_is_pxa1928() || cpu_is_pxa1U88() || cpu_is_pxa1908()
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,14,0)
-    || cpu_is_pxa1936()
-#endif
-    ;
+    return cpu_is_pxa1928() || cpu_is_pxa1U88();
 }
 
 /*
@@ -108,7 +100,7 @@ static inline int has_feat_freq_change_when_idle(void)
 
 static inline int has_feat_ulc(void)
 {
-    return cpu_is_pxa1908();
+    return false;
 }
 
 static inline int has_feat_3d_axi_combine_limit(void)
