@@ -1,6 +1,6 @@
 /****************************************************************************
 *
-*    Copyright (c) 2005 - 2014 by Vivante Corp.  All rights reserved.
+*    Copyright (c) 2005 - 2015 by Vivante Corp.  All rights reserved.
 *
 *    The material in this file is confidential and contains trade secrets
 *    of Vivante Corporation. This is proprietary information owned by
@@ -219,6 +219,8 @@ typedef const void *            gctCONST_POINTER;
 typedef char                    gctCHAR;
 typedef char *                  gctSTRING;
 typedef const char *            gctCONST_STRING;
+
+typedef gctUINT64               gctPHYS_ADDR_T;
 
 typedef struct _gcsCOUNT_STRING
 {
@@ -888,6 +890,8 @@ struct _gckLINKDATA
     gctUINT32                   start;
     gctUINT32                   end;
     gctUINT32                   pid;
+    gctUINT32                   linkLow;
+    gctUINT32                   linkHigh;
 };
 
 typedef struct _gckLINKQUEUE * gckLINKQUEUE;

@@ -1,6 +1,6 @@
 /****************************************************************************
 *
-*    Copyright (c) 2005 - 2014 by Vivante Corp.  All rights reserved.
+*    Copyright (c) 2005 - 2015 by Vivante Corp.  All rights reserved.
 *
 *    The material in this file is confidential and contains trade secrets
 *    of Vivante Corporation. This is proprietary information owned by
@@ -824,7 +824,7 @@ static int vidmem_show(struct seq_file *file, void *unused)
     gcsDATABASE_PTR database;
     gckGALDEVICE device = file->private;
 
-    gckKERNEL kernel = device->kernels[gcvCORE_MAJOR];
+    gckKERNEL kernel = _GetValidKernel(device);
 
     /* Find the database. */
     gcmkONERROR(

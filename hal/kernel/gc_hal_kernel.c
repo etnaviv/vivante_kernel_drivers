@@ -1,6 +1,6 @@
 /****************************************************************************
 *
-*    Copyright (c) 2005 - 2014 by Vivante Corp.  All rights reserved.
+*    Copyright (c) 2005 - 2015 by Vivante Corp.  All rights reserved.
 *
 *    The material in this file is confidential and contains trade secrets
 *    of Vivante Corporation. This is proprietary information owned by
@@ -253,10 +253,7 @@ _DumpState(
     /* Dump GPU Debug registers. */
     gcmkVERIFY_OK(gckHARDWARE_DumpGPUState(Kernel->hardware));
 
-    if (Kernel->virtualCommandBuffer)
-    {
-        gcmkVERIFY_OK(gckCOMMAND_DumpExecutingBuffer(Kernel->command));
-    }
+    gcmkVERIFY_OK(gckCOMMAND_DumpExecutingBuffer(Kernel->command));
 
     /* Dump Pending event. */
     gcmkVERIFY_OK(gckEVENT_Dump(Kernel->eventObj));
@@ -1594,7 +1591,7 @@ gckKERNEL_Dispatch(
     gcskSECURE_CACHE_PTR cache;
     gctPOINTER logical;
 #endif
-    gctUINT32 paddr = gcvINVALID_ADDRESS;
+    gctUINT64 paddr = gcvINVALID_ADDRESS;
 #if !USE_NEW_LINUX_SIGNAL
     gctSIGNAL   signal;
 #endif
@@ -2528,9 +2525,9 @@ gckKERNEL_Dispatch(
         Interface->u.Version.build = gcvVERSION_BUILD;
 #if gcmIS_DEBUG(gcdDEBUG_TRACE)
         gcmkTRACE_ZONE(gcvLEVEL_INFO, gcvZONE_KERNEL,
-                       "KERNEL version %d.%d.%d build %u %s %s",
-                       gcvVERSION_MAJOR, gcvVERSION_MINOR, gcvVERSION_PATCH,
-                       gcvVERSION_BUILD, gcvVERSION_DATE, gcvVERSION_TIME);
+                       "KERNEL version %d.%d.%d build %u",
+                       gcvVERSION_MAJOR, gcvVERSION_MINOR,
+                       gcvVERSION_PATCH, gcvVERSION_BUILD);
 #endif
         break;
 
@@ -2550,7 +2547,7 @@ gckKERNEL_Dispatch(
                               &Interface->u.Attach.numStates,
                               processID));
 
-        Interface->u.Attach.stateCount = bytes;
+        Interface->u.Attach.maxState = bytes;
         Interface->u.Attach.context = gcmPTR_TO_NAME(context);
 
         if (Interface->u.Attach.map == gcvTRUE)
@@ -3602,7 +3599,7 @@ gckKERNEL_Recovery(
     gcmkONERROR(gckKERNEL_FlushTranslationCache(Kernel, cache, gcvNULL, 0));
 #endif
 
-    if (Kernel->stuckDump == gcdSTUCK_DUMP_MINIMAL)
+    if (Kernel->stuckDump == gcvSTUCK_DUMP_NONE)
     {
         gcmkPRINT("[galcore]: GPU[%d] hang, automatic recovery.", Kernel->core);
     }
@@ -4208,7 +4205,9 @@ void
 gckLINKQUEUE_Enqueue(
     IN gckLINKQUEUE LinkQueue,
     IN gctUINT32 start,
-    IN gctUINT32 end
+    IN gctUINT32 end,
+    IN gctUINT32 LinkLow,
+    IN gctUINT32 LinkHigh
     )
 {
     if (LinkQueue->count == gcdLINK_QUEUE_SIZE)
@@ -4222,6 +4221,9 @@ gckLINKQUEUE_Enqueue(
 
     LinkQueue->data[LinkQueue->rear].start = start;
     LinkQueue->data[LinkQueue->rear].end = end;
+    LinkQueue->data[LinkQueue->rear].linkLow = LinkLow;
+    LinkQueue->data[LinkQueue->rear].linkHigh = LinkHigh;
+
 
     gcmkVERIFY_OK(
         gckOS_GetProcessID(&LinkQueue->data[LinkQueue->rear].pid));
@@ -4662,7 +4664,7 @@ gckKERNEL_SetRecovery(
     if (Recovery == gcvFALSE)
     {
         /* Dump stuck information if Recovery is disabled. */
-        Kernel->stuckDump = gcmMAX(StuckDump, gcdSTUCK_DUMP_MIDDLE);
+        Kernel->stuckDump = gcmMAX(StuckDump, gcvSTUCK_DUMP_USER_COMMAND);
     }
 
     return gcvSTATUS_OK;

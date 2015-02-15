@@ -1,6 +1,6 @@
 /****************************************************************************
 *
-*    Copyright (c) 2005 - 2014 by Vivante Corp.  All rights reserved.
+*    Copyright (c) 2005 - 2015 by Vivante Corp.  All rights reserved.
 *
 *    The material in this file is confidential and contains trade secrets
 *    of Vivante Corporation. This is proprietary information owned by
@@ -968,9 +968,10 @@ typedef struct _gcsHAL_INTERFACE
             /* Handle of context buffer object. */
             OUT gctUINT32               context;
 
-            /* Number of states in the buffer. */
-            OUT gctUINT64               stateCount;
+            /* Maximum state in the buffer. */
+            OUT gctUINT64               maxState;
 
+            /* Number of states in the buffer. */
             OUT gctUINT32               numStates;
 
             /* Map context buffer to user or not. */

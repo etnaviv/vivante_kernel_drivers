@@ -1,6 +1,6 @@
 /****************************************************************************
 *
-*    Copyright (c) 2005 - 2014 by Vivante Corp.  All rights reserved.
+*    Copyright (c) 2005 - 2015 by Vivante Corp.  All rights reserved.
 *
 *    The material in this file is confidential and contains trade secrets
 *    of Vivante Corporation. This is proprietary information owned by
@@ -108,7 +108,7 @@ struct _gckCONTEXT
     gctUINT32                   reservedTail;
 
     /* Context buffer metrics. */
-    gctSIZE_T                   stateCount;
+    gctSIZE_T                   maxState;
     gctUINT32                   numStates;
     gctUINT32                   totalSize;
     gctUINT32                   bufferSize;

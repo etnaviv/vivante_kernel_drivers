@@ -1,6 +1,6 @@
 /****************************************************************************
 *
-*    Copyright (c) 2005 - 2014 by Vivante Corp.  All rights reserved.
+*    Copyright (c) 2005 - 2015 by Vivante Corp.  All rights reserved.
 *
 *    The material in this file is confidential and contains trade secrets
 *    of Vivante Corporation. This is proprietary information owned by
@@ -1069,6 +1069,12 @@ gco2D_UnSet2DEngine(
 gceSTATUS
 gco2D_Get2DEngine(
     OUT gco2D * Engine
+    );
+
+gceSTATUS
+gco2D_Commit(
+    IN gco2D Engine,
+    IN gctBOOL Stall
     );
 
 #ifdef __cplusplus

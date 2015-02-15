@@ -1,6 +1,6 @@
 /****************************************************************************
 *
-*    Copyright (c) 2005 - 2014 by Vivante Corp.  All rights reserved.
+*    Copyright (c) 2005 - 2015 by Vivante Corp.  All rights reserved.
 *
 *    The material in this file is confidential and contains trade secrets
 *    of Vivante Corporation. This is proprietary information owned by
@@ -114,7 +114,7 @@ typedef struct _gcsMIRROR
     gctUINT32_PTR       logical[gcdNUM_RECORDS];
     gctUINT32           bytes;
     gcsSTATE_MAP_PTR    map;
-    gctUINT32           stateCount;
+    gctUINT32           maxState;
 }
 gcsMIRROR;
 
@@ -449,9 +449,9 @@ gckRECORDER_Construct(
     gckOS_ZeroMemory(recorder, gcmSIZEOF(gcsRECORDER));
 
     /* Copy state map. */
-    recorder->mirror.stateCount = context->stateCount;
+    recorder->mirror.maxState = context->maxState;
 
-    mapSize = context->stateCount * gcmSIZEOF(gcsSTATE_MAP);
+    mapSize = context->maxState * gcmSIZEOF(gcsSTATE_MAP);
 
     gcmkONERROR(gckOS_Allocate(Os, mapSize, (gctPOINTER *)&recorder->mirror.map));
 
@@ -553,7 +553,7 @@ gckRECORDER_UpdateMirror(
     gcsSTATE_MAP_PTR map = Recorder->mirror.map;
     gctUINT32_PTR buffer = Recorder->mirror.logical[Recorder->index];
 
-    if (State >= Recorder->mirror.stateCount)
+    if (State >= Recorder->mirror.maxState)
     {
         /* Ignore them just like HW does. */
         return gcvSTATUS_OK;

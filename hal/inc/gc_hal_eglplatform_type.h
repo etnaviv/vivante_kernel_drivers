@@ -1,6 +1,6 @@
 /****************************************************************************
 *
-*    Copyright 2012 - 2014 Vivante Corporation, Sunnyvale, California.
+*    Copyright 2012 - 2015 Vivante Corporation, Sunnyvale, California.
 *    All Rights Reserved.
 *
 *    Permission is hereby granted, free of charge, to any person obtaining

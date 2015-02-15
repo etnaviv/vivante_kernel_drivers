@@ -1,6 +1,6 @@
 /****************************************************************************
 *
-*    Copyright (c) 2005 - 2014 by Vivante Corp.  All rights reserved.
+*    Copyright (c) 2005 - 2015 by Vivante Corp.  All rights reserved.
 *
 *    The material in this file is confidential and contains trade secrets
 *    of Vivante Corporation. This is proprietary information owned by
@@ -991,7 +991,7 @@ _HardwareToKernel(
     }
     else
     {
-        nodePhysical = Node->Virtual.physicalAddress;
+        gcmkSAFECASTPHYSADDRT(nodePhysical, Node->Virtual.physicalAddress);
         bytes = Node->Virtual.bytes;
         logical = &Node->Virtual.kernelVirtual;
     }
@@ -1091,6 +1091,7 @@ _AllocateLinear(
     gctPHYS_ADDR physical;
     gctUINT32 address;
     gctSIZE_T size = Size;
+    gctPHYS_ADDR_T paddr;
 
     do
     {
@@ -1102,7 +1103,9 @@ _AllocateLinear(
             &logical
             ));
 
-        gcmkERR_BREAK(gckOS_GetPhysicalAddress(Command->os, logical, &address));
+        gcmkERR_BREAK(gckOS_GetPhysicalAddress(Command->os, logical, &paddr));
+
+        gcmkSAFECASTPHYSADDRT(address, paddr);
 
         /* Set return values. */
         * Node    = physical;

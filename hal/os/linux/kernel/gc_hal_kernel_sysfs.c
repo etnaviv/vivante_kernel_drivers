@@ -564,7 +564,6 @@ static ssize_t show_clk_rate (struct device *dev,
         }
     }
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0)
     if(has_feat_axi_freq_change())
     {
         unsigned int axiClkRate = 0;
@@ -579,8 +578,6 @@ static ssize_t show_clk_rate (struct device *dev,
             len += sprintf(buf+len, "[%s] failed to get clock rate\n", "AXI");
         }
     }
-
-#endif
 
     return len;
 }
@@ -600,15 +597,12 @@ static ssize_t store_clk_rate (struct device *dev,
     if (has_feat_3d_shader_clock())
         gpu_count++;
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0)
     /* read input and verify */
     if(has_feat_axi_freq_change())
     {
         SYSFS_VERIFY_INPUT(sscanf(buf, "%d,%d,%d", &core, &frequency, &axi), 3);
     }
     else
-
-#endif
     {
         SYSFS_VERIFY_INPUT(sscanf(buf, "%d,%d", &core, &frequency), 2);
     }
@@ -686,13 +680,13 @@ static ssize_t store_stuck_debug (struct device *dev,
 
     SYSFS_VERIFY_INPUT_RANGE(core, 0, (gpu_count-1));
     SYSFS_VERIFY_INPUT_RANGE(recovery, 0, 1);
-    SYSFS_VERIFY_INPUT_RANGE(stuckDump, 1, 3);
+    SYSFS_VERIFY_INPUT_RANGE(stuckDump, 0, 4);
 
     galDevice->kernels[core]->recovery = recovery;
 
     if (recovery == gcvFALSE)
     {
-        galDevice->kernels[core]->stuckDump = gcmMAX(stuckDump, gcdSTUCK_DUMP_MIDDLE);
+        galDevice->kernels[core]->stuckDump = gcmMAX(stuckDump, gcvSTUCK_DUMP_NEARBY_MEMORY);
     }
     else
     {

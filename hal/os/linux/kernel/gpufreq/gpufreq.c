@@ -157,13 +157,24 @@ gpufreq_freq_attr_ro(gputype);
 
 static ssize_t show_scaling_cur_freq(struct gpufreq_policy *policy, char *buf)
 {
-    unsigned int freq = ~0, gpu = 0;
+    unsigned int freq = ~0, gpu = 0, len = 0;
 
     gpu = policy->gpu;
     if(gpufreq_driver->get)
         freq = gpufreq_driver->get(gpu);
 
-    return sprintf(buf, "%u\n", freq);
+    len += sprintf(buf+len, "[3D] %u\n", freq);
+
+    if(!has_feat_shader_indept_dfc() &&
+       gcvCORE_MAJOR == gpu)
+    {
+        unsigned int freq_sh = ~0;
+
+        freq_sh = gpufreq_driver->get(gcvCORE_SH);
+        len += sprintf(buf+len, "[SH] %u\n", freq_sh);
+    }
+
+    return len;
 }
 gpufreq_freq_attr_ro(scaling_cur_freq);
 
@@ -797,6 +808,50 @@ static int pulseEater_notifier_call (struct notifier_block *nb,
     return ret;
 }
 
+/* if 2D set to 416000, gc axi will be set to 416000
+* so set 3D/sh to 832000 to make sure 3D/sh/axi are
+* from same freq source.
+*/
+static int frequency_combine_call(struct notifier_block *nb,
+                    unsigned long action, void *data)
+{
+    struct gpufreq_freqs *freqs = (struct gpufreq_freqs *)data;
+    int ret = NOTIFY_OK;
+
+    if(!has_feat_3d_axi_combine_limit())
+        return ret;
+
+    if(!freqs || gcvCORE_MAJOR == freqs->gpu)
+        return ret;
+
+    //return directly if 2D core not equal 416000
+    if(freqs->new_freq % GPUFREQ_MAX_AXI_BUS_FREQ &&
+       gpufreq_driver->qos_upd)
+    {
+        gpufreq_driver->qos_upd(gcvCORE_MAJOR, 1, GPUFREQ_MIN_AXI_BUS_FREQ);
+
+        return ret;
+    }
+
+    switch(action)
+    {
+        //set 3D to 832M when 2D/axi increase to 416M
+        case GPUFREQ_PRECHANGE:
+            if(gpufreq_driver->qos_upd)
+            {
+                gpufreq_driver->qos_upd(gcvCORE_MAJOR, 1, GPUFREQ_MAX_AXI_BUS_FREQ * 2);
+            }
+            break;
+        case GPUFREQ_POSTCHANGE:
+            break;
+        default:
+            debug_log(GPUFREQ_LOG_WARNING, "[gpufreq] %s (%d)", __func__, __LINE__);
+            break;
+    }
+
+    return ret;
+}
+
 /*
 struct notifier_block {
     int (*notifier_call)(struct notifier_block *, unsigned long, void *);
@@ -812,6 +867,9 @@ static struct notifier_block pulseEater_gpufreq_notifier_block = {
     .notifier_call = pulseEater_notifier_call,
 };
 
+static struct notifier_block frequency_combine_block = {
+    .notifier_call = frequency_combine_call,
+};
 /***************************************************
  *  gpufreq notifier interfaces
  ***************************************************/
@@ -935,6 +993,13 @@ int gpufreq_register_driver(gckOS Os, struct gpufreq_driver *driver_data)
                                     0);
     }
 
+    if(has_feat_3d_axi_combine_limit())
+    {
+        gpufreq_register_notifier(&frequency_combine_block,
+                                   GPUFREQ_TRANSITION_NOTIFIER,
+                                   1);
+    }
+
 #if MRVL_CONFIG_DEVFREQ_GOV_THROUGHPUT
     for_each_gpu(gpu)
         gpufeq_register_dev_notifier(&gpufreq_trans_notifier_list[gpu]);
@@ -963,6 +1028,13 @@ int gpufreq_unregister_driver(gckOS Os, struct gpufreq_driver *driver)
         gpufreq_unregister_notifier(&pulseEater_gpufreq_notifier_block,
                                     GPUFREQ_TRANSITION_NOTIFIER,
                                     0);
+    }
+
+    if(has_feat_3d_axi_combine_limit())
+    {
+        gpufreq_unregister_notifier(&frequency_combine_block,
+                                    GPUFREQ_TRANSITION_NOTIFIER,
+                                    1);
     }
 
     gckOS_GPUFreqNotifierUnregister(Os, &gpufreq_notifier_block);

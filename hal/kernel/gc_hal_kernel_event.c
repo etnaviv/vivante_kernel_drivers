@@ -1,6 +1,6 @@
 /****************************************************************************
 *
-*    Copyright (c) 2005 - 2014 by Vivante Corp.  All rights reserved.
+*    Copyright (c) 2005 - 2015 by Vivante Corp.  All rights reserved.
 *
 *    The material in this file is confidential and contains trade secrets
 *    of Vivante Corporation. This is proprietary information owned by
@@ -2317,6 +2317,9 @@ gckEVENT_Interrupt(
 #endif
 
 #if gcdINTERRUPT_STATISTIC
+#if gcdMULTI_GPU
+    if (CoreId == gcvCORE_3D_0_ID)
+#endif
     {
         gctINT j = 0;
         gctINT32 oldValue;
@@ -2519,7 +2522,8 @@ gckEVENT_Notify(
 
         if (pending & 0x80000000)
         {
-            gcmkPRINT("AXI BUS ERROR");
+            gcmkPRINT("[galcore]: AXI BUS ERROR");
+            gckHARDWARE_DumpGPUState(Event->kernel->hardware);
             pending &= 0x7FFFFFFF;
 
             mask  = 1 << 31;
@@ -2556,6 +2560,8 @@ gckEVENT_Notify(
         if (pending & 0x40000000)
         {
             gckHARDWARE_DumpMMUException(Event->kernel->hardware);
+
+            gckHARDWARE_DumpGPUState(Event->kernel->hardware);
 
             pending &= 0xBFFFFFFF;
 
@@ -3369,7 +3375,7 @@ gceSTATUS
 gckEVENT_Stop(
     IN gckEVENT Event,
     IN gctUINT32 ProcessID,
-    IN gctPHYS_ADDR Handle,
+    IN gctUINT32 Handle,
     IN gctPOINTER Logical,
     IN gctSIGNAL Signal,
     IN OUT gctUINT32 * waitSize

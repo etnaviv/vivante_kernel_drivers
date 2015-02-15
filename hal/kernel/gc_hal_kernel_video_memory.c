@@ -1,6 +1,6 @@
 /****************************************************************************
 *
-*    Copyright (c) 2005 - 2014 by Vivante Corp.  All rights reserved.
+*    Copyright (c) 2005 - 2015 by Vivante Corp.  All rights reserved.
 *
 *    The material in this file is confidential and contains trade secrets
 *    of Vivante Corporation. This is proprietary information owned by
@@ -1264,7 +1264,8 @@ _NeedVirtualMapping(
 )
 {
     gceSTATUS status;
-    gctUINT32 phys;
+    gctPHYS_ADDR_T phys;
+    gctUINT32 address;
     gctUINT32 end;
     gcePOOL pool;
     gctUINT32 offset;
@@ -1288,29 +1289,37 @@ _NeedVirtualMapping(
         }
         else
 #endif
+        if (!gckHARDWARE_IsFeatureAvailable(Kernel->hardware, gcvFEATURE_MMU))
         {
             /* Convert logical address into a physical address. */
             gcmkONERROR(gckOS_UserLogicalToPhysical(
                         Kernel->os, Node->Virtual.logical, &phys
                         ));
 
+            gcmkSAFECASTPHYSADDRT(address, phys);
+
             gcmkONERROR(gckOS_GetBaseAddress(Kernel->os, &baseAddress));
 
             gcmkASSERT(phys >= baseAddress);
 
             /* Subtract baseAddress to get a GPU address used for programming. */
-            phys -= baseAddress;
+            address -= baseAddress;
 
             /* If part of region is belong to gcvPOOL_VIRTUAL,
             ** whole region has to be mapped. */
             gcmkSAFECASTSIZET(bytes, Node->Virtual.bytes);
-            end = phys + bytes - 1;
+            end = address + bytes - 1;
 
             gcmkONERROR(gckHARDWARE_SplitMemory(
                         Kernel->hardware, end, &pool, &offset
                         ));
 
             *NeedMapping = (pool == gcvPOOL_VIRTUAL);
+        }
+        else
+        {
+            /* TODO: Check whether physical address in flat mapping. */
+            *NeedMapping = gcvTRUE;
         }
     }
     else
@@ -1461,8 +1470,9 @@ gckVIDMEM_Lock(
     gctBOOL needMapping = gcvFALSE;
 #endif
     gctUINT32 baseAddress;
-    gctUINT32 physicalAddress;
+    gctUINT64 physicalAddress;
     gcuVIDMEM_NODE_PTR node = Node->node;
+    gctPHYS_ADDR_T physical;
 
     gcmkHEADER_ARG("Node=0x%x", Node);
 
@@ -1526,8 +1536,10 @@ gckVIDMEM_Lock(
         gcmkVERIFY_OK(gckOS_CPUPhysicalToGPUPhysical(
             Kernel->os,
             *Address,
-            Address
+            &physical
             ));
+
+        gcmkSAFECASTSIZET(*Address, physical);
 
         gcmkTRACE_ZONE(gcvLEVEL_INFO, gcvZONE_VIDMEM,
                       "Locked node 0x%x (%d) @ 0x%08X",
@@ -1556,7 +1568,7 @@ gckVIDMEM_Lock(
                             &node->Virtual.logical,
                             &node->Virtual.pageCount));
 
-        gcmkONERROR(gckOS_GetPhysicalAddress(
+        gcmkONERROR(gckOS_UserLogicalToPhysical(
             os,
             node->Virtual.logical,
             &physicalAddress

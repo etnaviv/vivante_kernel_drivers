@@ -1,6 +1,6 @@
 ##############################################################################
 #
-#    Copyright (c) 2005 - 2014 by Vivante Corp.  All rights reserved.
+#    Copyright (c) 2005 - 2015 by Vivante Corp.  All rights reserved.
 #
 #    The material in this file is confidential and contains trade secrets
 #    of Vivante Corporation. This is proprietary information owned by
@@ -67,6 +67,8 @@ GL_2_APPENDIX  ?= _es2
 GL_3_APPENDIX  ?= _es3
 
 endif
+
+NO_KERNEL       ?= 0
 
 ifeq ($(LINUX_OABI), 1)
 ABI             ?= 0
@@ -181,9 +183,9 @@ else
 endif
 
 ifneq ($(ENDIANNESS),)
-   	CFLAGS += $(ENDIANNESS)
-	LFLAGS += $(ENDIANNESS)
-	PFLAGS += $(ENDIANNESS)
+  CFLAGS += $(ENDIANNESS)
+  LFLAGS += $(ENDIANNESS)
+  PFLAGS += $(ENDIANNESS)
 endif
 endif
 
@@ -314,8 +316,8 @@ endif
 
 ifeq ($(EGL_API_DRI), 1)
     ifeq ($(YOCTO_DRI_BUILD), 1)
-   	CFLAGS += -DDRI_PIXMAPRENDER_ASYNC
-   	CFLAGS += -DDRI_PIXMAPRENDER_GL
+    CFLAGS += -DDRI_PIXMAPRENDER_ASYNC
+    CFLAGS += -DDRI_PIXMAPRENDER_GL
     endif
 
     CFLAGS += -DEGL_API_DRI
@@ -483,6 +485,7 @@ ifeq ($(ANDROID), 1)
 GCU3_DIR        := $(AQROOT)/gcu3/proj/android
 ifeq ($(USE_CLU), 1)
 CLU_DIR         := $(AQROOT)/clu/proj/android
+CLU20_DIR       := $(AQROOT)/clu_2.0/build/android
 endif
 else
 GCU3_DIR        := $(AQROOT)/gcu3/proj/linux
@@ -561,3 +564,10 @@ VVLAUNCHER_DIR  := $(ES2X_TEST_DIR)/vv_launcher
 
 VIDEOCUBE_DIR	:= $(AQROOT)/test/es11/extern/VideoCube
 VC_TESTCASE_DIR := $(AQROOT)/test/es20/vCompiler_Testcase
+
+################################################################################
+# Platform specific configs.
+
+THIRDPARTY_CUSTOMER ?=
+THIRDPARTY_TYPE ?=
+

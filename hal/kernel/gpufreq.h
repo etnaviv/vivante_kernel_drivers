@@ -39,6 +39,11 @@
 #define GPUFREQ_REQ_DDR_LVL_HIGH        312000
 #define GPUFREQ_REQ_DDR_LVL_DEFAULT     78000
 
+
+/* Min axi frequency*/
+#define GPUFREQ_MAX_AXI_BUS_FREQ        416000
+#define GPUFREQ_MIN_AXI_BUS_FREQ        78000
+
 typedef struct _DDR_QOS_NODE {
     struct pm_qos_request   qos_node;
     struct mutex            qos_mutex;
@@ -136,10 +141,10 @@ struct gpufreq_freqs {
     unsigned int gpu;
     unsigned int old_freq;
     unsigned int new_freq;
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0)
+
+    /* clk value for axi bus*/
     unsigned int axi_old_freq;
     unsigned int axi_new_freq;
-#endif
 };
 
 /* enum for "setpolicy" type policy */
@@ -157,9 +162,10 @@ struct gpufreq_policy {
     unsigned int        min;
     unsigned int        max;
     unsigned int        cur;
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0)
+
+    /* current axi bus frequency*/
     unsigned int        axi_cur;
-#endif
+
     struct gpufreq_governor     *governor;
 
     /* hold the actual setting gpu's running */
@@ -246,6 +252,7 @@ struct gpufreq_driver {
 
     int (*suspend) (struct gpufreq_policy *policy);
     int (*resume) (struct gpufreq_policy *policy);
+    int (*qos_upd)(unsigned int chip, unsigned int min, unsigned int freq);
     struct gpufreq_freq_attr    **attr;
 };
 
@@ -369,9 +376,9 @@ extern struct gpufreq_governor gpufreq_gov_ondemand;
 struct gpufreq_frequency_table {
     unsigned int    index;
     unsigned int    frequency;
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0)
+
+    /* clk value for axi bus*/
     unsigned int    busfreq;
-#endif
 };
 
 int gpufreq_frequency_table_gpuinfo(struct gpufreq_policy *policy,

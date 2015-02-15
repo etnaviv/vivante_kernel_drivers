@@ -1,6 +1,6 @@
 /****************************************************************************
 *
-*    Copyright (c) 2005 - 2014 by Vivante Corp.  All rights reserved.
+*    Copyright (c) 2005 - 2015 by Vivante Corp.  All rights reserved.
 *
 *    The material in this file is confidential and contains trade secrets
 *    of Vivante Corporation. This is proprietary information owned by
@@ -657,7 +657,7 @@ _DefaultLogicalToPhysical(
     IN PLINUX_MDL Mdl,
     IN gctPOINTER Logical,
     IN gctUINT32 ProcessID,
-    OUT gctUINT32_PTR Physical
+    OUT gctPHYS_ADDR_T * Physical
     )
 {
     return _ConvertLogical2Physical(
@@ -682,7 +682,7 @@ _DefaultPhysical(
     IN gckALLOCATOR Allocator,
     IN PLINUX_MDL Mdl,
     IN gctUINT32 Offset,
-    OUT gctUINT32_PTR Physical
+    OUT gctPHYS_ADDR_T * Physical
     )
 {
     gcmkASSERT(Mdl->pagedMem && !Mdl->contiguous);

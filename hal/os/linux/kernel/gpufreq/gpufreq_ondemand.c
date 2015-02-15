@@ -469,9 +469,10 @@ static int gpufreq_gov_ondemand_init(void)
     /* successfully registered, then init work. */
     for_each_gpu(gpu)
     {
-        gpufreq_create_timer(do_ondemand_timer,
-                            &ondemand_info_s[gpu],
-                            &ondemand_info_s[gpu].timer);
+        if(gcvCORE_SH != gpu || has_feat_shader_indept_dfc())
+            gpufreq_create_timer(do_ondemand_timer,
+                                &ondemand_info_s[gpu],
+                                &ondemand_info_s[gpu].timer);
     }
 
     return 0;

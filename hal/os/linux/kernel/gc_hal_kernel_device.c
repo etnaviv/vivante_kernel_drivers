@@ -1,6 +1,6 @@
 /****************************************************************************
 *
-*    Copyright (c) 2005 - 2014 by Vivante Corp.  All rights reserved.
+*    Copyright (c) 2005 - 2015 by Vivante Corp.  All rights reserved.
 *
 *    The material in this file is confidential and contains trade secrets
 *    of Vivante Corporation. This is proprietary information owned by
@@ -22,35 +22,11 @@
 #define DEBUG_FILE          "galcore_trace"
 #define PARENT_FILE         "gpu"
 
+#define gcdDEBUG_FS_WARN    "Experimental debug entry, may be removed in future release, do NOT rely on it!\n"
 
 #ifdef FLAREON
     static struct dove_gpio_irq_handler gc500_handle;
 #endif
-
-gckKERNEL
-_GetValidKernel(
-    gckGALDEVICE Device
-    )
-{
-    if (Device->kernels[gcvCORE_MAJOR])
-    {
-        return Device->kernels[gcvCORE_MAJOR];
-    }
-    else
-    if (Device->kernels[gcvCORE_2D])
-    {
-        return Device->kernels[gcvCORE_2D];
-    }
-    else
-    if (Device->kernels[gcvCORE_VG])
-    {
-        return Device->kernels[gcvCORE_VG];
-    }
-    else
-    {
-        return gcvNULL;
-    }
-}
 
 /******************************************************************************\
 ******************************** Debugfs Support *******************************
@@ -315,14 +291,27 @@ _ShowProcesses(
 {
     gcsDATABASE_PTR database;
     gctINT i;
+    static gctUINT64 idleTime[2] = {0, 0};
 
     /* Acquire the database mutex. */
     gcmkVERIFY_OK(
         gckOS_AcquireMutex(Kernel->os, Kernel->db->dbMutex, gcvINFINITE));
 
+    if (Kernel->db->idleTime[0])
+    {
+        /* Record idle time if DB upated. */
+        idleTime[0] = Kernel->db->idleTime[0];
+        Kernel->db->idleTime[0] = 0;
+    }
+    if (Kernel->db->idleTime[1])
+    {
+        /* Record idle time if DB upated. */
+        idleTime[1] = Kernel->db->idleTime[1];
+        Kernel->db->idleTime[1] = 0;
+    }
+
     /* Idle time since last call */
-    seq_printf(file, "GPU Idle: [0] %llu, [1] %llu ns \n",  Kernel->db->idleTime[0], Kernel->db->idleTime[1]);
-    Kernel->db->idleTime[0] = Kernel->db->idleTime[1] = 0;
+    seq_printf(file, "GPU Idle: [0] %llu, [1] %llu ns \n",  idleTime[0], idleTime[1]);
 
     /* Walk the databases. */
     for (i = 0; i < gcmCOUNTOF(Kernel->db->db); ++i)
@@ -357,13 +346,78 @@ gc_version_show(struct seq_file *m, void *data)
     return 0 ;
 }
 
+static int
+gc_idle_show(struct seq_file *m, void *data)
+{
+    gcsINFO_NODE *node = m->private;
+    gckGALDEVICE device = node->device;
+    gckKERNEL kernel = _GetValidKernel(device);
+
+    static gctUINT64 idleTime[2] = {0, 0};
+
+    /* Acquire the database mutex. */
+    gcmkVERIFY_OK(
+        gckOS_AcquireMutex(kernel->os, kernel->db->dbMutex, gcvINFINITE));
+
+    if (kernel->db->idleTime[0])
+    {
+        /* Record idle time if DB upated. */
+        idleTime[0] = kernel->db->idleTime[0];
+        kernel->db->idleTime[0] = 0;
+    }
+    if (kernel->db->idleTime[1])
+    {
+        /* Record idle time if DB upated. */
+        idleTime[1] = kernel->db->idleTime[1];
+        kernel->db->idleTime[1] = 0;
+    }
+
+    /* Idle time since last call */
+    seq_printf(m, "GPU Idle: [0] %llu, [1] %llu ns\n",  idleTime[0], idleTime[1]);
+
+    /* Release the database mutex. */
+    gcmkVERIFY_OK(gckOS_ReleaseMutex(kernel->os, kernel->db->dbMutex));
+
+    return 0 ;
+}
+
+extern void
+_DumpState(
+    IN gckKERNEL Kernel
+    );
+
+static int
+gc_dump_trigger_show(struct seq_file *m, void *data)
+{
+#if gcdENABLE_3D || gcdENABLE_2D
+    gcsINFO_NODE *node = m->private;
+    gckGALDEVICE device = node->device;
+    gckKERNEL kernel = _GetValidKernel(device);
+#endif
+
+    seq_printf(m, gcdDEBUG_FS_WARN);
+
+#if gcdENABLE_3D || gcdENABLE_2D
+    seq_printf(m, "Get dump from /proc/kmsg or /sys/kernel/debug/gc/galcore_trace\n");
+
+    if (kernel->hardware->powerManagement == gcvFALSE)
+    {
+        _DumpState(kernel);
+    }
+#endif
+
+    return 0;
+}
+
 static gcsINFO InfoList[] =
 {
     {"info", gc_info_show},
     {"clients", gc_clients_show},
     {"meminfo", gc_meminfo_show},
+    {"idle", gc_idle_show},
     {"database", gc_db_show},
     {"version", gc_version_show},
+    {"dump_trigger", gc_dump_trigger_show},
 };
 
 static gceSTATUS
@@ -1227,38 +1281,48 @@ gckGALDEVICE_Construct(
             /* Set up register memory region. */
             if (physical != 0)
             {
-                mem_region = request_mem_region(physical,
-                        device->requestedRegisterMemSizes[i],
-                        "galcore register region");
 
-                if (mem_region == gcvNULL)
+                if ( Args->registerMemMapped )
                 {
-                    gcmkTRACE_ZONE(
-                            gcvLEVEL_ERROR, gcvZONE_DRIVER,
-                            "%s(%d): Failed to claim %lu bytes @ 0x%08X\n",
-                            __FUNCTION__, __LINE__,
-                            physical, device->requestedRegisterMemSizes[i]
-                    );
+                    device->registerBases[i] = Args->registerMemAddress;
+                    device->requestedRegisterMemBases[i] = 0;
+
+                } else {
+
+                    mem_region = request_mem_region(physical,
+                            device->requestedRegisterMemSizes[i],
+                            "galcore register region");
+
+                    if (mem_region == gcvNULL)
+                    {
+                        gcmkTRACE_ZONE(
+                                gcvLEVEL_ERROR, gcvZONE_DRIVER,
+                                "%s(%d): Failed to claim %lu bytes @ 0x%08X\n",
+                                __FUNCTION__, __LINE__,
+                                physical, device->requestedRegisterMemSizes[i]
+                         );
 
                     gcmkONERROR(gcvSTATUS_OUT_OF_RESOURCES);
-                }
+                    }
 
-                device->registerBases[i] = (gctPOINTER) ioremap_nocache(
-                        physical, device->requestedRegisterMemSizes[i]);
+                    device->registerBases[i] = (gctPOINTER) ioremap_nocache(
+                            physical, device->requestedRegisterMemSizes[i]);
 
-                if (device->registerBases[i] == gcvNULL)
-                {
-                    gcmkTRACE_ZONE(
-                            gcvLEVEL_ERROR, gcvZONE_DRIVER,
-                            "%s(%d): Unable to map %ld bytes @ 0x%08X\n",
-                            __FUNCTION__, __LINE__,
-                            physical, device->requestedRegisterMemSizes[i]
-                    );
+                    if (device->registerBases[i] == gcvNULL)
+                    {
+                        gcmkTRACE_ZONE(
+                                gcvLEVEL_ERROR, gcvZONE_DRIVER,
+                                "%s(%d): Unable to map %ld bytes @ 0x%08X\n",
+                                __FUNCTION__, __LINE__,
+                                physical, device->requestedRegisterMemSizes[i]
+                        );
 
-                    gcmkONERROR(gcvSTATUS_OUT_OF_RESOURCES);
+                        gcmkONERROR(gcvSTATUS_OUT_OF_RESOURCES);
+                    }
                 }
 
                 physical += device->requestedRegisterMemSizes[i];
+
             }
         }
     }
@@ -1908,7 +1972,9 @@ gckGALDEVICE_Destroy(
                 if (Device->registerBases[i] != gcvNULL)
                 {
                     /* Unmap register memory. */
-                    iounmap(Device->registerBases[i]);
+                    if (Device->requestedRegisterMemBases[i] != 0)
+                        iounmap(Device->registerBases[i]);
+
                     if (Device->requestedRegisterMemBases[i] != 0)
                     {
                         release_mem_region(Device->requestedRegisterMemBases[i],

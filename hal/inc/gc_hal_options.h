@@ -1,6 +1,6 @@
 /****************************************************************************
 *
-*    Copyright (c) 2005 - 2014 by Vivante Corp.  All rights reserved.
+*    Copyright (c) 2005 - 2015 by Vivante Corp.  All rights reserved.
 *
 *    The material in this file is confidential and contains trade secrets
 *    of Vivante Corporation. This is proprietary information owned by
@@ -866,7 +866,7 @@
         is be used to debug.
 */
 #ifndef gcdLINK_QUEUE_SIZE
-#   define gcdLINK_QUEUE_SIZE                   5
+#   define gcdLINK_QUEUE_SIZE                   64
 #endif
 
 /*  gcdALPHA_KILL_IN_SHADER
@@ -1127,13 +1127,9 @@
 
 #ifndef gcdMOVG
 #   define gcdMOVG                              0
-#if gcdMOVG
-#       define GC355_PROFILER                   1
-#   endif
-#       define gcdENABLE_TS_DOUBLE_BUFFER       1
+#   define gcdENABLE_TS_DOUBLE_BUFFER           1
 #else
 #if gcdMOVG
-#       define GC355_PROFILER                   1
 #       define gcdENABLE_TS_DOUBLE_BUFFER       0
 #else
 #       define gcdENABLE_TS_DOUBLE_BUFFER       1
@@ -1250,7 +1246,7 @@
         Enable third party operation like tpc or not.
 */
 #ifndef gcdENABLE_THIRD_PARTY_OPERATION
-#   define gcdENABLE_THIRD_PARTY_OPERATION      1
+#   define gcdENABLE_THIRD_PARTY_OPERATION      0
 #endif
 
 
@@ -1269,12 +1265,23 @@
 #   define gcdENABLE_VG                         0
 #endif
 
-#ifndef gcdgcdGC355_MEM_PRINT
-#   define gcdgcdGC355_MEM_PRINT                      0
+
+#if gcdENABLE_VG
+#ifdef LINUX
+#       define GC355_PROFILER                   1
+#   else
+#       define GC355_PROFILER                   0
+#   endif
+#else
+#   define GC355_PROFILER                       0
+#endif
+
+#ifndef gcdGC355_MEM_PRINT
+#   define gcdGC355_MEM_PRINT                      0
 #else
 #if (!((gcdENABLE_3D == 0) && (gcdENABLE_2D == 0) && (gcdENABLE_VG == 1)))
-#      undef gcdgcdGC355_MEM_PRINT
-#      define gcdgcdGC355_MEM_PRINT                   0
+#      undef gcdGC355_MEM_PRINT
+#      define gcdGC355_MEM_PRINT                   0
 #   endif
 #endif
 

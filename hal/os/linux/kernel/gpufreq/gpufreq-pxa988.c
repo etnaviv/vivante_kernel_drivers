@@ -81,10 +81,11 @@ static DDR_QOS_NODE gpufreq_ddr_constraint[GPUFREQ_GPU_NUMS] = {
 static int gpu_high_threshold = 312000;
 #endif
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0)
 static struct gpufreq_axi ga[GPUFREQ_GPU_NUMS-1];
 static bool _AllowSetAxiFreq(unsigned int old_freq, int gpu, unsigned int new_freq)
 {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0)
+
     unsigned int cnt = 0, i =0;
 
     /* return false directly if shader core*/
@@ -117,8 +118,10 @@ static bool _AllowSetAxiFreq(unsigned int old_freq, int gpu, unsigned int new_fr
         return true;
     else
         return false;
-}
+#else
+    return false;
 #endif
+}
 
 static int gpufreq_frequency_table_get(unsigned int gpu, struct gpufreq_frequency_table *table_freqs, void * srcFreqTable)
 {
@@ -209,15 +212,14 @@ static int pxa988_gpufreq_init (gctPOINTER freqTable ,struct gpufreq_policy *pol
 static int pxa988_gpufreq_exit (struct gpufreq_policy *policy);
 static int pxa988_gpufreq_verify (struct gpufreq_policy *policy);
 static int pxa988_gpufreq_target (struct gpufreq_policy *policy, unsigned int target_freq, unsigned int relation);
-static int pxa988_gpufreq_set(unsigned int gpu, struct gpufreq_freqs* freqs);
+static int pxa988_gpufreq_set(struct gpufreq_freqs* freqs);
 static int pxa988_gpufreq_suspend(struct gpufreq_policy *policy);
 static int pxa988_gpufreq_resume(struct gpufreq_policy *policy);
+static int pxa988_gpufreq_qos_update(unsigned int chip, unsigned int min, unsigned int freq);
 
 
 static unsigned int pxa988_gpufreq_get (unsigned int chip);
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0)
 static unsigned int pxa988_gpufreq_get_axi(unsigned int chip);
-#endif
 
 #if MRVL_CONFIG_ENABLE_QOS_SUPPORT
 static unsigned int is_qos_inited = 0;
@@ -263,6 +265,7 @@ struct gpufreq_driver pxa988_gpufreq_driver = {
     .target = pxa988_gpufreq_target,
     .suspend= pxa988_gpufreq_suspend,
     .resume = pxa988_gpufreq_resume,
+    .qos_upd= pxa988_gpufreq_qos_update,
     .name   = "pxa988-gpufreq",
     .exit   = pxa988_gpufreq_exit,
     .attr   = driver_attrs,
@@ -359,7 +362,6 @@ static int pxa988_gpufreq_init (gctPOINTER freqTable, struct gpufreq_policy *pol
     }
 #endif
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0)
     if(has_feat_axi_freq_change() &&
         gpu != gcvCORE_SH)
     {
@@ -367,7 +369,6 @@ static int pxa988_gpufreq_init (gctPOINTER freqTable, struct gpufreq_policy *pol
         ga[gpu].freq    = policy->axi_cur;
         ga[gpu].dec     = gcvTRUE;
     }
-#endif
 
 #if GPUFREQ_REQUEST_DDR_QOS
     gpufreq_ddr_constraint_init(&gpufreq_ddr_constraint[gpu]);
@@ -402,7 +403,7 @@ static int pxa988_gpufreq_target (struct gpufreq_policy *policy, unsigned int ta
 {
     int index;
     int ret = 0;
-    struct gpufreq_freqs freqs;
+    struct gpufreq_freqs freqs, freqs_sh;
     unsigned int gpu = policy->gpu;
     struct gpufreq_frequency_table *freq_table = gh[gpu].freq_table;
 
@@ -441,14 +442,20 @@ static int pxa988_gpufreq_target (struct gpufreq_policy *policy, unsigned int ta
     freqs.old_freq = policy->cur;
     freqs.new_freq = freq_table[index].frequency;
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0)
     if(has_feat_axi_freq_change() &&
       (gpu != gcvCORE_SH))
     {
         freqs.axi_old_freq = policy->axi_cur;
         freqs.axi_new_freq = freq_table[index].busfreq;
     }
-#endif
+
+    if(!has_feat_shader_indept_dfc() &&
+        gcvCORE_MAJOR == gpu)
+    {
+        gckOS_QueryClkRate(gpu_os, gcvCORE_SH, gcvFALSE, &freqs_sh.old_freq);
+        freqs_sh.gpu = gcvCORE_SH;
+        freqs_sh.new_freq = freqs.new_freq;
+    }
 
 #if MRVL_CONFIG_ENABLE_QOS_SUPPORT
     pr_debug("[%d] Qos_min: %d, Qos_max: %d, Target: %d (KHZ)\n",
@@ -463,13 +470,16 @@ static int pxa988_gpufreq_target (struct gpufreq_policy *policy, unsigned int ta
 
     gpufreq_notify_transition(&freqs, GPUFREQ_PRECHANGE);
 
-    ret = pxa988_gpufreq_set(gpu, &freqs);
+    ret = pxa988_gpufreq_set(&freqs);
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0)
+    //set shader core frequency
+    if(!has_feat_shader_indept_dfc() &&
+        gcvCORE_MAJOR == gpu)
+        pxa988_gpufreq_set(&freqs_sh);
+
     if(has_feat_axi_freq_change() &&
         (gpu != gcvCORE_SH))
         policy->axi_cur = freqs.axi_new_freq;
-#endif
 
 #if GPUFREQ_REQUEST_DDR_QOS
     gpufreq_ddr_constraint_update(&gpufreq_ddr_constraint[gpu],
@@ -483,11 +493,12 @@ static int pxa988_gpufreq_target (struct gpufreq_policy *policy, unsigned int ta
     return ret;
 }
 
-static int pxa988_gpufreq_set(unsigned int gpu, struct gpufreq_freqs* freqs)
+static int pxa988_gpufreq_set(struct gpufreq_freqs* freqs)
 {
     int ret = 0;
     unsigned int rate = 0;
     gceSTATUS status;
+    unsigned int gpu = freqs->gpu;
 
     if (has_feat_dfc_protect_clk_op())
         gpufreq_acquire_clock_mutex(gpu);
@@ -500,7 +511,6 @@ static int pxa988_gpufreq_set(unsigned int gpu, struct gpufreq_freqs* freqs)
                         gpu, freqs->new_freq);
     }
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0)
     if(has_feat_axi_freq_change() &&
         gpu != gcvCORE_SH &&
        _AllowSetAxiFreq(freqs->axi_old_freq, gpu, freqs->axi_new_freq))
@@ -509,7 +519,6 @@ static int pxa988_gpufreq_set(unsigned int gpu, struct gpufreq_freqs* freqs)
         status = gckOS_SetClkRate(gpu_os, gpu, gcvTRUE, AXI_MIN(ga));
         freqs->axi_new_freq = AXI_MIN(ga);
     }
-#endif
 
     if(gcmIS_ERROR(status))
     {
@@ -581,7 +590,22 @@ static int pxa988_gpufreq_resume(struct gpufreq_policy *policy)
     return 0;
 }
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0)
+static int pxa988_gpufreq_qos_update(unsigned int chip, unsigned int min, unsigned int freq)
+{
+#if MRVL_CONFIG_ENABLE_QOS_SUPPORT
+    struct pm_qos_request *qos = NULL;
+
+    if(min)
+        qos = gc_qos[chip].pm_qos_req_min;
+    else
+        qos = gc_qos[chip].pm_qos_req_max;
+
+    pm_qos_update_request(qos, freq);
+#endif
+
+    return 0;
+}
+
 static unsigned int pxa988_gpufreq_get_axi (unsigned int gpu)
 {
     gceSTATUS status;
@@ -594,7 +618,6 @@ OnError:
     debug_log(GPUFREQ_LOG_ERROR, "failed to get clk rate of gpu %u\n", gpu);
     return -EINVAL;
 }
-#endif
 
 #endif /* End of MRVL_CONFIG_ENABLE_GPUFREQ */
 

@@ -1,6 +1,6 @@
 ##############################################################################
 #
-#    Copyright (c) 2005 - 2014 by Vivante Corp.  All rights reserved.
+#    Copyright (c) 2005 - 2015 by Vivante Corp.  All rights reserved.
 #
 #    The material in this file is confidential and contains trade secrets
 #    of Vivante Corporation. This is proprietary information owned by
@@ -170,7 +170,7 @@ endif
 
 CFLAGS        += -DANDROID_SDK_VERSION=$(PLATFORM_SDK_VERSION)
 CFLAGS        += -fno-strict-aliasing -fno-short-enums
-CFLAGS        += -Wall -Wno-missing-field-initializers -Wno-unused-parameter
+CFLAGS        += -Wno-missing-field-initializers -Wno-unused-parameter
 
 ifeq ($(DEBUG), 1)
 CFLAGS        += -DDBG=1 -DDEBUG -D_DEBUG -O0 -g
@@ -206,6 +206,9 @@ endif
 
 ################################################################################
 # Platform specific configs.
+
+THIRDPARTY_CUSTOMER ?=
+THIRDPARTY_TYPE ?=
 
 USE_LOCAL_GRALLOC ?= 0
 ifeq ($(USE_LOCAL_GRALLOC), 1)

@@ -1,6 +1,6 @@
 /****************************************************************************
 *
-*    Copyright (c) 2005 - 2014 by Vivante Corp.  All rights reserved.
+*    Copyright (c) 2005 - 2015 by Vivante Corp.  All rights reserved.
 *
 *    The material in this file is confidential and contains trade secrets
 *    of Vivante Corporation. This is proprietary information owned by
@@ -570,11 +570,12 @@ _State(
         ? gcvNULL
         : Context->buffer->logical;
 
-    if ((buffer == gcvNULL) && (Address + Size > Context->stateCount))
+    if ((buffer == gcvNULL) && (Address + Size > Context->maxState))
     {
         /* Determine maximum state. */
-        Context->stateCount = Address + Size;
+        Context->maxState = Address + Size;
     }
+
     if (buffer == gcvNULL)
     {
         /* Update number of states. */
@@ -1634,29 +1635,25 @@ gckCONTEXT_Construct(
         = gcmSIZEOF(gcsSTATE_DELTA_RECORD) * (gctUINT)context->numStates;
 
 
-    if (context->stateCount > 0)
+    if (context->maxState > 0)
     {
-        gctUINT32 oldValue;
-
-        gcmkONERROR(gckOS_AtomicExchange(
-            Os,
-            context->hardware->kernel->command->stateMapCreated,
-            1,
-            &oldValue
-            ));
-
         /**************************************************************************/
         /* Allocate and reset the state mapping table. ****************************/
-        if (oldValue == 0)
+        if (context->hardware->kernel->command->stateMap == gcvNULL)
         {
             /* Allocate the state mapping table. */
             gcmkONERROR(gckOS_Allocate(
                 Os,
-                gcmSIZEOF(gcsSTATE_MAP) * context->stateCount,
+                gcmSIZEOF(gcsSTATE_MAP) * context->maxState,
                 &pointer
                 ));
 
             context->map = pointer;
+
+            /* Zero the state mapping table. */
+            gcmkONERROR(gckOS_ZeroMemory(
+                context->map, gcmSIZEOF(gcsSTATE_MAP) * context->maxState
+                ));
 
             context->hardware->kernel->command->stateMap = pointer;
         }
@@ -1665,11 +1662,6 @@ gckCONTEXT_Construct(
             context->map = context->hardware->kernel->command->stateMap;
         }
 
-        /* Zero the state mapping table. */
-        gcmkONERROR(gckOS_ZeroMemory(
-            context->map, gcmSIZEOF(gcsSTATE_MAP) * context->stateCount
-            ));
-
         /**************************************************************************/
         /* Allocate the hint array. ***********************************************/
 
@@ -1677,7 +1669,7 @@ gckCONTEXT_Construct(
         /* Allocate hints. */
         gcmkONERROR(gckOS_Allocate(
             Os,
-            gcmSIZEOF(gctBOOL) * context->stateCount,
+            gcmSIZEOF(gctBOOL) * context->maxState,
             &pointer
             ));
 
@@ -1813,7 +1805,7 @@ gckCONTEXT_Construct(
 
             /* Query LINK size. */
             gcmkONERROR(gckHARDWARE_Link(
-                Hardware, gcvNULL, 0, 0, &linkBytes
+                Hardware, gcvNULL, 0, 0, &linkBytes, gcvNULL, gcvNULL
                 ));
 
             /* Generate a LINK. */
@@ -1822,7 +1814,9 @@ gckCONTEXT_Construct(
                 xdLink,
                 xdEntryAddress,
                 xdEntrySize,
-                &linkBytes
+                &linkBytes,
+                gcvNULL,
+                gcvNULL
                 ));
         }
     }
@@ -2156,7 +2150,7 @@ gckCONTEXT_Update(
                 address = record->address;
 
                 /* Make sure the state is a part of the mapping table. */
-                if (address >= Context->stateCount)
+                if (address >= Context->maxState)
                 {
                     gcmkTRACE(
                         gcvLEVEL_ERROR,

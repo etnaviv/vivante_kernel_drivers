@@ -1,6 +1,6 @@
 /****************************************************************************
 *
-*    Copyright (c) 2005 - 2013 by Vivante Corp.  All rights reserved.
+*    Copyright (c) 2005 - 2015 by Vivante Corp.  All rights reserved.
 *
 *    The material in this file is confidential and contains trade secrets
 *    of Vivante Corporation. This is proprietary information owned by
@@ -147,8 +147,6 @@
 #define MRVL_DFC_PROTECT_REG_ACCESS             0
 #endif
 
-#define MRVL_REDEFINE_KERNEL_MUTEX_INIT         1
-
 /*Pulse Eater counter --- record Nums*/
 #ifndef PULSE_EATER_COUNT
 #define PULSE_EATER_COUNT                       200
@@ -254,7 +252,7 @@
 /* @Ziyi: If any change happened between these 2 comments please contact zyxu@marvell.com, Thanks. */
 /* #################### [START ==DO NOT CHANGE THIS MARCRO== START] #################### */
 
-#define _GC_VERSION_STRING_                     "GC version rls_5011p5_GC4.0"
+#define _GC_VERSION_STRING_                     "GC version rls_5011p6_GC5.0"
 
 /* Do not align u/v stride to 16 */
 #define VIVANTE_ALIGN_UVSTRIDE                  0

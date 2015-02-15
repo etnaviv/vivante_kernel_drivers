@@ -1,6 +1,6 @@
 /****************************************************************************
 *
-*    Copyright (c) 2005 - 2014 by Vivante Corp.  All rights reserved.
+*    Copyright (c) 2005 - 2015 by Vivante Corp.  All rights reserved.
 *
 *    The material in this file is confidential and contains trade secrets
 *    of Vivante Corporation. This is proprietary information owned by
@@ -299,9 +299,11 @@ OnError:
 }
 
 static gctUINT32
-_SetPage(gctUINT32 PageAddress)
+_SetPage(gctUINT32 PageAddress, gctUINT32 PageAddressExt)
 {
     return PageAddress
+           /* AddressExt */
+           | (PageAddressExt << 4)
            /* writable */
            | (1 << 2)
            /* Ignore exception */
@@ -433,6 +435,7 @@ _FillFlatMapping(
     gctUINT32 sStart = (start & gcdMMU_STLB_64K_MASK) >> gcdMMU_STLB_64K_SHIFT;
     gctUINT32 sEnd = (end & gcdMMU_STLB_64K_MASK) >> gcdMMU_STLB_64K_SHIFT;
     gctBOOL ace = gckHARDWARE_IsFeatureAvailable(Mmu->hardware, gcvFEATURE_ACE);
+    gctPHYS_ADDR_T physical;
 
     /* Grab the mutex. */
     gcmkONERROR(gckOS_AcquireMutex(Mmu->os, Mmu->pageTableMutex, gcvINFINITE));
@@ -481,7 +484,9 @@ _FillFlatMapping(
             gcmkONERROR(gckOS_GetPhysicalAddress(
                 Mmu->os,
                 stlb->logical,
-                &stlb->physBase));
+                &physical));
+
+            gcmkSAFECASTPHYSADDRT(stlb->physBase, physical);
 
             if (stlb->physBase & (gcdMMU_STLB_64K_SIZE - 1))
             {
@@ -524,7 +529,7 @@ _FillFlatMapping(
             while (sStart <= last)
             {
                 gcmkASSERT(!(start & gcdMMU_PAGE_64K_MASK));
-                _WritePageEntry(stlb->logical + sStart, _SetPage(start));
+                _WritePageEntry(stlb->logical + sStart, _SetPage(start, 0));
 #if gcdMMU_TABLE_DUMP
                 gckOS_Print("%s(%d): insert STLB[%d]: %08x\n",
                     __FUNCTION__, __LINE__,
@@ -692,7 +697,8 @@ _SetupDynamicSpace(
     gceSTATUS status;
     gcsDynamicSpaceNode_PTR nodeArray = gcvNULL;
     gctINT i, nodeArraySize = 0;
-    gctUINT32 physical;
+    gctPHYS_ADDR_T physical;
+    gctUINT32 address;
     gctINT numEntries = 0;
     gctUINT32_PTR map;
     gctBOOL acquired = gcvFALSE;
@@ -751,6 +757,8 @@ _SetupDynamicSpace(
                 Mmu->pageTableLogical,
                 &physical));
 
+    gcmkSAFECASTPHYSADDRT(address, physical);
+
     /* Grab the mutex. */
     gcmkONERROR(gckOS_AcquireMutex(Mmu->os, Mmu->pageTableMutex, gcvINFINITE));
     acquired = gcvTRUE;
@@ -760,7 +768,7 @@ _SetupDynamicSpace(
          i < (gctINT)Mmu->dynamicMappingStart + numEntries;
          i++)
     {
-        mtlbEntry = physical
+        mtlbEntry = address
                   /* 4KB page size */
                   | (0 << 2)
                   /* Ignore exception */
@@ -783,7 +791,7 @@ _SetupDynamicSpace(
                 i,
                 _ReadPageEntry(Mmu->mtlbLogical + i));
 #endif
-        physical += gcdMMU_STLB_4K_SIZE;
+        address += gcdMMU_STLB_4K_SIZE;
     }
 
     /* Release the mutex. */
@@ -854,6 +862,7 @@ _Construct(
     gctUINT32 physBase;
     gctUINT32 physSize;
     gctUINT32 gpuAddress;
+    gctPHYS_ADDR_T gpuPhysical;
 
     gcmkHEADER_ARG("Kernel=0x%x MmuSize=%lu", Kernel, MmuSize);
 
@@ -975,7 +984,9 @@ _Construct(
             gckOS_QueryOption(mmu->os, "physSize", &physSize));
 
         gcmkONERROR(
-            gckOS_CPUPhysicalToGPUPhysical(mmu->os, physBase, &gpuAddress));
+            gckOS_CPUPhysicalToGPUPhysical(mmu->os, physBase, &gpuPhysical));
+
+        gcmkSAFECASTPHYSADDRT(gpuAddress, gpuPhysical);
 
         /* Setup [physBase - physSize) flat mapping. */
         gcmkONERROR(_FillFlatMapping(
@@ -1804,7 +1815,7 @@ gckMMU_FreePages(
 gceSTATUS
 gckMMU_SetPage(
     IN gckMMU Mmu,
-    IN gctUINT32 PageAddress,
+    IN gctPHYS_ADDR_T PageAddress,
     IN gctUINT32 *PageEntry
     )
 {
@@ -1814,6 +1825,8 @@ gckMMU_SetPage(
     gckMMU mmu;
     gctUINT32 offset = (gctUINT32)PageEntry - (gctUINT32)Mmu->pageTableLogical;
 #endif
+    gctUINT32 addressExt;
+    gctUINT32 address;
 
     gcmkHEADER_ARG("Mmu=0x%x", Mmu);
 
@@ -1822,13 +1835,18 @@ gckMMU_SetPage(
     gcmkVERIFY_ARGUMENT(PageEntry != gcvNULL);
     gcmkVERIFY_ARGUMENT(!(PageAddress & 0xFFF));
 
+    /* [31:0]. */
+    address    = (gctUINT32)(PageAddress & 0xFFFFFFFF);
+    /* [39:32]. */
+    addressExt = (gctUINT32)((PageAddress >> 32) & 0xFF);
+
     if (Mmu->hardware->mmuVersion == 0)
     {
-        _WritePageEntry(PageEntry, PageAddress);
+        _WritePageEntry(PageEntry, address);
     }
     else
     {
-        _WritePageEntry(PageEntry, _SetPage(PageAddress));
+        _WritePageEntry(PageEntry, _SetPage(address, addressExt));
     }
 
 #if gcdMIRROR_PAGETABLE
@@ -1842,11 +1860,11 @@ gckMMU_SetPage(
 
             if (mmu->hardware->mmuVersion == 0)
             {
-                _WritePageEntry(pageEntry, PageAddress);
+                _WritePageEntry(pageEntry, address);
             }
             else
             {
-                _WritePageEntry(pageEntry, _SetPage(PageAddress));
+                _WritePageEntry(pageEntry, _SetPage(address, addressExt));
             }
         }
 
@@ -2200,12 +2218,12 @@ gckMMU_DumpPageTableEntry(
 #if gcdPROCESS_ADDRESS_SPACE
     if (stlbDesc)
     {
-        gcmkPRINT("      STLB entry = 0x%08X",
+        gcmkPRINT("    STLB entry = 0x%08X",
                   _ReadPageEntry(&stlbDesc->logical[_StlbOffset(Address)]));
     }
     else
     {
-        gcmkPRINT("      MTLB entry is empty.");
+        gcmkPRINT("    MTLB entry is empty.");
     }
 #else
     mtlb   = (Address & gcdMMU_MTLB_MASK) >> gcdMMU_MTLB_SHIFT;
@@ -2220,7 +2238,7 @@ gckMMU_DumpPageTableEntry(
               * gcdMMU_STLB_4K_ENTRY_NUM
               + stlb;
 
-        gcmkPRINT("      Page table entry = 0x%08X", _ReadPageEntry(pageTable + index));
+        gcmkPRINT("    Page table entry = 0x%08X", _ReadPageEntry(pageTable + index));
     }
     else
     {
@@ -2236,7 +2254,7 @@ gckMMU_DumpPageTableEntry(
 
             if (entry == stlbObj->physBase)
             {
-                gcmkPRINT("      Page table entry = 0x%08X", stlbObj->logical[stlb]);
+                gcmkPRINT("    Page table entry = 0x%08X", stlbObj->logical[stlb]);
                 break;
             }
 

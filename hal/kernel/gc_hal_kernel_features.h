@@ -55,21 +55,13 @@ static inline int has_feat_2d_power_onoff(void)
 /* has pulse eater support */
 static inline int has_feat_pulse_eater_profiler(void)
 {
-    return cpu_is_pxa1U88() || cpu_is_pxa1908()
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,14,0)
-    || cpu_is_pxa1936()
-#endif
-    ;
+    return cpu_is_pxa1U88() || cpu_is_pxa1908();
 }
 
 /* refer to MRVL_CONFIG_SHADER_CLK_CONTROL */
 static inline int has_feat_shader_indept_dfc(void)
 {
-    return cpu_is_pxa1U88() || cpu_is_pxa1908()
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,14,0)
-    || cpu_is_pxa1936()
-#endif
-    ;
+    return cpu_is_pxa1U88() || cpu_is_pxa1908();
 }
 
 /* MRVL_3D_CORE_SH_CLOCK_SEPARATED */
@@ -117,6 +109,15 @@ static inline int has_feat_freq_change_when_idle(void)
 static inline int has_feat_ulc(void)
 {
     return cpu_is_pxa1908();
+}
+
+static inline int has_feat_3d_axi_combine_limit(void)
+{
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,14,0)
+    return cpu_is_pxa1936();
+#else
+    return 0;
+#endif
 }
 
 #endif

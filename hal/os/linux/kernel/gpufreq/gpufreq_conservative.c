@@ -505,13 +505,16 @@ static int gpufreq_gov_conservative_init(void)
     /* successfully registered, then init work. */
     for_each_gpu(gpu)
     {
+        if(gcvCORE_SH != gpu || has_feat_shader_indept_dfc())
+        {
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,7,0))
-        INIT_DEFERRABLE_WORK(&conservative_info_s[gpu].work,
-                                 do_conservative_timer);
-#else
-        INIT_DELAYED_WORK_DEFERRABLE(&conservative_info_s[gpu].work,
+            INIT_DEFERRABLE_WORK(&conservative_info_s[gpu].work,
                                      do_conservative_timer);
+#else
+            INIT_DELAYED_WORK_DEFERRABLE(&conservative_info_s[gpu].work,
+                                         do_conservative_timer);
 #endif
+        }
     }
 
     return 0;

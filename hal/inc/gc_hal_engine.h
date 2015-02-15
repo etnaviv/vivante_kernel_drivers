@@ -1,6 +1,6 @@
 /****************************************************************************
 *
-*    Copyright (c) 2005 - 2014 by Vivante Corp.  All rights reserved.
+*    Copyright (c) 2005 - 2015 by Vivante Corp.  All rights reserved.
 *
 *    The material in this file is confidential and contains trade secrets
 *    of Vivante Corporation. This is proprietary information owned by
@@ -2508,6 +2508,10 @@ typedef enum _gceBUFOBJ_USAGE
     gcvBUFOBJ_USAGE_DYNAMIC_COPY,
     gcvBUFOBJ_USAGE_DOUBLE_BUFFER = 16,
 
+    /* special patch for optimaize performance,
+    ** no fence and duplicate stream to ensure data correct
+    */
+    gcvBUFOBJ_USAGE_DISABLE_FENCE_DYNAMIC_STREAM = 256
 } gceBUFOBJ_USAGE;
 
 /* Construct a new gcoBUFOBJ object. */

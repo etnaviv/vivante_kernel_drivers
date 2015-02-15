@@ -1,6 +1,6 @@
 /****************************************************************************
 *
-*    Copyright (c) 2005 - 2014 by Vivante Corp.  All rights reserved.
+*    Copyright (c) 2005 - 2015 by Vivante Corp.  All rights reserved.
 *
 *    The material in this file is confidential and contains trade secrets
 *    of Vivante Corporation. This is proprietary information owned by
@@ -257,6 +257,7 @@ gckKERNEL_MapVideoMemoryEx(
     gceSTATUS status;
     gctPOINTER logical    = gcvNULL;
     gctUINT32 baseAddress;
+    gctPHYS_ADDR_T physical;
 
     gcmkHEADER_ARG("Kernel=%p InUserSpace=%d Address=%08x",
                    Kernel, InUserSpace, Address);
@@ -347,8 +348,10 @@ gckKERNEL_MapVideoMemoryEx(
                 gckOS_CPUPhysicalToGPUPhysical(
                     Kernel->os,
                     device->contiguousVidMem->baseAddress - systemBaseAddress,
-                    &baseAddress
+                    &physical
                     ));
+
+            gcmkSAFECASTPHYSADDRT(baseAddress, physical);
 
             gcmkVERIFY_OK(
                 gckHARDWARE_SplitMemory(Kernel->hardware,

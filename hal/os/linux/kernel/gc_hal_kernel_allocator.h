@@ -1,6 +1,6 @@
 /****************************************************************************
 *
-*    Copyright (c) 2005 - 2014 by Vivante Corp.  All rights reserved.
+*    Copyright (c) 2005 - 2015 by Vivante Corp.  All rights reserved.
 *
 *    The material in this file is confidential and contains trade secrets
 *    of Vivante Corporation. This is proprietary information owned by
@@ -224,7 +224,7 @@ typedef struct _gcsALLOCATOR_OPERATIONS
         IN PLINUX_MDL Mdl,
         IN gctPOINTER Logical,
         IN gctUINT32 ProcessID,
-        OUT gctUINT32_PTR Physical
+        OUT gctPHYS_ADDR_T * Physical
         );
 
     /**************************************************************************
@@ -291,7 +291,7 @@ typedef struct _gcsALLOCATOR_OPERATIONS
         IN gckALLOCATOR Allocator,
         IN PLINUX_MDL Mdl,
         IN gctUINT32 Offset,
-        OUT gctUINT32_PTR Physical
+        OUT gctPHYS_ADDR_T * Physical
         );
 }
 gcsALLOCATOR_OPERATIONS;

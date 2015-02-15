@@ -1,6 +1,6 @@
 /****************************************************************************
 *
-*    Copyright (c) 2005 - 2014 by Vivante Corp.  All rights reserved.
+*    Copyright (c) 2005 - 2015 by Vivante Corp.  All rights reserved.
 *
 *    The material in this file is confidential and contains trade secrets
 *    of Vivante Corporation. This is proprietary information owned by
@@ -42,7 +42,7 @@ gpu3d_allocate_secure_mem(
     TEEC_Context *context = &teecContext;
     TEEC_SharedMemory *shm = NULL;
     void *handle = NULL;
-    unsigned int phyAddr = 0xFFFFFFFF;
+    gctPHYS_ADDR_T phyAddr;
     gceSTATUS status;
     gctSIZE_T bytes = size;
 
@@ -87,7 +87,7 @@ gpu3d_allocate_secure_mem(
     shm->flags = TEEC_MEM_INPUT;
 
     /* Use TEE Client API to register the underlying memory buffer. */
-    shm->phyAddr = (void *)phyAddr;
+    shm->phyAddr = (void *)(gctUINT32)phyAddr;
 
     result = TEEC_RegisterSharedMemory(
             context,
