@@ -6084,13 +6084,9 @@ OnError:
         info->extraPage = 0;
 
         /* Allocate the array of page addresses. */
-        pages = (struct page **)kmalloc((pageCount + extraPage) * sizeof(struct page *), GFP_KERNEL | gcdNOWARN);
-
-        if (pages == gcvNULL)
-        {
-            status = gcvSTATUS_OUT_OF_MEMORY;
-            break;
-        }
+        gcmkONERROR(gckOS_Allocate(
+            Os, (pageCount + extraPage) * sizeof(struct page *), (gctPOINTER *) &pages
+            ));
 
         if (Physical != ~0U)
         {
@@ -6187,7 +6183,7 @@ OnError:
                         if (!((physical - Os->device->baseAddress) & 0x80000000))
                         {
                             gctPHYS_ADDR_T gpuPhysical;
-                            kfree(pages);
+                            gcmkVERIFY_OK(gckOS_Free(Os, pages));
                             pages = gcvNULL;
 
                             info->pages = gcvNULL;
@@ -6464,7 +6460,7 @@ OnError:
                 );
 
             /* Free the page table. */
-            kfree(pages);
+            gckOS_Free(Os, pages);
             info->pages = gcvNULL;
         }
 
@@ -6702,7 +6698,7 @@ OnError:
         /* Free the page array. */
         if (info->pages != gcvNULL)
         {
-            kfree(info->pages);
+            status = gckOS_Free(Os, (info->pages));
         }
 
         kfree(info);

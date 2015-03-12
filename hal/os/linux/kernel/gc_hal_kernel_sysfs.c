@@ -588,7 +588,7 @@ static ssize_t store_clk_rate (struct device *dev,
 {
     gceSTATUS status;
     int core, frequency, i, gpu_count;
-    int axi=0;
+    int axi=0, min_freq = 156, max_freq = 624;
 
     for (i = 0, gpu_count = 0; i < gcdMAX_GPU_COUNT; i++)
         if (galDevice->kernels[i] != gcvNULL)
@@ -607,7 +607,15 @@ static ssize_t store_clk_rate (struct device *dev,
         SYSFS_VERIFY_INPUT(sscanf(buf, "%d,%d", &core, &frequency), 2);
     }
     SYSFS_VERIFY_INPUT_RANGE(core, 0, (gpu_count-1));
-    SYSFS_VERIFY_INPUT_RANGE(frequency, 156, 624);
+
+    if(galDevice->max_freq[core] != 0 &&
+        galDevice->min_freq[core] != 0)
+    {
+        min_freq = galDevice->min_freq[core];
+        max_freq = galDevice->max_freq[core];
+    }
+
+    SYSFS_VERIFY_INPUT_RANGE(frequency, min_freq, max_freq);
 
     /* acquire clock mutex */
     if(has_feat_dfc_protect_clk_op())

@@ -3185,18 +3185,11 @@ gckCOMMAND_Attach(
     )
 {
     gceSTATUS status;
-    gctBOOL acquired = gcvFALSE;
 
     gcmkHEADER_ARG("Command=0x%x", Command);
 
     /* Verify the arguments. */
     gcmkVERIFY_OBJECT(Command, gcvOBJ_COMMAND);
-
-    /* Acquire the context switching mutex. */
-    gcmkONERROR(gckOS_AcquireMutex(
-        Command->os, Command->mutexContext, gcvINFINITE
-        ));
-    acquired = gcvTRUE;
 
     /* Construct a gckCONTEXT object. */
     gcmkONERROR(gckCONTEXT_Construct(
@@ -3210,23 +3203,11 @@ gckCOMMAND_Attach(
     * MaxState  = (* Context)->maxState;
     * NumStates = (* Context)->numStates;
 
-    /* Release the context switching mutex. */
-    gcmkONERROR(gckOS_ReleaseMutex(Command->os, Command->mutexContext));
-    acquired = gcvFALSE;
-
     /* Success. */
     gcmkFOOTER_ARG("*Context=0x%x", *Context);
     return gcvSTATUS_OK;
 
 OnError:
-    /* Release mutex. */
-    if (acquired)
-    {
-        /* Release the context switching mutex. */
-        gcmkVERIFY_OK(gckOS_ReleaseMutex(Command->os, Command->mutexContext));
-        acquired = gcvFALSE;
-    }
-
     /* Return the status. */
     gcmkFOOTER();
     return status;

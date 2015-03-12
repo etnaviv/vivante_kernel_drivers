@@ -42,6 +42,8 @@ typedef struct _gckGALDEVICE
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0)
     struct freq_table   *ft;
 #endif
+    gctUINT32           min_freq[gcdMAX_GPU_COUNT];
+    gctUINT32           max_freq[gcdMAX_GPU_COUNT];
 
     /* Attributes. */
     gctSIZE_T           internalSize;

@@ -289,6 +289,8 @@ typedef struct _gcsPLS
 
     gctBOOL                     bLandscapeGame;
 
+    gctBOOL                     bTempleRun;
+
     gctPLS_DESTRUCTOR           destructor;
     /* Mutex to guard PLS access. currently it's for EGL.
     ** We can use this mutex for every PLS access.
@@ -337,6 +339,7 @@ extern gcsPLS gcPLS;
     gcvFALSE,        /* bChrome */ \
     gcvFALSE,        /* bF18 */ \
     gcvFALSE,        /* bLandscapeGame */ \
+    gcvFALSE,        /* temple run */      \
     gcvNULL,         /* destructor        */ \
     gcvNULL,         /* accessLock        */ \
     gcvPATCH_NOTINIT,/* global patchID    */ \

@@ -1800,7 +1800,7 @@ gckKERNEL_ShowProcessVidMemUsage(
         database = database->next;
     }
 
-    seq_printf(m, "GC memory usage details for pid %d\n",database->processID);
+    seq_printf(m, "GC memory usage details for pid %d\n", ProcessID);
 
     if(database && database->processID == ProcessID)
     {
@@ -1827,6 +1827,10 @@ gckKERNEL_ShowProcessVidMemUsage(
         seq_printf(m, "  - %-16s %d KB \n",
                       "Sum",sum/1024);
 
+    }
+    else
+    {
+        seq_printf(m, "  - pid %d does not exist \n", ProcessID);
     }
     gcmkVERIFY_OK(gckOS_ReleaseMutex(Kernel->os, Kernel->db->dbMutex));
     gcmkFOOTER_NO();

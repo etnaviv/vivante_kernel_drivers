@@ -568,8 +568,8 @@ static int pxa988_gpufreq_suspend(struct gpufreq_policy *policy)
     */
     if(policy->cur >= gpu_high_threshold)
         gpufreq_ddr_constraint_update(&gpufreq_ddr_constraint[gpu],
-                                       policy->cur,
                                        0,
+                                       policy->cur,
                                        gpu_high_threshold);
 #endif
     return 0;
@@ -583,8 +583,8 @@ static int pxa988_gpufreq_resume(struct gpufreq_policy *policy)
     /* re-hold ddr qos if freq > gpu_high_threshold when power on*/
     if(policy->cur >= gpu_high_threshold)
         gpufreq_ddr_constraint_update(&gpufreq_ddr_constraint[gpu],
-                                      0,
                                       policy->cur,
+                                      0,
                                       gpu_high_threshold);
 #endif
     return 0;

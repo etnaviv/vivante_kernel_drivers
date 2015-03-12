@@ -1464,7 +1464,8 @@ static int parse_freq_table(const __be32 *prop, unsigned int proplen, struct fre
     /* end of the freq table*/
     (ft+i)->index = ~1;
 
-    return 0;
+    /* return freq table length*/
+    return i;
 out:
     /* failed to get freq table*/
     ft[i].index = ~0;
@@ -1523,6 +1524,13 @@ static int gpu2D_dt_probe(struct platform_device *pdev)
 
     /* pass 2D freq table head ptr in*/
     rnt = parse_freq_table(prop, proplen, galDevice->ft + gcvCORE_2D*FREQ_TABLE_MAX);
+
+    if(rnt > 0)
+    {
+        galDevice->min_freq[gcvCORE_2D] = (galDevice->ft + gcvCORE_2D*FREQ_TABLE_MAX)->frequency / 1000;
+        galDevice->max_freq[gcvCORE_2D] = (galDevice->ft + gcvCORE_2D*FREQ_TABLE_MAX + rnt - 1)->frequency / 1000;
+        rnt = 0;
+    }
 #endif
 
     return rnt;
@@ -1634,7 +1642,13 @@ static int gpu_dt_probe(struct platform_device *pdev)
     /* pass 3D freq table head ptr in*/
     rnt = parse_freq_table(prop, proplen, galDevice->ft + gcvCORE_MAJOR*FREQ_TABLE_MAX);
 
-    if(rnt)
+    if(rnt > 0)
+    {
+        galDevice->min_freq[gcvCORE_MAJOR] = (galDevice->ft + gcvCORE_MAJOR*FREQ_TABLE_MAX)->frequency / 1000;
+        galDevice->max_freq[gcvCORE_MAJOR] = (galDevice->ft + gcvCORE_MAJOR*FREQ_TABLE_MAX + rnt - 1)->frequency / 1000;
+        rnt = 0;
+    }
+    else
     {
         goto out;
     }
@@ -1651,11 +1665,17 @@ static int gpu_dt_probe(struct platform_device *pdev)
     /* pass shader freq table head ptr in*/
     rnt = parse_freq_table(prop, proplen, galDevice->ft + gcvCORE_SH*FREQ_TABLE_MAX);
 
-    if(rnt)
+    if(rnt <= 0)
     {
         goto out;
     }
 
+    if(gcdMAX_GPU_COUNT-1 >= gcvCORE_SH)
+    {
+        galDevice->min_freq[gcvCORE_SH] = (galDevice->ft + gcvCORE_SH*FREQ_TABLE_MAX)->frequency / 1000;
+        galDevice->max_freq[gcvCORE_SH] = (galDevice->ft + gcvCORE_SH*FREQ_TABLE_MAX + rnt - 1)->frequency / 1000;
+        rnt = 0;
+    }
 out:
 #endif
 

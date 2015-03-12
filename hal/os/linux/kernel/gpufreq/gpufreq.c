@@ -157,24 +157,13 @@ gpufreq_freq_attr_ro(gputype);
 
 static ssize_t show_scaling_cur_freq(struct gpufreq_policy *policy, char *buf)
 {
-    unsigned int freq = ~0, gpu = 0, len = 0;
+    unsigned int freq = ~0, gpu = 0;
 
     gpu = policy->gpu;
     if(gpufreq_driver->get)
         freq = gpufreq_driver->get(gpu);
 
-    len += sprintf(buf+len, "[3D] %u\n", freq);
-
-    if(!has_feat_shader_indept_dfc() &&
-       gcvCORE_MAJOR == gpu)
-    {
-        unsigned int freq_sh = ~0;
-
-        freq_sh = gpufreq_driver->get(gcvCORE_SH);
-        len += sprintf(buf+len, "[SH] %u\n", freq_sh);
-    }
-
-    return len;
+    return sprintf(buf, "%u\n", freq);
 }
 gpufreq_freq_attr_ro(scaling_cur_freq);
 
