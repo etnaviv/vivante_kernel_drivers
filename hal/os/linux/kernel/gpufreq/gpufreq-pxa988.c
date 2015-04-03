@@ -56,7 +56,6 @@ struct gpufreq_pxa988 {
 };
 
 struct gpufreq_pxa988 gh[GPUFREQ_GPU_NUMS];
-static gckOS gpu_os;
 
 #if GPUFREQ_REQUEST_DDR_QOS
 static DDR_QOS_NODE gpufreq_ddr_constraint[GPUFREQ_GPU_NUMS] = {
@@ -329,7 +328,6 @@ extern int get_gc_shader_freqs_table(unsigned long *gcush_freqs_table,
     debug_log(GPUFREQ_LOG_ERROR, "cannot get func pointer for gpu %u\n", gpu);
 #endif
 }
-
 static int pxa988_gpufreq_init (gctPOINTER freqTable, struct gpufreq_policy *policy)
 {
     unsigned int gpu = policy->gpu;
@@ -348,6 +346,21 @@ static int pxa988_gpufreq_init (gctPOINTER freqTable, struct gpufreq_policy *pol
 
     policy->cur = pxa988_gpufreq_get(policy->gpu);
 
+    if(has_feat_ulc() && gpu == gcvCORE_MAJOR)
+    {
+        gctPOINTER freqTable;
+        if(gpu_os!=NULL){
+            gckOS_GetFreqTablePointer(gpu_os,&freqTable,gcvCORE_SH);
+            if(gpufreq_frequency_table_get(gcvCORE_SH, gh[gcvCORE_SH].freq_table, freqTable))
+            {
+                debug_log(GPUFREQ_LOG_ERROR, "failed to get core(%d) freq table", gcvCORE_SH);
+                return -1;
+            }
+        }else{
+            debug_log(GPUFREQ_LOG_ERROR, "failed to get gpu_os");
+            return -1;
+        }
+    }
 #if MRVL_CONFIG_ENABLE_QOS_SUPPORT
     if(unlikely(!(is_qos_inited & (1 << gpu))))
     {
@@ -448,13 +461,24 @@ static int pxa988_gpufreq_target (struct gpufreq_policy *policy, unsigned int ta
         freqs.axi_old_freq = policy->axi_cur;
         freqs.axi_new_freq = freq_table[index].busfreq;
     }
-
+    /*target shader frequency*/
     if(!has_feat_shader_indept_dfc() &&
         gcvCORE_MAJOR == gpu)
     {
         gckOS_QueryClkRate(gpu_os, gcvCORE_SH, gcvFALSE, &freqs_sh.old_freq);
         freqs_sh.gpu = gcvCORE_SH;
-        freqs_sh.new_freq = freqs.new_freq;
+        if(has_feat_ulc())
+        {
+            ret = gpufreq_frequency_table_target(policy, gh[gcvCORE_SH].freq_table, freqs.new_freq, GPUFREQ_RELATION_L, &index);
+            if(ret)
+            {
+                debug_log(GPUFREQ_LOG_ERROR, "[%d] error: invalid target frequency: %u\n", gpu, target_freq);
+                return ret;
+            }
+            freqs_sh.new_freq = gh[gcvCORE_SH].freq_table[index].frequency;
+        }else{
+            freqs_sh.new_freq = freqs.new_freq;
+        }
     }
 
 #if MRVL_CONFIG_ENABLE_QOS_SUPPORT

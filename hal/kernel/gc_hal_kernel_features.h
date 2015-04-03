@@ -55,13 +55,13 @@ static inline int has_feat_2d_power_onoff(void)
 /* has pulse eater support */
 static inline int has_feat_pulse_eater_profiler(void)
 {
-    return cpu_is_pxa1U88() || cpu_is_pxa1908();
+    return cpu_is_pxa1U88();
 }
 
 /* refer to MRVL_CONFIG_SHADER_CLK_CONTROL */
 static inline int has_feat_shader_indept_dfc(void)
 {
-    return cpu_is_pxa1U88() || cpu_is_pxa1908();
+    return cpu_is_pxa1U88();
 }
 
 /* MRVL_3D_CORE_SH_CLOCK_SEPARATED */

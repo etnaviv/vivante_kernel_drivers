@@ -439,6 +439,10 @@ OnError:
     }
     if (record != gcvNULL)
     {
+        if (Database->list[Slot] == record)
+        {
+            Database->list[Slot] = record->next;
+        }
         gcmkVERIFY_OK(gcmkOS_SAFE_FREE(Kernel->os, record));
     }
 

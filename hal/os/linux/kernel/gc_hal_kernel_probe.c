@@ -126,7 +126,12 @@ static int powerManagement = 1;
 #endif
 module_param(powerManagement, int, 0644);
 
+#if VIVANTE_PROFILER
+static int gpuProfiler = 1;
+#else
 static int gpuProfiler = 0;
+#endif
+
 module_param(gpuProfiler, int, 0644);
 
 static int signal = 48;

@@ -29,7 +29,7 @@ static struct gpufreq_driver *gpufreq_driver;
 static unsigned int inited_gpufreq_trans_notifier_list[GPUFREQ_GPU_NUMS] = {0};
 static struct srcu_notifier_head gpufreq_trans_notifier_list[GPUFREQ_GPU_NUMS];
 
-static gckOS gpu_os = NULL;
+gckOS gpu_os = NULL;
 
 static const char* const _gpu_type[] = {
     [gcvCORE_MAJOR]     = "3D",

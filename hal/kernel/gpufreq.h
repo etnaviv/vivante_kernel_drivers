@@ -126,6 +126,7 @@ struct gpufreq_real_policy {
 #define GPUFREQ_PRECHANGE   (0)
 #define GPUFREQ_POSTCHANGE  (1)
 
+extern gckOS gpu_os;
 #if MRVL_CONFIG_DEVFREQ_GOV_THROUGHPUT
 #define st_trans(action)                         \
     if(((action) == (GPUFREQ_POSTCHANGE_UP))||  \

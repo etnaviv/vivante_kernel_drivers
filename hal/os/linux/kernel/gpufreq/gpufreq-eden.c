@@ -67,7 +67,6 @@ struct gpufreq_eden {
     int gpu_suspended;
 };
 
-static gckOS gpu_os;
 struct gpufreq_eden gpu_eden[GPUFREQ_GPU_NUMS];
 static unsigned int major_freq_table_size;
 

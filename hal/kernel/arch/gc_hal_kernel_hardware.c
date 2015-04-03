@@ -2750,6 +2750,8 @@ gckHARDWARE_Execute(
     }
     else
     {
+        gckOS_Delay(Hardware->os, 1);
+
         /* Write control register. */
         gcmkONERROR(
             gckOS_WriteRegisterEx(Hardware->os, Hardware->core, 0x00658, control));
@@ -7313,7 +7315,7 @@ gckHARDWARE_UpdateContextProfile(
     gceCHIPMODEL chipModel;
     gctUINT32 chipRevision;
     gctUINT32 temp;
-    gctBOOL needResetShader = gcvFALSE;
+    gctBOOL needResetShader = gcvTRUE;
 
     gcmkHEADER_ARG("Hardware=0x%x Context=0x%x", Hardware, Context);
 

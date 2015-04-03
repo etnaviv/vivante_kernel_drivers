@@ -50,6 +50,7 @@ struct gpufreq_ondemand_info_s {
     void                    *timer;
     struct mutex            timer_mutex;
     int                     ref;
+    int                     enabled;
 };
 
 static struct gpufreq_ondemand_info_s ondemand_info_s[GPUFREQ_GPU_NUMS];
@@ -342,6 +343,9 @@ static void do_ondemand_timer(void* data)
     struct gpufreq_ondemand_info_s *this_gov_info = (struct gpufreq_ondemand_info_s *)data;
     unsigned int delay = ondemand_tuners_ins[this_gov_info->gpu].sampling_rate;
 
+    if (this_gov_info->enabled == 0)
+        return;
+
     mutex_lock(&this_gov_info->timer_mutex);
 
 //    debug_log(GPUFREQ_LOG_DEBUG, "do_ondemand_timer...\n");
@@ -355,11 +359,14 @@ static void do_ondemand_timer(void* data)
 static inline void gov_ondemand_init(struct gpufreq_ondemand_info_s *ondemand_info)
 {
     unsigned int delay = 1;
+
+    ondemand_info->enabled = 1;
     gpufreq_start_timer(ondemand_info->timer, delay);
 }
 
 static inline void gov_ondemand_exit(struct gpufreq_ondemand_info_s *ondemand_info)
 {
+    ondemand_info->enabled = 0;
     gpufreq_stop_timer(ondemand_info->timer);
 }
 

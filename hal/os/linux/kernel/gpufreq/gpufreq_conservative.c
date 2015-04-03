@@ -364,6 +364,9 @@ static void do_conservative_timer(struct work_struct *work)
         container_of(work, struct gpufreq_conservative_info_s, work.work);
     unsigned int delay = msecs_to_jiffies(conservative_tuners_ins[this_gov_info->gpu].sampling_rate);
 
+    if (this_gov_info->enabled == 0)
+        return;
+
     mutex_lock(&this_gov_info->timer_mutex);
 
     delay -= jiffies % delay;
