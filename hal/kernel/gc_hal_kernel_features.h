@@ -113,11 +113,7 @@ static inline int has_feat_ulc(void)
 
 static inline int has_feat_3d_axi_combine_limit(void)
 {
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,14,0)
-    return cpu_is_pxa1936();
-#else
     return 0;
-#endif
 }
 
 #endif

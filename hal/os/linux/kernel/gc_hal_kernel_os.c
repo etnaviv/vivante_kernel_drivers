@@ -149,7 +149,7 @@ _CreateMdlMap(
 
     gcmkHEADER_ARG("Mdl=0x%X ProcessID=%d", Mdl, ProcessID);
 
-    mdlMap = (PLINUX_MDL_MAP)kmalloc(sizeof(struct _LINUX_MDL_MAP), GFP_KERNEL | gcdNOWARN);
+    mdlMap = (PLINUX_MDL_MAP)vmalloc(sizeof(struct _LINUX_MDL_MAP));
     if (mdlMap == gcvNULL)
     {
         gcmkFOOTER_NO();
@@ -215,7 +215,7 @@ _DestroyMdlMap(
         prevMdlMap->next = MdlMap->next;
     }
 
-    kfree(MdlMap);
+    vfree(MdlMap);
 
     gcmkFOOTER_NO();
     return gcvSTATUS_OK;
