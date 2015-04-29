@@ -1,5 +1,19 @@
 .PHONY: build-galcore
 
+ARCH ?= arm64
+ARCH_TYPE ?= arm64
+
+ifneq ($(ARCH),)
+       ARCH := $(ARCH)
+       ARCH_TYPE := $(ARCH)
+       BUILD_PARAMETERS := ARCH=${ARCH} ARCH_TYPE=${ARCH_TYPE} CROSS_COMPILE=${CROSS_COMPILE} -j$(MAKE_JOBS)
+endif
+
+ifeq ($(ARCH), arm64)
+       CROSS_COMPILE := aarch64-linux-android-
+       BUILD_PARAMETERS := -j$(MAKE_JOBS)
+endif
+
 $(PRODUCT_OUT)/ramdisk.img: galcore.ko
 
 include $(CLEAR_VARS)
@@ -12,9 +26,19 @@ LOCAL_MODULE_PATH := $(PRODUCT_OUT)/system/lib/modules
 $(LOCAL_PATH)/$(LOCAL_SRC_FILES): build-galcore
 include $(BUILD_PREBUILT)
 
-build-galcore: build-kernel
+build-galcore: uImage
 	cd $(GALCORE_SRC_PATH) &&\
-	$(MAKE) -j$(MAKE_JOBS)
+	$(MAKE) $(BUILD_PARAMETERS)
+ifeq (,$(wildcard $(PRODUCT_OUT)/system/lib/modules))
+	mkdir -p $(PRODUCT_OUT)/system/lib/modules
+endif
+	cp $(GALCORE_SRC_PATH)/hal/driver/galcore.ko $(PRODUCT_OUT)/system/lib/modules
+
+
+.PHONY: build-debug-galcore
+build-debug-galcore: $(PRODUCT_OUT)/$(KERNEL_IMAGE)_debug
+	cd $(GALCORE_SRC_PATH) &&\
+	$(MAKE) $(BUILD_PARAMETERS)
 ifeq (,$(wildcard $(PRODUCT_OUT)/system/lib/modules))
 	mkdir -p $(PRODUCT_OUT)/system/lib/modules
 endif

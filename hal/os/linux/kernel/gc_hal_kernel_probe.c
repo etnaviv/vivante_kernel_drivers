@@ -164,7 +164,7 @@ module_param(recovery, uint, 0644);
 MODULE_PARM_DESC(recovery, "Recover GPU from stuck (1: Enable, 0: Disable)");
 
 /* Middle needs about 40KB buffer, Maximal may need more than 200KB buffer. */
-static uint stuckDump = 3;
+static uint stuckDump = 2;
 module_param(stuckDump, uint, 0644);
 MODULE_PARM_DESC(stuckDump, "Level of stuck dump content (1: Minimal, 2: Middle, 3: Maximal)");
 
@@ -255,7 +255,7 @@ static const struct file_operations gc_procmem_ops = {
     .open    = gc_procmem_open,
     .read    = seq_read,
     .llseek  = seq_lseek,
-    .release = seq_release,
+    .release = single_release,
 };
 
 static gceSTATUS _gc_gather_infomation(char *buf, ssize_t* length)

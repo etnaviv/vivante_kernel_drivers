@@ -24,7 +24,7 @@
 static int gpu_high_threshold[GPUFREQ_GPU_NUMS] = {312000, 800000};
 #endif
 
-#if MRVL_CONFIG_DEVFREQ_GOV_THROUGHPUT
+#if MRVL_CONFIG_DEVFREQ_GOV_THROUGHPUT && (LINUX_VERSION_CODE < KERNEL_VERSION(3, 14, 0))
 #define _config_state(gpu, cur_freq, old_freq, state) \
 { \
     if((cur_freq) >= gpu_high_threshold[gpu]) \
@@ -289,12 +289,18 @@ static DDR_QOS_NODE gpufreq_ddr_constraint[GPUFREQ_GPU_NUMS] = {
         {
             .qos_node = {
                 .name = "gpu3d_ddr_min",
-            }
+            },
+            .qos_type = PM_QOS_DDR_DEVFREQ_MIN,
+            .default_value = GPUFREQ_REQ_DDR_LVL_DEFAULT,
+            .update_value  = GPUFREQ_REQ_DDR_LVL_HIGH,
         },
         {
             .qos_node = {
                 .name = "gpu2d_ddr_min",
-            }
+            },
+            .qos_type = PM_QOS_DDR_DEVFREQ_MIN,
+            .default_value = GPUFREQ_REQ_DDR_LVL_DEFAULT,
+            .update_value  = GPUFREQ_REQ_DDR_LVL_HIGH,
         },
     };
 #endif
@@ -586,7 +592,7 @@ static unsigned int eden_gpufreq_get (unsigned int gpu)
 
 int eden_gpufreq_suspend(struct gpufreq_policy *policy)
 {
-#if MRVL_CONFIG_DEVFREQ_GOV_THROUGHPUT
+#if MRVL_CONFIG_DEVFREQ_GOV_THROUGHPUT && (LINUX_VERSION_CODE < KERNEL_VERSION(3, 14, 0))
     struct gpufreq_freqs freqs = {0};
 #endif
 
@@ -600,7 +606,7 @@ int eden_gpufreq_suspend(struct gpufreq_policy *policy)
                                    156, 624, 312);
 #endif
 
-#if MRVL_CONFIG_DEVFREQ_GOV_THROUGHPUT
+#if MRVL_CONFIG_DEVFREQ_GOV_THROUGHPUT && (LINUX_VERSION_CODE < KERNEL_VERSION(3, 14, 0))
     freqs.gpu      = policy->gpu;
     gpufreq_notify_transition(&freqs, GPUFREQ_PRECHANGE);
     gpufreq_notify_transition(&freqs, GPUFREQ_POSTCHANGE_DOWN);
@@ -611,7 +617,7 @@ int eden_gpufreq_suspend(struct gpufreq_policy *policy)
 
 int eden_gpufreq_resume(struct gpufreq_policy *policy)
 {
-#if MRVL_CONFIG_DEVFREQ_GOV_THROUGHPUT
+#if MRVL_CONFIG_DEVFREQ_GOV_THROUGHPUT && (LINUX_VERSION_CODE < KERNEL_VERSION(3, 14, 0))
     struct gpufreq_freqs freqs = {0};
 #endif
 
@@ -622,7 +628,7 @@ int eden_gpufreq_resume(struct gpufreq_policy *policy)
                                    policy->cur, 0, gpu_high_threshold[policy->gpu]);
 #endif
 
-#if MRVL_CONFIG_DEVFREQ_GOV_THROUGHPUT
+#if MRVL_CONFIG_DEVFREQ_GOV_THROUGHPUT && (LINUX_VERSION_CODE < KERNEL_VERSION(3, 14, 0))
     if(policy->cur >= gpu_high_threshold[policy->gpu])
     {
         freqs.gpu      = policy->gpu;

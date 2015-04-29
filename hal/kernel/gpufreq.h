@@ -39,6 +39,9 @@
 #define GPUFREQ_REQ_DDR_LVL_HIGH        312000
 #define GPUFREQ_REQ_DDR_LVL_DEFAULT     78000
 
+/* requent DDR in upthreshold*/
+#define GPUFREQ_REQ_DDR_UPTHRESHD_LVL_DEFAULT 65
+#define GPUFREQ_REQ_DDR_UPTHRESHD_LVL_LOW 30
 
 /* Min axi frequency*/
 #define GPUFREQ_MAX_AXI_BUS_FREQ        416000
@@ -47,6 +50,9 @@
 typedef struct _DDR_QOS_NODE {
     struct pm_qos_request   qos_node;
     struct mutex            qos_mutex;
+    unsigned int            qos_type;
+    unsigned int            default_value;
+    unsigned int            update_value;
 } DDR_QOS_NODE;
 
 #endif /* if GPUFREQ_REQUEST_DDR_QOS */
@@ -54,14 +60,19 @@ typedef struct _DDR_QOS_NODE {
 /* disable it firstly
   * because kernel doesn't support  this right now
   */
-#if defined(CONFIG_DEVFREQ_GOV_THROUGHPUT) && (LINUX_VERSION_CODE < KERNEL_VERSION(3, 14, 0))
+#if defined(CONFIG_DEVFREQ_GOV_THROUGHPUT)
 #define MRVL_CONFIG_DEVFREQ_GOV_THROUGHPUT      1
 #else
 #define MRVL_CONFIG_DEVFREQ_GOV_THROUGHPUT      0
 #endif
 
 #if MRVL_CONFIG_DEVFREQ_GOV_THROUGHPUT
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 14, 0)
 #include <linux/platform_data/gpu4dev.h>
+#else
+#include <linux/ddr_upthreshold.h>
+#include <linux/sysfs.h>
+#endif
 #endif
 
 #define IN
@@ -127,7 +138,7 @@ struct gpufreq_real_policy {
 #define GPUFREQ_POSTCHANGE  (1)
 
 extern gckOS gpu_os;
-#if MRVL_CONFIG_DEVFREQ_GOV_THROUGHPUT
+#if MRVL_CONFIG_DEVFREQ_GOV_THROUGHPUT && (LINUX_VERSION_CODE < KERNEL_VERSION(3, 14, 0))
 #define st_trans(action)                         \
     if(((action) == (GPUFREQ_POSTCHANGE_UP))||  \
         ((action) == (GPUFREQ_POSTCHANGE_DOWN)))\

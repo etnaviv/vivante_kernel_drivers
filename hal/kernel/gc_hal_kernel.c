@@ -805,7 +805,7 @@ gckKERNEL_Destroy(
 ** Reserved memory to avoid too many fragment, else use other.
 **
 */
-static inline gctBOOL _UseSmallSizePool(IN gctSIZE_T Bytes)
+static inline gctBOOL _UseSmallSizePool(IN gctSIZE_T Bytes, IN gckVIDMEM videoMemory)
 {
     gctSIZE_T wasteBytes = (PAGE_SIZE - (Bytes & (PAGE_SIZE - 1))) % PAGE_SIZE;
 
@@ -814,6 +814,12 @@ static inline gctBOOL _UseSmallSizePool(IN gctSIZE_T Bytes)
     {
         return gcvTRUE;
     }
+
+    if(videoMemory && videoMemory->freeBytes*2 > videoMemory->bytes)
+    {
+        return gcvTRUE;
+    }
+
     /* WasteBytes /PAGE_SIZE < 0.1. */
     if((wasteBytes * 10) < PAGE_SIZE)
     {
@@ -980,7 +986,7 @@ AllocateMemory:
             /* Get pointer to gckVIDMEM object for pool. */
             status = gckKERNEL_GetVideoMemoryPool(Kernel, pool, &videoMemory);
 
-            if (gcmIS_SUCCESS(status) && _UseSmallSizePool(Bytes))
+            if (gcmIS_SUCCESS(status) && _UseSmallSizePool(Bytes,videoMemory))
             {
                 /* Allocate memory. */
 #if defined(gcdLINEAR_SIZE_LIMIT)

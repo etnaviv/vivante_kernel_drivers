@@ -952,7 +952,7 @@ void gpufreq_notify_transition(struct gpufreq_freqs *freqs, unsigned int state)
 int gpufreq_register_driver(gckOS Os, struct gpufreq_driver *driver_data)
 {
     unsigned long flags;
-#if MRVL_CONFIG_DEVFREQ_GOV_THROUGHPUT
+#if MRVL_CONFIG_DEVFREQ_GOV_THROUGHPUT && (LINUX_VERSION_CODE < KERNEL_VERSION(3, 14, 0))
     unsigned int gpu;
 #endif
 
@@ -989,7 +989,7 @@ int gpufreq_register_driver(gckOS Os, struct gpufreq_driver *driver_data)
                                    1);
     }
 
-#if MRVL_CONFIG_DEVFREQ_GOV_THROUGHPUT
+#if MRVL_CONFIG_DEVFREQ_GOV_THROUGHPUT && (LINUX_VERSION_CODE < KERNEL_VERSION(3, 14, 0))
     for_each_gpu(gpu)
         gpufeq_register_dev_notifier(&gpufreq_trans_notifier_list[gpu]);
 #endif
@@ -1524,8 +1524,8 @@ void gpufreq_ddr_constraint_init(
     DDR_QOS_NODE * qos_req)
 {
     pm_qos_add_request(&(qos_req->qos_node),
-                       PM_QOS_DDR_DEVFREQ_MIN,
-                       GPUFREQ_REQ_DDR_LVL_DEFAULT);
+                       qos_req->qos_type,
+                       qos_req->default_value);
 
     mutex_init(&(qos_req->qos_mutex));
 }
@@ -1548,7 +1548,7 @@ void gpufreq_ddr_constraint_update(
     {
         mutex_lock(&(qos_req->qos_mutex));
         pm_qos_update_request(&(qos_req->qos_node),
-                              GPUFREQ_REQ_DDR_LVL_HIGH);
+                              qos_req->update_value);
         mutex_unlock(&(qos_req->qos_mutex));
     }
     else if ((new_freq < gpu_high_threshold) &&
@@ -1556,7 +1556,7 @@ void gpufreq_ddr_constraint_update(
     {
         mutex_lock(&(qos_req->qos_mutex));
         pm_qos_update_request(&(qos_req->qos_node),
-                              GPUFREQ_REQ_DDR_LVL_DEFAULT);
+                              qos_req->default_value);
         mutex_unlock(&(qos_req->qos_mutex));
     }
 }

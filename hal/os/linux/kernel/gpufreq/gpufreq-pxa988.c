@@ -28,6 +28,7 @@
     _table[_index].frequency = _freq;  \
     _table[_index].busfreq   = _afreq; \
 }
+#define GPUFREQ_PM_QOS_DDR_DEVFREQ_UPTHRD_MAX PM_QOS_DDR_DEVFREQ_UPTHRD_MAX
 #else
 #define GPUFREQ_SET_FREQ_TABLE(_table, _index, _freq) \
 { \
@@ -58,26 +59,106 @@ struct gpufreq_pxa988 {
 struct gpufreq_pxa988 gh[GPUFREQ_GPU_NUMS];
 
 #if GPUFREQ_REQUEST_DDR_QOS
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0)
+static DDR_QOS_NODE gpufreq_ddr_upthrhd_constraint[GPUFREQ_GPU_NUMS] = {
+        {
+            .qos_node = {
+                .name = "gpu3d_ddr_upthrhd_max",
+            },
+            .qos_type = GPUFREQ_PM_QOS_DDR_DEVFREQ_UPTHRD_MAX,
+            .default_value = GPUFREQ_REQ_DDR_UPTHRESHD_LVL_DEFAULT,
+            .update_value  = GPUFREQ_REQ_DDR_UPTHRESHD_LVL_LOW,
+
+        },
+        {
+            .qos_node = {
+                .name = "gpu2d_ddr_upthrhd_max",
+            },
+            .qos_type = GPUFREQ_PM_QOS_DDR_DEVFREQ_UPTHRD_MAX,
+            .default_value = GPUFREQ_REQ_DDR_UPTHRESHD_LVL_DEFAULT,
+            .update_value  = GPUFREQ_REQ_DDR_UPTHRESHD_LVL_LOW,
+        },
+    };
+#endif
 static DDR_QOS_NODE gpufreq_ddr_constraint[GPUFREQ_GPU_NUMS] = {
         {
             .qos_node = {
                 .name = "gpu3d_ddr_min",
-            }
+            },
+            .qos_type = PM_QOS_DDR_DEVFREQ_MIN,
+            .default_value = GPUFREQ_REQ_DDR_LVL_DEFAULT,
+            .update_value  = GPUFREQ_REQ_DDR_LVL_HIGH,
         },
         {
             .qos_node = {
                 .name = "gpu2d_ddr_min",
-            }
+            },
+            .qos_type = PM_QOS_DDR_DEVFREQ_MIN,
+            .default_value = GPUFREQ_REQ_DDR_LVL_DEFAULT,
+            .update_value  = GPUFREQ_REQ_DDR_LVL_HIGH,
         },
         {
             .qos_node = {
                 .name = "gpush_ddr_min",
-            }
+            },
+            .qos_type = PM_QOS_DDR_DEVFREQ_MIN,
+            .default_value = GPUFREQ_REQ_DDR_LVL_DEFAULT,
+            .update_value  = GPUFREQ_REQ_DDR_LVL_HIGH,
         },
 
     };
 
 static int gpu_high_threshold = 312000;
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0)
+static ssize_t upthrd_gc_show(struct kobject *kobj,
+           struct kobj_attribute *attr, char *buf)
+{
+    int i = 0, len = 0;
+
+    while(i < GPUFREQ_GPU_NUMS - 1)
+    {
+        len += sprintf(buf+len, "core(%d) %u\n", i, gpufreq_ddr_upthrhd_constraint[i].update_value);
+        i++;
+    }
+
+    return len;
+}
+
+static ssize_t upthrd_gc_store(struct kobject *kobj,
+           struct kobj_attribute *attr, const char *buf, size_t count)
+{
+    int i = 0, ret = 0;
+    unsigned int upthrd_gc = 0;
+
+    ret = sscanf(buf, "%u", &upthrd_gc);
+
+    if(!ret || upthrd_gc > 100)
+    {
+        pr_err("<ERR> wrong parameter.\n");
+        pr_err("echo upthrd(0~100) > upthrd_gc\n");
+
+        return -EINVAL;
+    }
+
+    while(i < GPUFREQ_GPU_NUMS - 1)
+    {
+        struct gpufreq_policy *policy = gpufreq_policy_get(i);
+
+        gpufreq_ddr_upthrhd_constraint[i].update_value = upthrd_gc;
+        gpufreq_ddr_constraint_update(&gpufreq_ddr_upthrhd_constraint[i],
+                                      policy->cur,
+                                      0,
+                                      gpu_high_threshold);
+        i++;
+    }
+
+    return count;
+}
+
+static struct kobj_attribute upthrd_gc_attr =
+           __ATTR(upthrd_gc, 0644, upthrd_gc_show, upthrd_gc_store);
+#endif
 #endif
 
 static struct gpufreq_axi ga[GPUFREQ_GPU_NUMS-1];
@@ -219,6 +300,10 @@ static int pxa988_gpufreq_qos_update(unsigned int chip, unsigned int min, unsign
 
 static unsigned int pxa988_gpufreq_get (unsigned int chip);
 static unsigned int pxa988_gpufreq_get_axi(unsigned int chip);
+
+#if MRVL_CONFIG_DEVFREQ_GOV_THROUGHPUT && LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0)
+static unsigned int is_ddr_upthrd_inited;
+#endif
 
 #if MRVL_CONFIG_ENABLE_QOS_SUPPORT
 static unsigned int is_qos_inited = 0;
@@ -384,6 +469,21 @@ static int pxa988_gpufreq_init (gctPOINTER freqTable, struct gpufreq_policy *pol
     }
 
 #if GPUFREQ_REQUEST_DDR_QOS
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0)
+    if(!is_ddr_upthrd_inited)
+    {
+        int rnt = 0;
+
+        rnt = sysfs_create_file(ddr_upthrd_obj, &upthrd_gc_attr.attr);
+
+        if(rnt)
+            debug_log(GPUFREQ_LOG_ERROR, "failed to create ddr upthread hold sysfs node\n");
+
+        is_ddr_upthrd_inited = 1;
+    }
+
+    gpufreq_ddr_constraint_init(&gpufreq_ddr_upthrhd_constraint[gpu]);
+#endif
     gpufreq_ddr_constraint_init(&gpufreq_ddr_constraint[gpu]);
 #endif
 
@@ -398,6 +498,10 @@ static int pxa988_gpufreq_exit (struct gpufreq_policy *policy)
 
 #if GPUFREQ_REQUEST_DDR_QOS
     gpufreq_ddr_constraint_deinit(&gpufreq_ddr_constraint[gpu]);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0)
+    gpufreq_ddr_constraint_deinit(&gpufreq_ddr_upthrhd_constraint[gpu]);
+    sysfs_remove_file(ddr_upthrd_obj, &upthrd_gc_attr.attr);
+#endif
 #endif
 
     pxa988_gpufreq_unregister_qos(gpu);
@@ -510,6 +614,13 @@ static int pxa988_gpufreq_target (struct gpufreq_policy *policy, unsigned int ta
                                    freqs.new_freq,
                                    freqs.old_freq,
                                    gpu_high_threshold);
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0)
+    gpufreq_ddr_constraint_update(&gpufreq_ddr_upthrhd_constraint[gpu],
+                                   freqs.new_freq,
+                                   freqs.old_freq,
+                                   gpu_high_threshold);
+#endif
 #endif
 
     gpufreq_notify_transition(&freqs, GPUFREQ_POSTCHANGE);
@@ -591,10 +702,19 @@ static int pxa988_gpufreq_suspend(struct gpufreq_policy *policy)
     * because gpu doesn't need ddr anymore
     */
     if(policy->cur >= gpu_high_threshold)
+    {
         gpufreq_ddr_constraint_update(&gpufreq_ddr_constraint[gpu],
                                        0,
                                        policy->cur,
                                        gpu_high_threshold);
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0)
+        gpufreq_ddr_constraint_update(&gpufreq_ddr_upthrhd_constraint[gpu],
+                                       0,
+                                       policy->cur,
+                                       gpu_high_threshold);
+#endif
+    }
 #endif
     return 0;
 }
@@ -606,10 +726,19 @@ static int pxa988_gpufreq_resume(struct gpufreq_policy *policy)
 
     /* re-hold ddr qos if freq > gpu_high_threshold when power on*/
     if(policy->cur >= gpu_high_threshold)
+    {
         gpufreq_ddr_constraint_update(&gpufreq_ddr_constraint[gpu],
                                       policy->cur,
                                       0,
                                       gpu_high_threshold);
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0)
+        gpufreq_ddr_constraint_update(&gpufreq_ddr_upthrhd_constraint[gpu],
+                                      policy->cur,
+                                      0,
+                                      gpu_high_threshold);
+#endif
+    }
 #endif
     return 0;
 }

@@ -1,8 +1,17 @@
 PWD := $(shell pwd)
 
-ARCH := arm64
-ARCH_TYPE := arm64
-CROSS_COMPILE := aarch64-linux-android-
+ARCH ?= arm64
+ARCH_TYPE ?= arm64
+
+ifneq ($(ARCH),)
+       ARCH := $(ARCH)
+       ARCH_TYPE := $(ARCH)
+endif
+
+ifeq ($(ARCH), arm64)
+       CROSS_COMPILE := aarch64-linux-android-
+endif
+
 KERNEL_DIR ?= ${ANDROID_PRODUCT_OUT}/obj/kernel/
 GPU_TYPE ?= XAQ2
 

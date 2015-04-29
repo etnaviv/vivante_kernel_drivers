@@ -301,6 +301,8 @@ typedef struct _gcsPLS
 
     gctBOOL                     bTempleRun;
 
+    gctBOOL                     bRealRacing3;
+
     gctPLS_DESTRUCTOR           destructor;
     /* Mutex to guard PLS access. currently it's for EGL.
     ** We can use this mutex for every PLS access.
