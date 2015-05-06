@@ -6062,8 +6062,13 @@ OnError:
         start = memory >> PAGE_SHIFT;
         pageCount = end - start;
 
-        /* Allocate extra 64 bytes to avoid cache overflow */
+        /* Allocate extra page to avoid cache overflow */
+#if gcdENABLE_2D
+        extraPage = 2;
+#else
         extraPage = (((memory + gcmALIGN(Size + 64, 64) + PAGE_SIZE - 1) >> PAGE_SHIFT) > end) ? 1 : 0;
+#endif
+
 
         gcmkTRACE_ZONE(
             gcvLEVEL_INFO, gcvZONE_OS,
@@ -6237,8 +6242,11 @@ OnError:
 
         if (extraPage)
         {
-            pages[pageCount++] = Os->paddingPage;
-            info->extraPage = 1;
+            for (i = 0; i < extraPage; i++)
+            {
+                pages[pageCount++] = Os->paddingPage;
+            }
+            info->extraPage = extraPage;
         }
 
 #if gcdSECURITY
@@ -6616,7 +6624,7 @@ OnError:
 
         if (info->extraPage)
         {
-            pageCount += 1;
+            pageCount += info->extraPage;
         }
 
 #if gcdSECURITY
@@ -6669,7 +6677,7 @@ OnError:
 
         if (info->extraPage)
         {
-            pageCount -= 1;
+            pageCount -= info->extraPage;
             info->extraPage = 0;
         }
 

@@ -248,7 +248,7 @@ _DumpDriverConfigure(
     gcmkPRINT_N(0, "***   GPU DRV CONFIG   ***\n");
     gcmkPRINT_N(0, "**************************\n");
 
-    gcmkPRINT("Galcore version %d.%d.%d.%d\n",
+    gcmkPRINT("Galcore version %d.%d.%d.%d_GC5.6.1\n",
               gcvVERSION_MAJOR, gcvVERSION_MINOR, gcvVERSION_PATCH, gcvVERSION_BUILD);
 
     gckOS_DumpParam();
