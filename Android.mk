@@ -13,7 +13,7 @@ endif
 
 ifeq ($(ARCH), arm64)
        CROSS_COMPILE := $(KERNEL_TOOLS_PREFIX)
-       BUILD_PARAMETERS := -j$(MAKE_JOBS)
+       BUILD_PARAMETERS := -j$(MAKE_JOBS) CROSS_COMPILE=$(KERNEL_TOOLS_PREFIX)
 endif
 
 $(PRODUCT_OUT)/ramdisk.img: build-galcore
