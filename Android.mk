@@ -35,6 +35,7 @@ build-galcore: android_kernel
 ifeq (,$(wildcard $(PRODUCT_OUT)/root/lib/modules))
 	mkdir -p $(PRODUCT_OUT)/root/lib/modules
 endif
+	$(KERNEL_TOOLS_PREFIX)strip --strip-unneeded $(GALCORE_SRC_PATH)/hal/driver/galcore.ko
 	cp $(GALCORE_SRC_PATH)/hal/driver/galcore.ko $(PRODUCT_OUT)/root/lib/modules
 	make clean -C $(GALCORE_SRC_PATH)
 
