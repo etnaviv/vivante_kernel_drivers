@@ -1,0 +1,228 @@
+##############################################################################
+#
+#    Copyright (c) 2005 - 2015 by Vivante Corp.
+#    
+#    This program is free software; you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation; either version 2 of the license, or
+#    (at your option) any later version.
+#    
+#    This program is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+#    GNU General Public License for more details.
+#    
+#    You should have received a copy of the GNU General Public License
+#    along with this program; if not write to the Free Software
+#    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+#
+#
+##############################################################################
+
+
+#
+# Common include file for Android build
+#
+
+ifeq ($(VIVANTE_ANDROID_MK_DEF),)
+VIVANTE_ANDROID_MK_DEF := 1
+
+################################################################################
+# Options.
+
+# Select prebuilt binary types.
+FIXED_ARCH_TYPE              ?=
+
+# Set this variable to Kernel directory.
+KERNEL_DIR                   ?= $(ANDROID_PRODUCT_OUT)/obj/kernel
+
+# Cross compiler for building kernel module.
+CROSS_COMPILE                ?= arm-marvell-linux-gnueabi-
+
+# <ro.board.platform> property
+# This affects module name of <variant> field
+RO_BOARD_PLATFORM            ?= mrvl
+
+# Enable this to allocate video memory via coherent DMA.
+NO_DMA_COHERENT              ?= 1
+
+# Enable to start GPU clock in drver.
+ENABLE_GPU_CLOCK_BY_DRIVER   ?= 1
+
+# Enable platform driver model, available after linux 2.6.x.
+USE_PLATFORM_DRIVER          ?= 1
+
+# Force all video memory cached.
+FORCE_ALL_VIDEO_MEMORY_CACHED ?= 0
+
+# Enable caching for non paged memory.
+NONPAGED_MEMORY_CACHEABLE    ?= 0
+
+# Enable buffering for non paged memory
+NONPAGED_MEMORY_BUFFERABLE   ?= 1
+
+# Enable memory bank alignment
+USE_BANK_ALIGNMENT           ?= 0
+BANK_BIT_START               ?= 0
+BANK_BIT_END                 ?= 0
+BANK_CHANNEL_BIT             ?= 0
+
+# Enable debug.
+DEBUG                        ?= 0
+
+# Build OpenCL
+USE_OPENCL ?= 1
+ifeq ($(USE_OPENCL),1)
+BUILD_OPENCL_ICD             ?= 1
+else
+BUILD_OPENCL_ICD             ?= 0
+endif
+
+# Build libGLESv3x
+BUILD_HALTI                  ?= 1
+
+# Enable outer cache patch.
+ENABLE_OUTER_CACHE_PATCH     ?= 1
+
+# 2D VG
+VIVANTE_ENABLE_VG			 ?= 0
+# 2D
+VIVANTE_ENABLE_2D 			 ?= 1
+# 3D VG
+VIVANTE_ENABLE_3D 			 ?= 1
+
+# Security
+SECURITY                     ?= 0
+
+# Use reg or non-reg arch files
+USE_ARCH_REG ?= 1
+
+################################################################################
+# Variables.
+
+GPU_TYPE  := \
+	$(lastword \
+		$(filter XAQ2 GCCORE Unified,\
+			$(notdir $(wildcard $(call my-dir)/arch/*)) \
+		) \
+	)
+
+PROPERTY  := \
+	$(firstword \
+		$(strip $(RO_HARDWARE)) \
+		$(TARGET_BOOTLOADER_BOARD_NAME) \
+		$(RO_BOARD_PLATFORM)\
+		default \
+	)
+
+AQROOT    := $(call my-dir)
+AQARCH    := $(AQROOT)/arch/$(GPU_TYPE)
+ifeq ($(VIVANTE_ENABLE_VG), 1)
+AQVGARCH  := $(AQROOT)/arch/GC350
+else
+AQVGARCH  :=
+endif
+
+ARCH_TYPE := $(TARGET_ARCH)
+TAG       := MRVL
+
+export KERNEL_DIR
+export CROSS_COMPILE
+
+
+################################################################################
+# Target CFLAGS.
+
+CFLAGS        := -DLINUX
+
+CFLAGS        += -DEGL_API_ANDROID=1
+
+ifeq ($(VIVANTE_ENABLE_3D),0)
+CFLAGS += -DgcdENABLE_3D=0
+else
+CFLAGS += -DgcdENABLE_3D=1
+endif
+
+ifeq ($(VIVANTE_ENABLE_2D),0)
+CFLAGS += -DgcdENABLE_2D=0
+else
+CFLAGS += -DgcdENABLE_2D=1
+endif
+
+ifeq ($(VIVANTE_ENABLE_VG),0)
+CFLAGS += -DgcdENABLE_VG=0
+else
+CFLAGS += -DgcdENABLE_VG=1
+endif
+
+CFLAGS        += -DUSE_VDK=0
+
+PLATFORM_SDK_VERSION ?= 12
+
+ifeq ($(ENABLE_OUTER_CACHE_PATCH),1)
+CFLAGS        += -DgcdENABLE_OUTER_CACHE_PATCH=1
+endif
+
+ifeq ($(USE_BANK_ALIGNMENT), 1)
+    CFLAGS += -DgcdENABLE_BANK_ALIGNMENT=1
+    ifneq ($(BANK_BIT_START), 0)
+	        ifneq ($(BANK_BIT_END), 0)
+	            CFLAGS += -DgcdBANK_BIT_START=$(BANK_BIT_START)
+	            CFLAGS += -DgcdBANK_BIT_END=$(BANK_BIT_END)
+	        endif
+    endif
+
+    ifneq ($(BANK_CHANNEL_BIT), 0)
+        CFLAGS += -DgcdBANK_CHANNEL_BIT=$(BANK_CHANNEL_BIT)
+    endif
+endif
+
+CFLAGS        += -DANDROID_SDK_VERSION=$(PLATFORM_SDK_VERSION)
+CFLAGS        += -fno-strict-aliasing -fno-short-enums
+CFLAGS        += -Wno-missing-field-initializers -Wno-unused-parameter
+
+ifeq ($(DEBUG), 1)
+CFLAGS        += -DDBG=1 -DDEBUG -D_DEBUG -O0 -g
+endif
+
+ifeq ($(SECURITY), 1)
+CFLAGS        += -DgcdSECURITY=1
+endif
+
+CFLAGS        += -DVIVANTE_PROFILER=0
+CFLAGS        += -DVIVANTE_PROFILER_CONTEXT=0
+
+ifeq ($(FORCE_ALL_VIDEO_MEMORY_CACHED), 1)
+CFLAGS        += -DgcdPAGED_MEMORY_CACHEABLE=1
+else
+CFLAGS        += -DgcdPAGED_MEMORY_CACHEABLE=0
+endif
+
+# Disable implicit native buffer sync on kitkat and later.
+# Kitkat and later will use KHR_fence_sync or ANDROID_native_fence_sync
+# to keep buffers sync-ed.
+# Please see frameworks/native/libs/gui/SyncFeatures.cpp
+ifeq ($(shell expr $(PLATFORM_SDK_VERSION) ">=" 19),1)
+CFLAGS 		  += -DgcdANDROID_IMPLICIT_NATIVE_BUFFER_SYNC=0
+endif
+
+# G2D Compress feature support
+ifeq ($(strip $(MRVL_DISABLE_G2D_COMPRESS)), true)
+CFLAGS        += -DENABLE_COMPRESS=0
+else
+CFLAGS        += -DENABLE_COMPRESS=1
+endif
+
+################################################################################
+# Platform specific configs.
+
+THIRDPARTY_CUSTOMER ?=
+THIRDPARTY_TYPE ?=
+
+USE_LOCAL_GRALLOC ?= 0
+ifeq ($(USE_LOCAL_GRALLOC), 1)
+    CFLAGS += -DUSE_LOCAL_GRALLOC=1
+endif
+
+endif
+

@@ -1,0 +1,144 @@
+##############################################################################
+#
+#    Copyright (c) 2005 - 2015 by Vivante Corp.
+#    
+#    This program is free software; you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation; either version 2 of the license, or
+#    (at your option) any later version.
+#    
+#    This program is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+#    GNU General Public License for more details.
+#    
+#    You should have received a copy of the GNU General Public License
+#    along with this program; if not write to the Free Software
+#    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+#
+#
+##############################################################################
+
+
+################################################################################
+# Define a shortcut for the main target.
+
+TARGET_OUTPUT = $(OBJ_DIR)/$(TARGET_NAME)
+
+ifeq ($(OBJ_DIR),)
+ifeq ($(DEBUG), 1)
+OBJ_DIR	?= bin_d
+else
+OBJ_DIR	?= bin_r
+endif
+endif
+
+################################################################################
+# Specify targets.
+
+DEPENDS := $(subst .o,.d,$(OBJECTS))
+
+all: $(TARGET_OUTPUT)
+
+clean:
+	@rm -f $(PREREQUISITES)
+	@rm -rf $(OBJ_DIR)/* $(OBJ_DIR)
+	@rm -rf $(CLEAN_EXTRA)
+
+install: $(DEPENDS) $(TARGET_OUTPUT)
+ifneq ($(INSTALL_DIR),)
+	@mkdir -p $(INSTALL_DIR)
+	@-cp $(TARGET_OUTPUT) $(INSTALL_DIR)
+endif
+
+ifeq ($(COMMON_LITE), 1)
+ifeq ($(gcdES11_CORE_WITH_EGL), 1)
+  PREREQUISITES	:= .Prerequisites_cl
+else
+  PREREQUISITES	:= .Prerequisites_v1_cl
+endif
+else
+ifeq ($(gcdES11_CORE_WITH_EGL), 1)
+  PREREQUISITES	:= .Prerequisites_cm
+else
+  PREREQUISITES	:= .Prerequisites
+endif
+endif
+
+ifeq ($(DEBUG), 1)
+  PREREQUISITES	:= $(PREREQUISITES)_$(ARCH_TYPE)_d
+else
+  PREREQUISITES	:= $(PREREQUISITES)_$(ARCH_TYPE)_r
+endif
+
+MAKEFILE_NAME	= makefile.linux
+
+ifeq ($(gcdSTATIC_LINK),1)
+ifneq ($(USE_ARMCC), 1)
+  PFLAGS += -static
+else
+  PFLAGS += -L--no_search_dynamic_libraries
+endif
+else
+ifneq ($(QNX), 1)
+LIBS += -lrt
+endif
+PFLAGS += -Wl,-rpath $(SDK_DIR)/drivers
+endif
+
+ifeq ($(PROGRAM), 1)
+$(TARGET_OUTPUT): $(PREREQUISITES) $(OBJECTS)
+ifeq ($(SRC_CXX),)
+	$(CC) $(PFLAGS) $(OBJECTS) -o $(TARGET_OUTPUT) $(LIBS)
+else
+	$(CXX) $(PFLAGS) $(OBJECTS) -o $(TARGET_OUTPUT) $(LIBS)
+endif
+
+ifneq ($(USE_ARMCC), 1)
+ifneq ($(DEBUG), 1)
+	$(STRIP) $(TARGET_OUTPUT)
+endif
+endif
+endif
+
+ifeq ($(DYNAMIC), 1)
+ifeq ($(USE_ARMCC), 1)
+LFLAGS += --shared -L--soname=,$(TARGET_NAME)
+else
+LFLAGS += -Wall -shared -Wl,-soname,$(TARGET_NAME) -Wl,-z,defs
+endif
+$(TARGET_OUTPUT): $(PREREQUISITES) $(OBJECTS)
+	$(CC) $(LFLAGS) $(OBJECTS) -o $(TARGET_OUTPUT) $(LIBS)
+endif
+
+ifeq ($(STATIC), 1)
+$(TARGET_OUTPUT): $(PREREQUISITES) $(OBJECTS)
+	$(AR) -r -c $(TARGET_OUTPUT) $(OBJECTS)
+ifneq ($(USE_ARMCC), 1)
+	$(RANLIB) $(TARGET_OUTPUT)
+endif
+endif
+
+$(PREREQUISITES): $(MAKEFILE_NAME)
+	@-mkdir -p $(OBJ_DIR)
+	@-touch $(PREREQUISITES)
+
+$(OBJ_DIR)/%.o: %.c $(PREREQUISITES)
+	@mkdir -p $(OBJ_DIR)
+	$(CC) -c $(CFLAGS) -o $@ $<
+
+$(OBJ_DIR)/%.o: %.cpp $(PREREQUISITES)
+	@mkdir -p $(OBJ_DIR)
+	$(CXX) -c $(CXXFLAGS) $(CFLAGS) -o $@ $<
+
+$(OBJ_DIR)/%.d: %.c $(PREREQUISITES)
+	@mkdir -p $(OBJ_DIR)
+	$(CC) -MM $(CFLAGS) -MP -MT $(addprefix $(OBJ_DIR)/,$(subst .c,.o,$<)) -MF $@  $<
+
+$(OBJ_DIR)/%.d: %.cpp $(PREREQUISITES)
+	@mkdir -p $(OBJ_DIR)
+	$(CXX) -MM $(CXXFLAGS) $(CFLAGS) -MP -MT $(addprefix $(OBJ_DIR)/,$(subst .cpp,.o,$<)) -MF $@  $<
+
+ifeq ($(filter clean cleandeps cleanall distclean distcleandeps distcleanall, $(MAKECMDGOALS)),)
+    -include $(DEPENDS)
+endif
